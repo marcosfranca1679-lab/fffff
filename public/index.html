@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solicitar Acesso — Mapa Bermuda</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .pixel { font-family: 'Press Start 2P', monospace; }
+    .bg-minecraft {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+    }
+    .card-glow {
+      box-shadow: 0 0 40px rgba(34, 197, 94, 0.15), 0 0 80px rgba(34, 197, 94, 0.05);
+    }
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 20px rgba(34,197,94,0.4); }
+      50%       { box-shadow: 0 0 40px rgba(34,197,94,0.8); }
+    }
+    .btn-glow:hover { animation: pulse-green 1.5s infinite; }
+    .status-pending  { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
+    .status-approved { background: #d1fae5; color: #065f46; border: 1px solid #10b981; }
+    .status-rejected { background: #fee2e2; color: #991b1b; border: 1px solid #ef4444; }
+  </style>
+</head>
+<body class="bg-minecraft min-h-screen flex items-center justify-center p-4">
+
+  <div class="w-full max-w-md">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <div class="text-5xl mb-4">⛏️</div>
+      <h1 class="pixel text-green-400 text-xl leading-relaxed mb-2">MAPA BERMUDA</h1>
+      <p class="text-gray-400 text-sm">Minecraft Bedrock Edition</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-8 card-glow">
+      <h2 class="text-white font-bold text-xl mb-1">Solicitar Acesso</h2>
+      <p class="text-gray-400 text-sm mb-6">Digite seu Nick do Minecraft para pedir acesso ao mapa.</p>
+
+      <!-- Formulário -->
+      <div id="form-section">
+        <label class="block text-gray-300 text-sm font-semibold mb-2">Seu Nick</label>
+        <input
+          id="nick-input"
+          type="text"
+          maxlength="16"
+          placeholder="Ex: Steve123"
+          class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition mb-4"
+        />
+        <button
+          onclick="solicitar()"
+          class="btn-glow w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition-all duration-200"
+        >
+          🎮 Solicitar Acesso
+        </button>
+      </div>
+
+      <!-- Status -->
+      <div id="status-section" class="hidden mt-4">
+        <div id="status-box" class="rounded-lg p-4 text-center text-sm font-semibold"></div>
+        <button
+          onclick="resetar()"
+          class="mt-4 w-full text-gray-400 hover:text-white text-sm underline"
+        >
+          Verificar outro Nick
+        </button>
+      </div>
+
+      <!-- Verificar status existente -->
+      <div class="mt-6 pt-6 border-t border-gray-700">
+        <p class="text-gray-400 text-xs text-center mb-3">Já solicitou? Verifique o status:</p>
+        <div class="flex gap-2">
+          <input
+            id="check-nick"
+            type="text"
+            maxlength="16"
+            placeholder="Seu Nick"
+            class="flex-1 bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
+          />
+          <button
+            onclick="verificarStatus()"
+            class="bg-blue-700 hover:bg-blue-600 text-white text-sm font-bold px-4 py-2 rounded-lg transition"
+          >
+            🔍
+          </button>
+        </div>
+        <div id="check-result" class="mt-3 hidden rounded-lg p-3 text-sm text-center font-semibold"></div>
+      </div>
+    </div>
+
+    <p class="text-center text-gray-600 text-xs mt-6">
+      Administrador? <a href="/admin.html" class="text-green-500 hover:underline">Acessar painel</a>
+    </p>
+  </div>
+
+  <script>
+    async function solicitar() {
+      const nick = document.getElementById('nick-input').value.trim();
+      if (!nick) return alert('Digite seu Nick!');
+
+      try {
+        const res = await fetch('/api/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nick })
+        });
+        const data = await res.json();
+        mostrarStatus(data.status, data.message || data.error);
+      } catch (e) {
+        alert('Erro ao conectar com o servidor.');
+      }
+    }
+
+    async function verificarStatus() {
+      const nick = document.getElementById('check-nick').value.trim();
+      if (!nick) return;
+      const res = await fetch(`/api/status/${encodeURIComponent(nick)}`);
+      const data = await res.json();
+      const box = document.getElementById('check-result');
+      box.className = `mt-3 rounded-lg p-3 text-sm text-center font-semibold status-${data.status}`;
+      box.textContent = data.message;
+      box.classList.remove('hidden');
+    }
+
+    function mostrarStatus(status, msg) {
+      document.getElementById('form-section').classList.add('hidden');
+      const section = document.getElementById('status-section');
+      const box = document.getElementById('status-box');
+      section.classList.remove('hidden');
+      box.className = `rounded-lg p-4 text-center text-sm font-semibold status-${status}`;
+      box.textContent = msg;
+    }
+
+    function resetar() {
+      document.getElementById('form-section').classList.remove('hidden');
+      document.getElementById('status-section').classList.add('hidden');
+      document.getElementById('nick-input').value = '';
+    }
+
+    // Enter para solicitar
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (document.activeElement.id === 'nick-input') solicitar();
+        if (document.activeElement.id === 'check-nick') verificarStatus();
+      }
+    });
+  </script>
+</body>
+</html>
