@@ -3,23 +3,31 @@ const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const path = require('path');
-const db = require('./database');
+const { sql, initDb } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ─── Configurações Admin padrão ──────────────────────────────────────────────
+// ─── Inicializar banco e admin padrão ────────────────────────────────────────
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
-const ADMIN_PASS = process.env.ADMIN_PASS || 'MinecraftAdmin@2025'; // 🔐 Troque via variável de ambiente!
+const ADMIN_PASS = process.env.ADMIN_PASS || 'MinecraftAdmin@2025';
 
-// Criar admin padrão se não existir
-const adminExists = db.prepare('SELECT id FROM admin WHERE username = ?').get(ADMIN_USER);
-if (!adminExists) {
-  const hash = bcrypt.hashSync(ADMIN_PASS, 12); // custo 12 para maior segurança
-  db.prepare('INSERT INTO admin (username, password) VALUES (?, ?)').run(ADMIN_USER, hash);
-  console.log(`✅ Admin criado: ${ADMIN_USER}`);
-  console.log('⚠️  Defina ADMIN_PASS via variável de ambiente antes de usar em produção!');
+async function bootstrap() {
+  try {
+    await initDb();
+    const res = await sql`SELECT id FROM admin WHERE username = ${ADMIN_USER}`;
+    if (res.rows.length === 0) {
+      const hash = bcrypt.hashSync(ADMIN_PASS, 12);
+      await sql`INSERT INTO admin (username, password) VALUES (${ADMIN_USER}, ${hash})`;
+      console.log(`✅ Admin criado: ${ADMIN_USER}`);
+      console.log('⚠️  Defina ADMIN_PASS via variável de ambiente!');
+    }
+  } catch (err) {
+    console.error('❌ Erro ao inicializar banco:', err.message);
+  }
 }
+
+bootstrap();
 
 // ─── Middlewares ─────────────────────────────────────────────────────────────
 app.use(cors());
@@ -27,7 +35,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'mc-whitelist-' + Math.random().toString(36),
+  secret: process.env.SESSION_SECRET || 'mc-whitelist-secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -37,30 +45,25 @@ app.use(session({
   }
 }));
 
-// ─── Rate limiting simples para proteção brute-force ─────────────────────────
+// ─── Rate limiting simples (brute-force) ─────────────────────────────────────
 const loginAttempts = new Map();
-
 function loginRateLimit(req, res, next) {
   const ip = req.ip || req.connection.remoteAddress;
   const now = Date.now();
   const entry = loginAttempts.get(ip) || { count: 0, firstAttempt: now };
-
-  // Reseta após 15 minutos
   if (now - entry.firstAttempt > 15 * 60 * 1000) {
     loginAttempts.set(ip, { count: 1, firstAttempt: now });
     return next();
   }
-
   if (entry.count >= 10) {
     return res.status(429).json({ error: 'Muitas tentativas. Tente novamente em 15 minutos.' });
   }
-
   entry.count++;
   loginAttempts.set(ip, entry);
   next();
 }
 
-// ─── Middleware de autenticação admin ────────────────────────────────────────
+// ─── Auth middleware ──────────────────────────────────────────────────────────
 function requireAdmin(req, res, next) {
   if (req.session && req.session.isAdmin) return next();
   res.status(401).json({ error: 'Não autorizado' });
@@ -69,9 +72,7 @@ function requireAdmin(req, res, next) {
 // ─── Validação de nick ────────────────────────────────────────────────────────
 function validarNick(nick) {
   if (!nick || typeof nick !== 'string') return false;
-  const trimmed = nick.trim();
-  // Minecraft nick: 3-16 caracteres, apenas letras, números e underscore
-  return /^[a-zA-Z0-9_]{3,16}$/.test(trimmed);
+  return /^[a-zA-Z0-9_]{3,16}$/.test(nick.trim());
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -79,67 +80,77 @@ function validarNick(nick) {
 // ════════════════════════════════════════════════════════════════════════════
 
 // Solicitar acesso
-app.post('/api/request', (req, res) => {
-  const nick = (req.body.nick || '').trim();
+app.post('/api/request', async (req, res) => {
+  try {
+    const nick = (req.body.nick || '').trim();
+    if (!validarNick(nick)) {
+      return res.status(400).json({ error: 'Nick inválido! Use 3-16 caracteres (letras, números ou _)' });
+    }
 
-  if (!validarNick(nick)) {
-    return res.status(400).json({
-      error: 'Nick inválido! Use 3-16 caracteres (letras, números ou _)'
-    });
+    const existing = await sql`SELECT status FROM players WHERE LOWER(nick) = LOWER(${nick})`;
+    if (existing.rows.length > 0) {
+      const { status } = existing.rows[0];
+      return res.json({ status, message: statusMessage(status) });
+    }
+
+    await sql`INSERT INTO players (nick) VALUES (${nick})`;
+    res.json({ status: 'pending', message: '⏳ Pedido enviado! Aguarde a aprovação do admin.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro interno. Tente novamente.' });
   }
-
-  const existing = db.prepare('SELECT * FROM players WHERE nick = ?').get(nick);
-  if (existing) {
-    return res.json({ status: existing.status, message: statusMessage(existing.status) });
-  }
-
-  db.prepare('INSERT INTO players (nick) VALUES (?)').run(nick);
-  res.json({ status: 'pending', message: '⏳ Pedido enviado! Aguarde a aprovação do admin.' });
 });
 
-// Checar status do pedido
-app.get('/api/status/:nick', (req, res) => {
-  const nick = req.params.nick.trim();
-  if (!validarNick(nick)) {
-    return res.status(400).json({ error: 'Nick inválido' });
+// Checar status
+app.get('/api/status/:nick', async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    if (!validarNick(nick)) return res.status(400).json({ error: 'Nick inválido' });
+
+    const result = await sql`SELECT status FROM players WHERE LOWER(nick) = LOWER(${nick})`;
+    if (result.rows.length === 0) {
+      return res.json({ status: 'not_found', message: '❓ Nick não encontrado. Faça uma solicitação.' });
+    }
+    const { status } = result.rows[0];
+    res.json({ status, message: statusMessage(status) });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno.' });
   }
-  const player = db.prepare('SELECT status FROM players WHERE nick = ?').get(nick);
-  if (!player) return res.json({ status: 'not_found', message: '❓ Nick não encontrado. Faça uma solicitação.' });
-  res.json({ status: player.status, message: statusMessage(player.status) });
 });
 
-// ────────────────────────────────────────────────────────────────────────────
-//  ROTA USADA PELO MOD (Addon Bedrock)
-// ────────────────────────────────────────────────────────────────────────────
-
-// O mod chama essa rota quando um jogador entra no servidor
-app.get('/api/check/:nick', (req, res) => {
-  const nick = req.params.nick.trim();
-  const player = db.prepare('SELECT status FROM players WHERE nick = ?').get(nick);
-  const allowed = player && player.status === 'approved';
-  res.json({ allowed, nick });
+// ─── Verificação pelo Addon Bedrock ──────────────────────────────────────────
+app.get('/api/check/:nick', async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const result = await sql`SELECT status FROM players WHERE LOWER(nick) = LOWER(${nick})`;
+    const allowed = result.rows.length > 0 && result.rows[0].status === 'approved';
+    res.json({ allowed, nick });
+  } catch (err) {
+    res.json({ allowed: false, nick: req.params.nick });
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-//  ROTAS DO ADMIN
+//  ROTAS ADMIN
 // ════════════════════════════════════════════════════════════════════════════
 
-// Login com rate limiting
-app.post('/api/admin/login', loginRateLimit, (req, res) => {
-  const { username, password } = req.body;
+// Login
+app.post('/api/admin/login', loginRateLimit, async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
 
-  if (!username || !password) {
-    return res.status(400).json({ error: 'Usuário e senha são obrigatórios' });
+    const result = await sql`SELECT * FROM admin WHERE username = ${username}`;
+    const admin = result.rows[0];
+    if (!admin || !bcrypt.compareSync(password, admin.password)) {
+      return res.status(401).json({ error: 'Usuário ou senha incorretos' });
+    }
+    req.session.isAdmin = true;
+    req.session.username = username;
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno.' });
   }
-
-  const admin = db.prepare('SELECT * FROM admin WHERE username = ?').get(username);
-  if (!admin || !bcrypt.compareSync(password, admin.password)) {
-    return res.status(401).json({ error: 'Usuário ou senha incorretos' });
-  }
-
-  req.session.isAdmin = true;
-  req.session.username = username;
-  res.json({ success: true });
 });
 
 // Logout
@@ -148,94 +159,130 @@ app.post('/api/admin/logout', (req, res) => {
   res.json({ success: true });
 });
 
-// Verificar se está logado
+// Verificar sessão
 app.get('/api/admin/me', requireAdmin, (req, res) => {
   res.json({ username: req.session.username });
 });
 
-// Listar todos os jogadores (separados por status) + busca opcional
-app.get('/api/admin/players', requireAdmin, (req, res) => {
-  const search = req.query.search ? `%${req.query.search}%` : null;
-
-  const query = (status) => search
-    ? db.prepare(`SELECT * FROM players WHERE status = ? AND nick LIKE ? ORDER BY requested_at DESC`).all(status, search)
-    : db.prepare(`SELECT * FROM players WHERE status = ? ORDER BY requested_at DESC`).all(status);
-
-  const pending  = query('pending');
-  const approved = query('approved');
-  const rejected = query('rejected');
-
-  res.json({ pending, approved, rejected });
-});
-
-// Estatísticas rápidas
-app.get('/api/admin/stats', requireAdmin, (req, res) => {
-  const stats = db.prepare(`
-    SELECT
-      SUM(CASE WHEN status = 'pending'  THEN 1 ELSE 0 END) AS pending,
-      SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved,
-      SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
-      COUNT(*) AS total
-    FROM players
-  `).get();
-  res.json(stats);
-});
-
-// Aprovar jogador
-app.post('/api/admin/approve/:nick', requireAdmin, (req, res) => {
-  const nick = req.params.nick;
-  const result = db.prepare("UPDATE players SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE nick = ?").run(nick);
-  if (result.changes === 0) return res.status(404).json({ error: 'Nick não encontrado' });
-  console.log(`[ADMIN] ${req.session.username} aprovou: ${nick}`);
-  res.json({ success: true, message: `✅ ${nick} aprovado!` });
-});
-
-// Rejeitar jogador
-app.post('/api/admin/reject/:nick', requireAdmin, (req, res) => {
-  const nick = req.params.nick;
-  const result = db.prepare("UPDATE players SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE nick = ?").run(nick);
-  if (result.changes === 0) return res.status(404).json({ error: 'Nick não encontrado' });
-  console.log(`[ADMIN] ${req.session.username} rejeitou: ${nick}`);
-  res.json({ success: true, message: `❌ ${nick} rejeitado.` });
-});
-
-// Remover jogador (apagar do banco)
-app.delete('/api/admin/remove/:nick', requireAdmin, (req, res) => {
-  const nick = req.params.nick;
-  const result = db.prepare('DELETE FROM players WHERE nick = ?').run(nick);
-  if (result.changes === 0) return res.status(404).json({ error: 'Nick não encontrado' });
-  console.log(`[ADMIN] ${req.session.username} removeu: ${nick}`);
-  res.json({ success: true, message: `🗑️ ${nick} removido.` });
-});
-
-// Adicionar Nick manualmente (sem precisar de solicitação)
-app.post('/api/admin/add', requireAdmin, (req, res) => {
-  const nick = (req.body.nick || '').trim();
-  if (!validarNick(nick)) {
-    return res.status(400).json({ error: 'Nick inválido! Use 3-16 caracteres (letras, números ou _)' });
-  }
+// Listar jogadores
+app.get('/api/admin/players', requireAdmin, async (req, res) => {
   try {
-    db.prepare("INSERT OR REPLACE INTO players (nick, status) VALUES (?, 'approved')").run(nick);
+    const search = req.query.search ? `%${req.query.search}%` : null;
+
+    let pending, approved, rejected;
+    if (search) {
+      pending  = await sql`SELECT * FROM players WHERE status = 'pending'  AND nick ILIKE ${search} ORDER BY requested_at DESC`;
+      approved = await sql`SELECT * FROM players WHERE status = 'approved' AND nick ILIKE ${search} ORDER BY updated_at DESC`;
+      rejected = await sql`SELECT * FROM players WHERE status = 'rejected' AND nick ILIKE ${search} ORDER BY updated_at DESC`;
+    } else {
+      pending  = await sql`SELECT * FROM players WHERE status = 'pending'  ORDER BY requested_at DESC`;
+      approved = await sql`SELECT * FROM players WHERE status = 'approved' ORDER BY updated_at DESC`;
+      rejected = await sql`SELECT * FROM players WHERE status = 'rejected' ORDER BY updated_at DESC`;
+    }
+
+    res.json({ pending: pending.rows, approved: approved.rows, rejected: rejected.rows });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar jogadores.' });
+  }
+});
+
+// Estatísticas
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const result = await sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'pending')  AS pending,
+        COUNT(*) FILTER (WHERE status = 'approved') AS approved,
+        COUNT(*) FILTER (WHERE status = 'rejected') AS rejected,
+        COUNT(*) AS total
+      FROM players
+    `;
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar estatísticas.' });
+  }
+});
+
+// Aprovar
+app.post('/api/admin/approve/:nick', requireAdmin, async (req, res) => {
+  try {
+    const { nick } = req.params;
+    const result = await sql`
+      UPDATE players SET status = 'approved', updated_at = CURRENT_TIMESTAMP
+      WHERE LOWER(nick) = LOWER(${nick})
+    `;
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Nick não encontrado' });
+    console.log(`[ADMIN] ${req.session.username} aprovou: ${nick}`);
+    res.json({ success: true, message: `✅ ${nick} aprovado!` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+});
+
+// Rejeitar
+app.post('/api/admin/reject/:nick', requireAdmin, async (req, res) => {
+  try {
+    const { nick } = req.params;
+    const result = await sql`
+      UPDATE players SET status = 'rejected', updated_at = CURRENT_TIMESTAMP
+      WHERE LOWER(nick) = LOWER(${nick})
+    `;
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Nick não encontrado' });
+    console.log(`[ADMIN] ${req.session.username} rejeitou: ${nick}`);
+    res.json({ success: true, message: `❌ ${nick} rejeitado.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+});
+
+// Remover
+app.delete('/api/admin/remove/:nick', requireAdmin, async (req, res) => {
+  try {
+    const { nick } = req.params;
+    const result = await sql`DELETE FROM players WHERE LOWER(nick) = LOWER(${nick})`;
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Nick não encontrado' });
+    console.log(`[ADMIN] ${req.session.username} removeu: ${nick}`);
+    res.json({ success: true, message: `🗑️ ${nick} removido.` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno.' });
+  }
+});
+
+// Adicionar manualmente
+app.post('/api/admin/add', requireAdmin, async (req, res) => {
+  try {
+    const nick = (req.body.nick || '').trim();
+    if (!validarNick(nick)) return res.status(400).json({ error: 'Nick inválido! Use 3-16 caracteres (letras, números ou _)' });
+
+    await sql`
+      INSERT INTO players (nick, status) VALUES (${nick}, 'approved')
+      ON CONFLICT (nick) DO UPDATE SET status = 'approved', updated_at = CURRENT_TIMESTAMP
+    `;
     console.log(`[ADMIN] ${req.session.username} adicionou manualmente: ${nick}`);
     res.json({ success: true, message: `✅ ${nick} adicionado e aprovado!` });
-  } catch (e) {
-    res.status(500).json({ error: 'Erro ao adicionar jogador' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao adicionar jogador.' });
   }
 });
 
-// Trocar senha do admin
-app.post('/api/admin/change-password', requireAdmin, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: 'Senha nova deve ter pelo menos 8 caracteres' });
+// Trocar senha
+app.post('/api/admin/change-password', requireAdmin, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Senha nova deve ter pelo menos 8 caracteres' });
+    }
+    const result = await sql`SELECT * FROM admin WHERE username = ${req.session.username}`;
+    const admin = result.rows[0];
+    if (!admin || !bcrypt.compareSync(currentPassword, admin.password)) {
+      return res.status(401).json({ error: 'Senha atual incorreta' });
+    }
+    const hash = bcrypt.hashSync(newPassword, 12);
+    await sql`UPDATE admin SET password = ${hash} WHERE username = ${req.session.username}`;
+    res.json({ success: true, message: '🔐 Senha alterada com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro interno.' });
   }
-  const admin = db.prepare('SELECT * FROM admin WHERE username = ?').get(req.session.username);
-  if (!admin || !bcrypt.compareSync(currentPassword, admin.password)) {
-    return res.status(401).json({ error: 'Senha atual incorreta' });
-  }
-  const hash = bcrypt.hashSync(newPassword, 12);
-  db.prepare('UPDATE admin SET password = ? WHERE username = ?').run(hash, req.session.username);
-  res.json({ success: true, message: '🔐 Senha alterada com sucesso!' });
 });
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
@@ -250,13 +297,11 @@ function statusMessage(status) {
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'Rota não encontrada' });
-  }
+  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Rota não encontrada' });
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ─── Iniciar servidor ─────────────────────────────────────────────────────────
+// ─── Start ───────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 Servidor rodando em http://localhost:${PORT}`);
   console.log(`🔐 Painel Admin: http://localhost:${PORT}/admin.html`);
