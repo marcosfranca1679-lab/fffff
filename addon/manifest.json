@@ -1,0 +1,30 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "Mapa Bermuda Whitelist",
+    "description": "Verifica automaticamente se o jogador está na whitelist ao entrar no servidor.",
+    "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 20, 0]
+  },
+  "modules": [
+    {
+      "description": "Script de verificação de whitelist",
+      "type": "script",
+      "language": "javascript",
+      "uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "version": [1, 0, 0],
+      "entry": "scripts/whitelist.js"
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "1.9.0"
+    },
+    {
+      "module_name": "@minecraft/server-net",
+      "version": "1.0.0-beta"
+    }
+  ]
+}
