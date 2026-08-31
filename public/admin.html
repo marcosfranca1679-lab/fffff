@@ -11,22 +11,25 @@
     .pixel { font-family: 'Press Start 2P', monospace; }
     .bg-dark { background: #0f172a; }
     .sidebar { background: #1e293b; border-right: 1px solid #334155; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+    .fade-in { animation: fadeIn 0.25s ease; }
+    .modal-backdrop { background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
   </style>
 </head>
 <body class="bg-dark min-h-screen text-white">
 
-  <!-- ── LOGIN ────────────────────────────────────────────────────────────── -->
+  <!-- ── LOGIN ──────────────────────────────────────────────────────────────── -->
   <div id="login-screen" class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-sm shadow-2xl">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-8 w-full max-w-sm shadow-2xl fade-in">
       <div class="text-center mb-6">
         <div class="text-4xl mb-3">🔐</div>
         <h1 class="pixel text-green-400 text-sm leading-loose">PAINEL ADMIN</h1>
         <p class="text-gray-400 text-xs mt-1">Mapa Bermuda</p>
       </div>
       <input id="login-user" type="text" placeholder="Usuário" value="admin"
-        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-3 focus:outline-none focus:border-green-500" />
+        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-3 focus:outline-none focus:border-green-500 transition" />
       <input id="login-pass" type="password" placeholder="Senha"
-        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-green-500" />
+        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-green-500 transition" />
       <div id="login-error" class="text-red-400 text-sm text-center mb-3 hidden"></div>
       <button onclick="fazerLogin()"
         class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition">
@@ -39,7 +42,7 @@
   <div id="dashboard" class="hidden min-h-screen flex flex-col">
 
     <!-- Topbar -->
-    <header class="bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+    <header class="bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
       <div class="flex items-center gap-3">
         <span class="text-2xl">⛏️</span>
         <div>
@@ -47,16 +50,21 @@
           <p class="text-gray-400 text-xs">Painel de Controle</p>
         </div>
       </div>
-      <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3 flex-wrap">
         <!-- Adicionar manualmente -->
         <div class="flex gap-2">
           <input id="add-nick" type="text" maxlength="16" placeholder="Nick manual..."
-            class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-40" />
+            class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-40 transition" />
           <button onclick="adicionarManual()"
             class="bg-green-700 hover:bg-green-600 text-white text-sm font-bold px-3 py-2 rounded-lg transition">
             + Adicionar
           </button>
         </div>
+        <!-- Trocar senha -->
+        <button onclick="abrirModalSenha()"
+          class="bg-yellow-700 hover:bg-yellow-600 text-white text-sm px-3 py-2 rounded-lg transition" title="Trocar senha">
+          🔑 Senha
+        </button>
         <button onclick="fazerLogout()"
           class="bg-gray-700 hover:bg-gray-600 text-sm px-4 py-2 rounded-lg transition">
           Sair
@@ -70,13 +78,22 @@
       <div class="grid grid-cols-3 gap-4 mb-6" id="stats-cards"></div>
 
       <!-- Mensagem de feedback -->
-      <div id="feedback" class="hidden mb-4 p-3 rounded-lg text-sm font-semibold text-center"></div>
+      <div id="feedback" class="hidden mb-4 p-3 rounded-lg text-sm font-semibold text-center fade-in"></div>
 
-      <!-- Abas -->
-      <div class="flex gap-2 mb-4">
-        <button onclick="mostrarAba('pending')"  id="tab-pending"  class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">⏳ Pendentes</button>
-        <button onclick="mostrarAba('approved')" id="tab-approved" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">✅ Aprovados</button>
-        <button onclick="mostrarAba('rejected')" id="tab-rejected" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">❌ Rejeitados</button>
+      <!-- Barra de busca + Abas -->
+      <div class="flex flex-col sm:flex-row gap-3 mb-4 items-start sm:items-center justify-between">
+        <div class="flex gap-2">
+          <button onclick="mostrarAba('pending')"  id="tab-pending"  class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">⏳ Pendentes</button>
+          <button onclick="mostrarAba('approved')" id="tab-approved" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">✅ Aprovados</button>
+          <button onclick="mostrarAba('rejected')" id="tab-rejected" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">❌ Rejeitados</button>
+        </div>
+        <!-- Busca -->
+        <div class="flex gap-2">
+          <input id="search-input" type="text" placeholder="🔍 Buscar nick..."
+            oninput="buscarJogadores()"
+            class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white w-48 focus:outline-none focus:border-blue-500 transition" />
+          <button onclick="limparBusca()" class="text-gray-400 hover:text-white text-sm px-2 transition" title="Limpar busca">✕</button>
+        </div>
       </div>
 
       <!-- Tabela -->
@@ -99,62 +116,112 @@
     </main>
   </div>
 
+  <!-- ── MODAL TROCAR SENHA ─────────────────────────────────────────────────── -->
+  <div id="modal-senha" class="hidden fixed inset-0 modal-backdrop flex items-center justify-center z-50 p-4">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm fade-in">
+      <h2 class="text-white font-bold text-lg mb-4">🔑 Trocar Senha</h2>
+      <input id="old-pass" type="password" placeholder="Senha atual"
+        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-3 focus:outline-none focus:border-yellow-500 transition" />
+      <input id="new-pass" type="password" placeholder="Nova senha (mín. 8 caracteres)"
+        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-3 focus:outline-none focus:border-yellow-500 transition" />
+      <input id="new-pass2" type="password" placeholder="Confirmar nova senha"
+        class="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-yellow-500 transition" />
+      <div id="modal-error" class="text-red-400 text-sm text-center mb-3 hidden"></div>
+      <div class="flex gap-2">
+        <button onclick="fecharModalSenha()"
+          class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg transition text-sm">
+          Cancelar
+        </button>
+        <button onclick="trocarSenha()"
+          class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 rounded-lg transition text-sm">
+          Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     let currentTab = 'pending';
     let allData = { pending: [], approved: [], rejected: [] };
+    let refreshInterval = null;
 
     // ── Login ──────────────────────────────────────────────────────────────
     async function fazerLogin() {
       const username = document.getElementById('login-user').value;
       const password = document.getElementById('login-pass').value;
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (data.success) {
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('dashboard').classList.remove('hidden');
-        carregarJogadores();
-        setInterval(carregarJogadores, 10000); // Atualiza a cada 10s
-      } else {
-        const err = document.getElementById('login-error');
-        err.textContent = data.error || 'Erro no login';
-        err.classList.remove('hidden');
+      const btn = document.querySelector('#login-screen button');
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('login-screen').classList.add('hidden');
+          document.getElementById('dashboard').classList.remove('hidden');
+          carregarJogadores();
+          refreshInterval = setInterval(carregarJogadores, 15000); // Atualiza a cada 15s
+        } else {
+          const err = document.getElementById('login-error');
+          err.textContent = data.error || 'Erro no login';
+          err.classList.remove('hidden');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
       }
     }
 
     async function fazerLogout() {
+      if (refreshInterval) clearInterval(refreshInterval);
       await fetch('/api/admin/logout', { method: 'POST' });
       location.reload();
     }
 
     // ── Carregar jogadores ─────────────────────────────────────────────────
     async function carregarJogadores() {
-      const res = await fetch('/api/admin/players');
+      const search = document.getElementById('search-input')?.value.trim() || '';
+      const url = search ? `/api/admin/players?search=${encodeURIComponent(search)}` : '/api/admin/players';
+      const res = await fetch(url);
+      if (res.status === 401) { location.reload(); return; }
       allData = await res.json();
       atualizarStats();
       renderTabela();
     }
 
+    async function buscarJogadores() {
+      await carregarJogadores();
+    }
+
+    function limparBusca() {
+      document.getElementById('search-input').value = '';
+      carregarJogadores();
+    }
+
     function atualizarStats() {
       document.getElementById('stats-cards').innerHTML = `
-        <div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4 text-center">
+        <div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4 text-center cursor-pointer hover:bg-yellow-900/50 transition" onclick="mostrarAba('pending')">
           <div class="text-3xl font-bold text-yellow-400">${allData.pending.length}</div>
           <div class="text-yellow-300 text-sm mt-1">⏳ Pendentes</div>
         </div>
-        <div class="bg-green-900/30 border border-green-700 rounded-xl p-4 text-center">
+        <div class="bg-green-900/30 border border-green-700 rounded-xl p-4 text-center cursor-pointer hover:bg-green-900/50 transition" onclick="mostrarAba('approved')">
           <div class="text-3xl font-bold text-green-400">${allData.approved.length}</div>
           <div class="text-green-300 text-sm mt-1">✅ Aprovados</div>
         </div>
-        <div class="bg-red-900/30 border border-red-700 rounded-xl p-4 text-center">
+        <div class="bg-red-900/30 border border-red-700 rounded-xl p-4 text-center cursor-pointer hover:bg-red-900/50 transition" onclick="mostrarAba('rejected')">
           <div class="text-3xl font-bold text-red-400">${allData.rejected.length}</div>
           <div class="text-red-300 text-sm mt-1">❌ Rejeitados</div>
         </div>
       `;
       // Aba pendentes em destaque se houver
-      document.getElementById('tab-pending').classList.toggle('bg-yellow-600', allData.pending.length > 0);
+      if (allData.pending.length > 0) {
+        document.getElementById('tab-pending').classList.add('ring-2', 'ring-yellow-500');
+      } else {
+        document.getElementById('tab-pending').classList.remove('ring-2', 'ring-yellow-500');
+      }
     }
 
     function mostrarAba(aba) {
@@ -167,7 +234,11 @@
     }
 
     function renderTabela() {
-      mostrarAba(currentTab);
+      ['pending','approved','rejected'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        btn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition ${t === currentTab ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-800'}`;
+      });
+
       const lista = allData[currentTab] || [];
       const tbody = document.getElementById('players-table');
       const empty = document.getElementById('empty-msg');
@@ -184,36 +255,36 @@
           <td class="px-5 py-4">
             <div class="flex items-center gap-2">
               <span class="text-lg">🧑‍💻</span>
-              <span class="font-semibold text-white">${p.nick}</span>
+              <span class="font-semibold text-white">${escapeHtml(p.nick)}</span>
             </div>
           </td>
           <td class="px-5 py-4 text-gray-400 text-xs">${formatarData(p.requested_at)}</td>
           <td class="px-5 py-4 text-gray-400 text-xs">${formatarData(p.updated_at)}</td>
           <td class="px-5 py-4 text-right">
-            <div class="flex gap-2 justify-end">
+            <div class="flex gap-2 justify-end flex-wrap">
               ${currentTab === 'pending' ? `
-                <button onclick="acao('approve','${p.nick}')"
+                <button onclick="acao('approve','${escapeHtml(p.nick)}')"
                   class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                   ✅ Aprovar
                 </button>
-                <button onclick="acao('reject','${p.nick}')"
+                <button onclick="acao('reject','${escapeHtml(p.nick)}')"
                   class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                   ❌ Rejeitar
                 </button>
               ` : ''}
               ${currentTab === 'approved' ? `
-                <button onclick="acao('reject','${p.nick}')"
+                <button onclick="acao('reject','${escapeHtml(p.nick)}')"
                   class="bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                   🚫 Suspender
                 </button>
               ` : ''}
               ${currentTab === 'rejected' ? `
-                <button onclick="acao('approve','${p.nick}')"
+                <button onclick="acao('approve','${escapeHtml(p.nick)}')"
                   class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                   ✅ Aprovar
                 </button>
               ` : ''}
-              <button onclick="acao('remove','${p.nick}')"
+              <button onclick="acao('remove','${escapeHtml(p.nick)}')"
                 class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
                 🗑️
               </button>
@@ -221,12 +292,6 @@
           </td>
         </tr>
       `).join('');
-
-      // Setar estilos das abas corretamente
-      ['pending','approved','rejected'].forEach(t => {
-        const btn = document.getElementById(`tab-${t}`);
-        btn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition ${t === currentTab ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-800'}`;
-      });
     }
 
     async function acao(tipo, nick) {
@@ -256,12 +321,58 @@
       carregarJogadores();
     }
 
+    // ── Modal Trocar Senha ─────────────────────────────────────────────────
+    function abrirModalSenha() {
+      document.getElementById('modal-senha').classList.remove('hidden');
+      document.getElementById('old-pass').value = '';
+      document.getElementById('new-pass').value = '';
+      document.getElementById('new-pass2').value = '';
+      document.getElementById('modal-error').classList.add('hidden');
+    }
+
+    function fecharModalSenha() {
+      document.getElementById('modal-senha').classList.add('hidden');
+    }
+
+    async function trocarSenha() {
+      const currentPassword = document.getElementById('old-pass').value;
+      const newPassword     = document.getElementById('new-pass').value;
+      const confirm2        = document.getElementById('new-pass2').value;
+      const errEl = document.getElementById('modal-error');
+
+      if (newPassword !== confirm2) {
+        errEl.textContent = 'As senhas novas não coincidem.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      if (newPassword.length < 8) {
+        errEl.textContent = 'A nova senha deve ter pelo menos 8 caracteres.';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        fecharModalSenha();
+        mostrarFeedback(data.message || '🔐 Senha alterada!', 'green');
+      } else {
+        errEl.textContent = data.error || 'Erro ao alterar senha.';
+        errEl.classList.remove('hidden');
+      }
+    }
+
     function mostrarFeedback(msg, cor) {
       const el = document.getElementById('feedback');
       el.textContent = msg;
-      el.className = `mb-4 p-3 rounded-lg text-sm font-semibold text-center bg-${cor}-900/40 border border-${cor}-700 text-${cor}-300`;
+      el.className = `mb-4 p-3 rounded-lg text-sm font-semibold text-center fade-in bg-${cor}-900/40 border border-${cor}-700 text-${cor}-300`;
       el.classList.remove('hidden');
-      setTimeout(() => el.classList.add('hidden'), 3000);
+      setTimeout(() => el.classList.add('hidden'), 4000);
     }
 
     function formatarData(str) {
@@ -269,13 +380,24 @@
       return new Date(str).toLocaleString('pt-BR');
     }
 
+    function escapeHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
     // ── Init ──────────────────────────────────────────────────────────────
     mostrarAba('pending');
 
+    // Fechar modal clicando fora
+    document.getElementById('modal-senha').addEventListener('click', e => {
+      if (e.target === document.getElementById('modal-senha')) fecharModalSenha();
+    });
+
     // Enter no login
     document.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !document.getElementById('login-screen').classList.contains('hidden')) {
-        fazerLogin();
+      if (e.key === 'Enter') {
+        if (!document.getElementById('login-screen').classList.contains('hidden')) {
+          fazerLogin();
+        }
       }
     });
   </script>
