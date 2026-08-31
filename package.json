@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "better-sqlite3": "^9.4.3",
+    "@vercel/postgres": "^0.10.0",
     "express-session": "^1.17.3",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5"
