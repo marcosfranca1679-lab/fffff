@@ -1,14 +1,14 @@
 {
   "name": "minecraft-whitelist",
   "version": "1.0.0",
-  "description": "Painel de controle de whitelist para Minecraft Bedrock",
+  "description": "Painel de controle de whitelist para Minecraft Bedrock integrado com Supabase",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.48.1",
     "express": "^4.18.2",
-    "@vercel/postgres": "^0.10.0",
     "express-session": "^1.17.3",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5"
