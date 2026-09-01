@@ -4,18 +4,47 @@ import { http, HttpRequest, HttpRequestMethod } from "@minecraft/server-net";
 // ─── Configuração ─────────────────────────────────────────────────────────────
 const API_URL = "https://fffff-autoforge.vercel.app/api/check";
 
-// Mensagem exibida ao jogador kickado
-const KICK_REASON = "Voce nao esta na Whitelist! Peca acesso no site do servidor.";
-
-// Admins que nunca são kickados (coloque seu Nick aqui)
+// Admins que nunca são bloqueados (seu nick exato aqui)
 const ADMINS_BYPASS = ["admin", "Marcos", "marcosfranca1679"];
 
-// Tempo de espera antes de checar (ticks) — 40 ticks = 2 segundos
-const CHECK_DELAY_TICKS = 40;
+// Jogadores não autorizados bloqueados
+const blockedPlayers = new Set();
 
-// ─── Evento quando jogador entra no servidor ──────────────────────────────────
+// ─── Bloqueio contínuo para não autorizados ───────────────────────────────────
+system.runInterval(() => {
+  if (blockedPlayers.size === 0) return;
+
+  for (const player of world.getAllPlayers()) {
+    if (blockedPlayers.has(player.name.toLowerCase())) {
+      try {
+        // Trava controles, câmera e movimento
+        if (player.inputPermissions) {
+          player.inputPermissions.movementEnabled = false;
+          player.inputPermissions.cameraEnabled = false;
+        }
+
+        // Aplica cegueira total e lentidão máxima
+        player.addEffect("blindness", 200, { amplifier: 255, showParticles: false });
+        player.addEffect("slowness", 200, { amplifier: 255, showParticles: false });
+        player.addEffect("weakness", 200, { amplifier: 255, showParticles: false });
+
+        // Mensagem na tela grande
+        player.onScreenDisplay.setTitle("§c§lACESSO NEGADO", {
+          stayDuration: 40,
+          fadeInDuration: 0,
+          fadeOutDuration: 10,
+          subtitle: "§eSolicite acesso no site do servidor!"
+        });
+
+        // Teleporta para o limbo/vazio para não interagir com o mapa
+        player.teleport({ x: 0, y: -100, z: 0 });
+      } catch (e) {}
+    }
+  }
+}, 10); // Executa a cada meio segundo
+
+// ─── Evento quando jogador entra ──────────────────────────────────────────────
 world.afterEvents.playerSpawn.subscribe(async (event) => {
-  // Executa apenas na entrada inicial no servidor
   if (!event.initialSpawn) return;
 
   const player = event.player;
@@ -23,92 +52,77 @@ world.afterEvents.playerSpawn.subscribe(async (event) => {
 
   const nick = player.name;
 
-  // Se for admin na lista de bypass, libera direto
-  if (ADMINS_BYPASS.some(adminNick => adminNick.toLowerCase() === nick.toLowerCase())) {
+  // Bypass de admin
+  if (ADMINS_BYPASS.some(a => a.toLowerCase() === nick.toLowerCase())) {
     player.sendMessage("§a✅ [Whitelist] Admin detectado! Acesso liberado.");
+    blockedPlayers.delete(nick.toLowerCase());
     return;
   }
 
-  // Aguarda 2 segundos para o jogador terminar de carregar
-  await delay(CHECK_DELAY_TICKS);
-
-  if (!player.isValid()) return;
-
   player.sendMessage("§e⏳ [Whitelist] Verificando sua permissão...");
 
-  let isAllowed = false;
-  let errorMsg = null;
+  // Aguarda 1.5s
+  await delay(30);
+  if (!player.isValid()) return;
 
+  let isAllowed = false;
   try {
     const res = await verificarWhitelist(nick);
     isAllowed = res.allowed === true;
-    if (!isAllowed && res.message) {
-      errorMsg = res.message;
-    }
   } catch (err) {
-    console.error(`[Whitelist] Erro ao consultar API para ${nick}:`, err);
-    errorMsg = err.message;
-    isAllowed = false; // MODO RESTRITO: Sem resposta da API = Não entra!
+    console.error(`[Whitelist] Erro API para ${nick}:`, err);
+    isAllowed = false;
   }
 
-  // Re-verifica se o player ainda está online
   if (!player.isValid()) return;
 
   if (isAllowed) {
+    blockedPlayers.delete(nick.toLowerCase());
+    if (player.inputPermissions) {
+      player.inputPermissions.movementEnabled = true;
+      player.inputPermissions.cameraEnabled = true;
+    }
     player.sendMessage("§a✅ [Whitelist] Acesso liberado! Bom jogo.");
   } else {
-    // Jogador NÃO aprovado ou erro na API -> KICK OBRIGATÓRIO
-    player.sendMessage("§c❌ [Whitelist] Acesso negado! Você não está aprovado.");
-    if (errorMsg) {
-      player.sendMessage(`§7Motivo: ${errorMsg}`);
-    }
+    // Adiciona à lista de bloqueio imediato
+    blockedPlayers.add(nick.toLowerCase());
 
-    await delay(30); // 1.5s para exibir o texto
+    player.sendMessage("§c❌ [Whitelist] Acesso negado! Seu nick não está na Whitelist.");
+    player.sendMessage("§ePeça permissão em: fffff-autoforge.vercel.app");
 
-    // Executa kick com fallback
+    // Tenta expulsar via comando /kick
     system.run(() => {
       try {
         const overworld = world.getDimension("overworld");
-        overworld.runCommandAsync(`kick "${nick}" §c${KICK_REASON}`);
-      } catch (e) {
-        console.error(`[Whitelist] Erro no comando kick:`, e);
-      }
+        overworld.runCommandAsync(`kick "${nick}" §cVoce nao esta na Whitelist!`);
+      } catch (e) {}
     });
   }
 });
 
-// ─── Requisição HTTP para a API ───────────────────────────────────────────────
+// ─── Requisição HTTP para API ─────────────────────────────────────────────────
 async function verificarWhitelist(nick) {
   const url = `${API_URL}/${encodeURIComponent(nick)}`;
-
   const request = new HttpRequest(url);
   request.method = HttpRequestMethod.Get;
   request.headers = [
     { key: "Content-Type", value: "application/json" },
-    { key: "User-Agent",   value: "MinecraftBedrock-Whitelist/2.0" }
+    { key: "User-Agent",   value: "MinecraftBedrock-Whitelist/2.1" }
   ];
-  request.timeout = 6; // 6 segundos de timeout
+  request.timeout = 5;
 
   const response = await http.request(request);
-
-  // Se a Vercel retornar HTML (tela de login da Vercel) ou erro
   if (response.status !== 200) {
-    throw new Error(`API retornou status HTTP ${response.status} (Verifique protecao Vercel)`);
+    throw new Error(`Status ${response.status}`);
   }
-
-  try {
-    const data = JSON.parse(response.body);
-    return data;
-  } catch (parseError) {
-    throw new Error("Resposta da API nao e JSON valido (Desative Vercel Authentication)");
-  }
+  return JSON.parse(response.body);
 }
 
 function delay(ticks) {
   return new Promise(resolve => system.runTimeout(resolve, ticks));
 }
 
-// ─── Comando Admin in-game: /scriptevent whitelist:check <nick> ────────────────
+// ─── Comando Admin: /scriptevent whitelist:check <nick> ────────────────────────
 system.afterEvents.scriptEventReceive.subscribe(async (event) => {
   if (event.id !== "whitelist:check") return;
 
@@ -118,16 +132,15 @@ system.afterEvents.scriptEventReceive.subscribe(async (event) => {
     return;
   }
 
-  event.sourceEntity?.sendMessage(`§e[Whitelist] Consultando '${nick}'...`);
   try {
     const res = await verificarWhitelist(nick);
     const msg = res.allowed
-      ? `§a✅ [Whitelist] '${nick}' ESTÁ aprovado!`
-      : `§c❌ [Whitelist] '${nick}' NÃO está aprovado.`;
+      ? `§a✅ [Whitelist] '${nick}' ESTÁ na whitelist!`
+      : `§c❌ [Whitelist] '${nick}' NÃO está na whitelist.`;
     event.sourceEntity?.sendMessage(msg);
   } catch (err) {
-    event.sourceEntity?.sendMessage(`§c[Whitelist] Erro na API: ${err.message}`);
+    event.sourceEntity?.sendMessage(`§c[Whitelist] Erro API: ${err.message}`);
   }
 });
 
-console.log("[Whitelist] ✅ Addon v2.0 (Strict Mode) inicializado!");
+console.log("[Whitelist] ✅ Addon v2.1 (Anti-Bypass + Input Lock) Ativo!");
