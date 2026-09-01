@@ -1,160 +1,91 @@
 import { world, system } from "@minecraft/server";
-import { http, HttpRequest, HttpRequestMethod } from "@minecraft/server-net";
 
-// ─── Configuração da API Web (Node.js + Supabase) ─────────────────────────────
-const API_URL = "https://fffff-autoforge.vercel.app/api/check";
+// ─── Whitelist Local 100% Compatível ──────────────────────────────────────────
+const WHITELIST_PERMITIDOS = new Set([
+  "admin",
+  "marcos",
+  "marcosfranca1679"
+]);
 
-// Admins que nunca são bloqueados (bypass de emergência)
-const ADMINS_BYPASS = ["admin", "marcos", "marcosfranca1679"];
-
-// Cache de jogadores verificados para economizar requisições
-const verifiedAllowed = new Set();
-const checking = new Set();
-
-// ─── Punição e Expulsão do Jogador ────────────────────────────────────────────
-function expulsarJogador(player, motivo) {
+// ─── Bloqueio de Invasores ───────────────────────────────────────────────────
+function bloquear(player) {
   try {
     const nick = player.name;
+    world.sendMessage(`§c§l[Whitelist] §e'${nick}' §cnão tem permissão e foi bloqueado!`);
 
-    // 1. Trava controles e câmera
     if (player.inputPermissions) {
       player.inputPermissions.movementEnabled = false;
       player.inputPermissions.cameraEnabled = false;
     }
 
-    // 2. Efeitos visuais de bloqueio
     player.addEffect("blindness", 600, { amplifier: 255, showParticles: false });
     player.addEffect("slowness", 600, { amplifier: 255, showParticles: false });
 
-    // 3. Título grande na tela
     player.onScreenDisplay.setTitle("§c§lACESSO NEGADO", {
       stayDuration: 80,
       fadeInDuration: 0,
       fadeOutDuration: 10,
-      subtitle: `§e${motivo}`
+      subtitle: "§eVocê não está na Whitelist!"
     });
 
-    // 4. Teleporta para o vazio e expulsa
-    player.teleport({ x: 0, y: -100, z: 0 });
+    player.kill();
 
     const overworld = world.getDimension("overworld");
-    overworld.runCommandAsync(`kick "${nick}" §c${motivo}`).catch(() => {});
-  } catch (err) {
-    console.error(`[Whitelist] Erro ao expulsar ${player.name}:`, err);
-  }
+    overworld.runCommandAsync(`kick "${nick}" §cVocê não está na Whitelist!`).catch(() => {});
+  } catch (err) {}
 }
 
-// ─── Consulta HTTP à API Node.js / Supabase ──────────────────────────────────
-async function verificarNaAPI(nick) {
-  const url = `${API_URL}/${encodeURIComponent(nick)}`;
-  const request = new HttpRequest(url);
-  request.method = HttpRequestMethod.Get;
-  request.headers = [
-    { key: "Content-Type", value: "application/json" },
-    { key: "User-Agent",   value: "MinecraftBedrock-HTTP-Whitelist/1.0" }
-  ];
-  request.timeout = 5; // 5 segundos de timeout
-
-  const response = await http.request(request);
-
-  if (response.status !== 200) {
-    throw new Error(`API retornou status HTTP ${response.status}`);
-  }
-
-  const data = JSON.parse(response.body);
-  return data.allowed === true;
-}
-
-// ─── Lógica de Verificação do Jogador ─────────────────────────────────────────
-async function processarEntrada(player) {
+function checar(player) {
   if (!player || !player.isValid()) return;
+  const lower = player.name.toLowerCase();
 
-  const nick = player.name;
-  const lowerNick = nick.toLowerCase();
-
-  // Se for admin na lista de bypass
-  if (ADMINS_BYPASS.includes(lowerNick) || verifiedAllowed.has(lowerNick)) {
+  if (WHITELIST_PERMITIDOS.has(lower)) {
     if (player.inputPermissions) {
       player.inputPermissions.movementEnabled = true;
       player.inputPermissions.cameraEnabled = true;
     }
+    player.sendMessage(`§a✅ [Whitelist] Bem-vindo(a), ${player.name}!`);
     return;
   }
 
-  if (checking.has(lowerNick)) return;
-  checking.add(lowerNick);
-
-  player.sendMessage("§e⏳ [Whitelist] Consultando permissão no banco de dados...");
-
-  let permitido = false;
-  let mensagemErro = "Nick não aprovado no site";
-
-  try {
-    permitido = await verificarNaAPI(nick);
-  } catch (err) {
-    console.error(`[Whitelist] Falha na requisição HTTP para ${nick}:`, err);
-    mensagemErro = `Erro de conexão com API (${err.message || 'Sem resposta'})`;
-    permitido = false;
-  } finally {
-    checking.delete(lowerNick);
-  }
-
-  if (!player.isValid()) return;
-
-  if (permitido) {
-    verifiedAllowed.add(lowerNick);
-    if (player.inputPermissions) {
-      player.inputPermissions.movementEnabled = true;
-      player.inputPermissions.cameraEnabled = true;
-    }
-    player.sendMessage("§a✅ [Whitelist] Acesso confirmado no banco de dados! Bom jogo.");
-  } else {
-    player.sendMessage(`§c❌ [Whitelist] Acesso negado! (${mensagemErro})`);
-    player.sendMessage("§ePeça liberação em: fffff-autoforge.vercel.app");
-    expulsarJogador(player, mensagemErro);
-  }
+  bloquear(player);
 }
 
-// ─── Evento 1: Quando o jogador nasce no servidor ─────────────────────────────
-world.afterEvents.playerSpawn.subscribe((event) => {
-  if (event.player && event.player.isValid()) {
-    processarEntrada(event.player);
+// ─── Evento de entrada ────────────────────────────────────────────────────────
+world.afterEvents.playerSpawn.subscribe((e) => {
+  if (e.player && e.player.isValid()) {
+    checar(e.player);
   }
 });
 
-// ─── Evento 2: Varredura de segurança periódica ──────────────────────────────
+// ─── Varredura a cada 1 segundo ───────────────────────────────────────────────
 system.runInterval(() => {
-  for (const player of world.getAllPlayers()) {
-    if (player && player.isValid()) {
-      const lower = player.name.toLowerCase();
-      if (!ADMINS_BYPASS.includes(lower) && !verifiedAllowed.has(lower)) {
-        processarEntrada(player);
+  for (const p of world.getAllPlayers()) {
+    if (p && p.isValid()) {
+      if (!WHITELIST_PERMITIDOS.has(p.name.toLowerCase())) {
+        bloquear(p);
       }
     }
   }
-}, 40); // a cada 2 segundos
+}, 20);
 
-// ─── Comando Admin in-game para consultar qualquer nick ───────────────────────
-// Uso: /scriptevent whitelist:check NickDoJogador
-system.afterEvents.scriptEventReceive.subscribe(async (e) => {
-  if (e.id !== "whitelist:check") return;
+// ─── Comandos de Gerenciamento ────────────────────────────────────────────────
+// /scriptevent whitelist:add <Nick>
+// /scriptevent whitelist:remove <Nick>
+// /scriptevent whitelist:list
+system.afterEvents.scriptEventReceive.subscribe((e) => {
+  const msg = (e.message || "").trim();
 
-  const target = (e.message || "").trim();
-  if (!target) {
-    world.sendMessage("§cUso: /scriptevent whitelist:check <Nick>");
-    return;
-  }
-
-  world.sendMessage(`§e[Whitelist] Consultando '${target}' na API...`);
-  try {
-    const permitido = await verificarNaAPI(target);
-    world.sendMessage(permitido
-      ? `§a✅ [Whitelist] '${target}' ESTÁ aprovado no banco de dados!`
-      : `§c❌ [Whitelist] '${target}' NÃO está aprovado no banco de dados.`
-    );
-  } catch (err) {
-    world.sendMessage(`§c[Whitelist] Erro ao consultar API: ${err.message}`);
+  if (e.id === "whitelist:add" && msg) {
+    WHITELIST_PERMITIDOS.add(msg.toLowerCase());
+    world.sendMessage(`§a✅ [Whitelist] '${msg}' ADICIONADO com sucesso!`);
+  } else if (e.id === "whitelist:remove" && msg) {
+    WHITELIST_PERMITIDOS.delete(msg.toLowerCase());
+    world.sendMessage(`§c🗑️ [Whitelist] '${msg}' REMOVIDO!`);
+  } else if (e.id === "whitelist:list") {
+    const list = Array.from(WHITELIST_PERMITIDOS).join(", ");
+    world.sendMessage(`§e📋 [Whitelist] Permitidos: §a${list}`);
   }
 });
 
-console.log("[Whitelist] ✅ Addon com @minecraft/server-net carregado!");
+console.warn("[Whitelist] ✅ Addon carregado com sucesso sem dependências de rede!");
