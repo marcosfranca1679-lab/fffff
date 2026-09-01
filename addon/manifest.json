@@ -1,19 +1,19 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Mapa Bermuda Whitelist v3",
-    "description": "Sistema de Whitelist automática via API Web v3.0",
-    "uuid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "version": [1, 2, 0],
+    "name": "Mapa Bermuda Whitelist FINAL",
+    "description": "Sistema de Whitelist Anti-Bypass v3.5",
+    "uuid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "version": [3, 5, 0],
     "min_engine_version": [1, 21, 0]
   },
   "modules": [
     {
-      "description": "Script de verificação de whitelist",
+      "description": "Script de verificação e bloqueio de whitelist",
       "type": "script",
       "language": "javascript",
-      "uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "version": [1, 2, 0],
+      "uuid": "e2b8c9d1-34f7-4123-89ab-c56789012345",
+      "version": [3, 5, 0],
       "entry": "scripts/whitelist.js"
     }
   ],
