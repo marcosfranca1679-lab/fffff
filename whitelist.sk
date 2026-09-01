@@ -1,0 +1,41 @@
+# ══════════════════════════════════════════════════════════════════════════════
+#  MAPA BERMUDA — WHITELIST AUTOMÁTICA VIA SITE (VERCEL + SUPABASE)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Admins liberados direto
+options:
+    api_url: "https://fffff-autoforge.vercel.app/api/check"
+    kick_msg: "&c&lACESSO NEGADO!%nl%%nl%&eSeu Nick não está na Whitelist.%nl%&fSolicite acesso no site:%nl%&ahttps://fffff-autoforge.vercel.app"
+
+on connect:
+    set {_name} to player's name
+    
+    # Remove o prefixo '.' do Geyser para jogadores de Bedrock/Celular
+    if {_name} starts with ".":
+        set {_name} to subtext of {_name} from characters 2 to (length of {_name})
+    
+    # Bypass para administradores
+    if {_name} is "admin" or "marcos" or "marcosfranca1679":
+        stop
+
+    # Consulta a API na Vercel
+    send a "GET" request to "{@api_url}/%{_name}%"
+    set {_response} to last http response's body
+    
+    # Se a API responder que NÃO está liberado -> EXPULSA!
+    if {_response} does not contain """allowed"":true":
+        kick player due to "{@kick_msg}"
+        broadcast "&c[Whitelist] &e%{_name}% &ctentou entrar sem permissão e foi expulso!"
+
+# Comando para administradores verificarem nicks no chat
+command /whitelist-check <text>:
+    permission: op
+    trigger:
+        set {_target} to arg-1
+        send "&e[Whitelist] Consultando &f%{_target}% &ena API..." to player
+        send a "GET" request to "{@api_url}/%{_target}%"
+        set {_response} to last http response's body
+        if {_response} contains """allowed"":true":
+            send "&a✅ [Whitelist] '%{_target}%' ESTÁ aprovado no site!" to player
+        else:
+            send "&c❌ [Whitelist] '%{_target}%' NÃO está aprovado no site." to player
