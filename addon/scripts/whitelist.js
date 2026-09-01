@@ -4,19 +4,18 @@ import { http, HttpRequest, HttpRequestMethod } from "@minecraft/server-net";
 // ─── Configuração ─────────────────────────────────────────────────────────────
 const API_URL = "https://fffff-autoforge.vercel.app/api/check";
 
-// Mensagem exibida ao jogador kickado (§c = vermelho, §e = amarelo, §f = branco)
-const KICK_REASON = "Voce nao esta na Whitelist! Peca acesso em: fffff-autoforge.vercel.app";
+// Mensagem exibida ao jogador kickado
+const KICK_REASON = "Voce nao esta na Whitelist! Peca acesso no site do servidor.";
 
-// Admins que nunca são kickados (nicknames exatos)
-const ADMINS_BYPASS = ["admin", "Marcos"];
+// Admins que nunca são kickados (coloque seu Nick aqui)
+const ADMINS_BYPASS = ["admin", "Marcos", "marcosfranca1679"];
 
-// Tempo de espera antes de checar (ticks) — 60 ticks = 3 segundos
-const CHECK_DELAY_TICKS = 60;
+// Tempo de espera antes de checar (ticks) — 40 ticks = 2 segundos
+const CHECK_DELAY_TICKS = 40;
 
-// ─── Lógica principal ─────────────────────────────────────────────────────────
-
+// ─── Evento quando jogador entra no servidor ──────────────────────────────────
 world.afterEvents.playerSpawn.subscribe(async (event) => {
-  // Só executa na primeira vez que o jogador entra na sessão (não ao renascer de morte)
+  // Executa apenas na entrada inicial no servidor
   if (!event.initialSpawn) return;
 
   const player = event.player;
@@ -24,48 +23,61 @@ world.afterEvents.playerSpawn.subscribe(async (event) => {
 
   const nick = player.name;
 
-  // Admins do bypass nunca são kickados
-  if (ADMINS_BYPASS.includes(nick)) {
+  // Se for admin na lista de bypass, libera direto
+  if (ADMINS_BYPASS.some(adminNick => adminNick.toLowerCase() === nick.toLowerCase())) {
     player.sendMessage("§a✅ [Whitelist] Admin detectado! Acesso liberado.");
     return;
   }
 
-  // Aguarda alguns ticks para o jogador carregar completamente no mundo
+  // Aguarda 2 segundos para o jogador terminar de carregar
   await delay(CHECK_DELAY_TICKS);
 
-  // Re-verifica se o jogador ainda está online e válido
   if (!player.isValid()) return;
 
-  // Avisa que está verificando
   player.sendMessage("§e⏳ [Whitelist] Verificando sua permissão...");
 
-  try {
-    const allowed = await verificarWhitelist(nick);
+  let isAllowed = false;
+  let errorMsg = null;
 
-    if (allowed) {
-      player.sendMessage("§a✅ [Whitelist] Acesso liberado! Bem-vindo ao Mapa Bermuda!");
-    } else {
-      player.sendMessage("§c❌ [Whitelist] Seu nick não está aprovado.");
-      await delay(20); // 1 segundo
-      
-      // Executa o kick usando API moderna do Minecraft Bedrock 1.21+
-      system.run(() => {
-        try {
-          const dimension = world.getDimension("overworld");
-          dimension.runCommandAsync(`kick "${nick}" §c${KICK_REASON}`);
-        } catch (e) {
-          console.error(`[Whitelist] Erro ao kickar ${nick}:`, e);
-        }
-      });
+  try {
+    const res = await verificarWhitelist(nick);
+    isAllowed = res.allowed === true;
+    if (!isAllowed && res.message) {
+      errorMsg = res.message;
     }
   } catch (err) {
-    // Se a API web estiver fora do ar ou sem internet, avisa no log
-    world.sendMessage(`§c[Whitelist] §eAviso: Erro ao verificar ${nick} na API.`);
-    console.error(`[Whitelist] Erro na API para ${nick}:`, err);
+    console.error(`[Whitelist] Erro ao consultar API para ${nick}:`, err);
+    errorMsg = err.message;
+    isAllowed = false; // MODO RESTRITO: Sem resposta da API = Não entra!
+  }
+
+  // Re-verifica se o player ainda está online
+  if (!player.isValid()) return;
+
+  if (isAllowed) {
+    player.sendMessage("§a✅ [Whitelist] Acesso liberado! Bom jogo.");
+  } else {
+    // Jogador NÃO aprovado ou erro na API -> KICK OBRIGATÓRIO
+    player.sendMessage("§c❌ [Whitelist] Acesso negado! Você não está aprovado.");
+    if (errorMsg) {
+      player.sendMessage(`§7Motivo: ${errorMsg}`);
+    }
+
+    await delay(30); // 1.5s para exibir o texto
+
+    // Executa kick com fallback
+    system.run(() => {
+      try {
+        const overworld = world.getDimension("overworld");
+        overworld.runCommandAsync(`kick "${nick}" §c${KICK_REASON}`);
+      } catch (e) {
+        console.error(`[Whitelist] Erro no comando kick:`, e);
+      }
+    });
   }
 });
 
-// ─── Função que chama a API Web ───────────────────────────────────────────────
+// ─── Requisição HTTP para a API ───────────────────────────────────────────────
 async function verificarWhitelist(nick) {
   const url = `${API_URL}/${encodeURIComponent(nick)}`;
 
@@ -73,26 +85,30 @@ async function verificarWhitelist(nick) {
   request.method = HttpRequestMethod.Get;
   request.headers = [
     { key: "Content-Type", value: "application/json" },
-    { key: "User-Agent",   value: "MinecraftBedrock-1.21-Whitelist/1.1" }
+    { key: "User-Agent",   value: "MinecraftBedrock-Whitelist/2.0" }
   ];
-  request.timeout = 8; // 8 segundos de timeout
+  request.timeout = 6; // 6 segundos de timeout
 
   const response = await http.request(request);
 
+  // Se a Vercel retornar HTML (tela de login da Vercel) ou erro
   if (response.status !== 200) {
-    throw new Error(`API retornou status HTTP ${response.status}`);
+    throw new Error(`API retornou status HTTP ${response.status} (Verifique protecao Vercel)`);
   }
 
-  const data = JSON.parse(response.body);
-  return data.allowed === true;
+  try {
+    const data = JSON.parse(response.body);
+    return data;
+  } catch (parseError) {
+    throw new Error("Resposta da API nao e JSON valido (Desative Vercel Authentication)");
+  }
 }
 
-// ─── Helper: delay assíncrono em ticks ────────────────────────────────────────
 function delay(ticks) {
   return new Promise(resolve => system.runTimeout(resolve, ticks));
 }
 
-// ─── Comando de admin in-game: /scriptevent whitelist:check <nick> ─────────────
+// ─── Comando Admin in-game: /scriptevent whitelist:check <nick> ────────────────
 system.afterEvents.scriptEventReceive.subscribe(async (event) => {
   if (event.id !== "whitelist:check") return;
 
@@ -102,15 +118,16 @@ system.afterEvents.scriptEventReceive.subscribe(async (event) => {
     return;
   }
 
+  event.sourceEntity?.sendMessage(`§e[Whitelist] Consultando '${nick}'...`);
   try {
-    const allowed = await verificarWhitelist(nick);
-    const msg = allowed
-      ? `§a✅ [Whitelist] '${nick}' ESTÁ na whitelist.`
-      : `§c❌ [Whitelist] '${nick}' NÃO está na whitelist.`;
+    const res = await verificarWhitelist(nick);
+    const msg = res.allowed
+      ? `§a✅ [Whitelist] '${nick}' ESTÁ aprovado!`
+      : `§c❌ [Whitelist] '${nick}' NÃO está aprovado.`;
     event.sourceEntity?.sendMessage(msg);
   } catch (err) {
-    event.sourceEntity?.sendMessage(`§c[Whitelist] Erro ao consultar API: ${err.message}`);
+    event.sourceEntity?.sendMessage(`§c[Whitelist] Erro na API: ${err.message}`);
   }
 });
 
-console.log("[Whitelist] ✅ Addon carregado com sucesso para Minecraft Bedrock 1.21+!");
+console.log("[Whitelist] ✅ Addon v2.0 (Strict Mode) inicializado!");
