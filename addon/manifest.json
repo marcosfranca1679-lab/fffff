@@ -1,19 +1,19 @@
 {
   "format_version": 2,
   "header": {
-    "name": "Mapa Bermuda Whitelist v5.0",
-    "description": "Sistema de Whitelist Anti-Bypass v5.0",
-    "uuid": "9c8b7a6d-5e4f-3a2b-1c0d-8e7f6a5b4c3d",
-    "version": [5, 0, 0],
+    "name": "Mapa Bermuda HTTP Whitelist",
+    "description": "Sistema de Whitelist conectado via HTTP REST ao Node.js / Supabase",
+    "uuid": "e3a8c1f4-5b2d-4e9a-8c71-0f2b3a4c5d6e",
+    "version": [1, 0, 0],
     "min_engine_version": [1, 21, 0]
   },
   "modules": [
     {
-      "description": "Script de whitelist",
+      "description": "Script de conexão HTTP com a API",
       "type": "script",
       "language": "javascript",
-      "uuid": "0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d",
-      "version": [5, 0, 0],
+      "uuid": "f4b9d2e5-6c3e-4f0b-9d82-1a3c4b5d6e7f",
+      "version": [1, 0, 0],
       "entry": "scripts/whitelist.js"
     }
   ],
@@ -21,6 +21,10 @@
     {
       "module_name": "@minecraft/server",
       "version": "1.13.0"
+    },
+    {
+      "module_name": "@minecraft/server-net",
+      "version": "1.0.0-beta"
     }
   ]
 }
