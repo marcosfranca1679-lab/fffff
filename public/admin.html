@@ -51,13 +51,17 @@
         </div>
       </div>
       <div class="flex items-center gap-3 flex-wrap">
-        <!-- Adicionar manualmente -->
+        <!-- Adicionar / Banir manualmente -->
         <div class="flex gap-2">
-          <input id="add-nick" type="text" maxlength="16" placeholder="Nick manual..."
-            class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-40 transition" />
+          <input id="add-nick" type="text" maxlength="16" placeholder="Nick..."
+            class="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500 w-36 transition" />
           <button onclick="adicionarManual()"
-            class="bg-green-700 hover:bg-green-600 text-white text-sm font-bold px-3 py-2 rounded-lg transition">
-            + Adicionar
+            class="bg-green-700 hover:bg-green-600 text-white text-sm font-bold px-3 py-2 rounded-lg transition" title="Aprovar direto">
+            + Aprovar
+          </button>
+          <button onclick="banirManual()"
+            class="bg-red-800 hover:bg-red-700 text-white text-sm font-bold px-3 py-2 rounded-lg transition" title="Banir Nick">
+            🔨 Banir
           </button>
         </div>
         <!-- Trocar senha -->
@@ -75,17 +79,18 @@
     <main class="flex-1 p-6 max-w-6xl mx-auto w-full">
 
       <!-- Stats -->
-      <div class="grid grid-cols-3 gap-4 mb-6" id="stats-cards"></div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6" id="stats-cards"></div>
 
       <!-- Mensagem de feedback -->
       <div id="feedback" class="hidden mb-4 p-3 rounded-lg text-sm font-semibold text-center fade-in"></div>
 
       <!-- Barra de busca + Abas -->
       <div class="flex flex-col sm:flex-row gap-3 mb-4 items-start sm:items-center justify-between">
-        <div class="flex gap-2">
+        <div class="flex gap-2 flex-wrap">
           <button onclick="mostrarAba('pending')"  id="tab-pending"  class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">⏳ Pendentes</button>
           <button onclick="mostrarAba('approved')" id="tab-approved" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">✅ Aprovados</button>
           <button onclick="mostrarAba('rejected')" id="tab-rejected" class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">❌ Rejeitados</button>
+          <button onclick="mostrarAba('banned')"   id="tab-banned"   class="tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition">🔨 Banidos</button>
         </div>
         <!-- Busca -->
         <div class="flex gap-2">
@@ -97,7 +102,7 @@
       </div>
 
       <!-- Tabela -->
-      <div class="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden">
+      <div class="bg-gray-900 border border-gray-700 rounded-2xl overflow-hidden shadow-xl">
         <table class="w-full text-sm">
           <thead class="bg-gray-800 text-gray-400 uppercase text-xs">
             <tr>
@@ -142,7 +147,7 @@
 
   <script>
     let currentTab = 'pending';
-    let allData = { pending: [], approved: [], rejected: [] };
+    let allData = { pending: [], approved: [], rejected: [], banned: [] };
     let refreshInterval = null;
 
     // ── Login ──────────────────────────────────────────────────────────────
@@ -202,22 +207,31 @@
     }
 
     function atualizarStats() {
+      const pendingCount = (allData.pending || []).length;
+      const approvedCount = (allData.approved || []).length;
+      const rejectedCount = (allData.rejected || []).length;
+      const bannedCount = (allData.banned || []).length;
+
       document.getElementById('stats-cards').innerHTML = `
         <div class="bg-yellow-900/30 border border-yellow-700 rounded-xl p-4 text-center cursor-pointer hover:bg-yellow-900/50 transition" onclick="mostrarAba('pending')">
-          <div class="text-3xl font-bold text-yellow-400">${allData.pending.length}</div>
+          <div class="text-3xl font-bold text-yellow-400">${pendingCount}</div>
           <div class="text-yellow-300 text-sm mt-1">⏳ Pendentes</div>
         </div>
         <div class="bg-green-900/30 border border-green-700 rounded-xl p-4 text-center cursor-pointer hover:bg-green-900/50 transition" onclick="mostrarAba('approved')">
-          <div class="text-3xl font-bold text-green-400">${allData.approved.length}</div>
+          <div class="text-3xl font-bold text-green-400">${approvedCount}</div>
           <div class="text-green-300 text-sm mt-1">✅ Aprovados</div>
         </div>
-        <div class="bg-red-900/30 border border-red-700 rounded-xl p-4 text-center cursor-pointer hover:bg-red-900/50 transition" onclick="mostrarAba('rejected')">
-          <div class="text-3xl font-bold text-red-400">${allData.rejected.length}</div>
-          <div class="text-red-300 text-sm mt-1">❌ Rejeitados</div>
+        <div class="bg-orange-900/30 border border-orange-700 rounded-xl p-4 text-center cursor-pointer hover:bg-orange-900/50 transition" onclick="mostrarAba('rejected')">
+          <div class="text-3xl font-bold text-orange-400">${rejectedCount}</div>
+          <div class="text-orange-300 text-sm mt-1">❌ Rejeitados</div>
+        </div>
+        <div class="bg-red-950/50 border border-red-700 rounded-xl p-4 text-center cursor-pointer hover:bg-red-900/50 transition" onclick="mostrarAba('banned')">
+          <div class="text-3xl font-bold text-red-500">${bannedCount}</div>
+          <div class="text-red-400 text-sm mt-1">🔨 Banidos</div>
         </div>
       `;
       // Aba pendentes em destaque se houver
-      if (allData.pending.length > 0) {
+      if (pendingCount > 0) {
         document.getElementById('tab-pending').classList.add('ring-2', 'ring-yellow-500');
       } else {
         document.getElementById('tab-pending').classList.remove('ring-2', 'ring-yellow-500');
@@ -226,16 +240,18 @@
 
     function mostrarAba(aba) {
       currentTab = aba;
-      ['pending','approved','rejected'].forEach(t => {
+      ['pending','approved','rejected','banned'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
+        if (!btn) return;
         btn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition ${t === aba ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-800'}`;
       });
       renderTabela();
     }
 
     function renderTabela() {
-      ['pending','approved','rejected'].forEach(t => {
+      ['pending','approved','rejected','banned'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
+        if (!btn) return;
         btn.className = `tab-btn px-4 py-2 rounded-lg text-sm font-semibold transition ${t === currentTab ? 'bg-gray-600 text-white' : 'text-gray-400 hover:bg-gray-800'}`;
       });
 
@@ -250,55 +266,96 @@
       }
       empty.classList.add('hidden');
 
-      tbody.innerHTML = lista.map(p => `
-        <tr class="hover:bg-gray-800/50 transition">
-          <td class="px-5 py-4">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">🧑‍💻</span>
-              <span class="font-semibold text-white">${escapeHtml(p.nick)}</span>
-            </div>
-          </td>
-          <td class="px-5 py-4 text-gray-400 text-xs">${formatarData(p.requested_at)}</td>
-          <td class="px-5 py-4 text-gray-400 text-xs">${formatarData(p.updated_at)}</td>
-          <td class="px-5 py-4 text-right">
-            <div class="flex gap-2 justify-end flex-wrap">
-              ${currentTab === 'pending' ? `
-                <button onclick="acao('approve','${escapeHtml(p.nick)}')"
-                  class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                  ✅ Aprovar
-                </button>
-                <button onclick="acao('reject','${escapeHtml(p.nick)}')"
-                  class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                  ❌ Rejeitar
-                </button>
-              ` : ''}
-              ${currentTab === 'approved' ? `
-                <button onclick="acao('reject','${escapeHtml(p.nick)}')"
-                  class="bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                  🚫 Suspender
-                </button>
-              ` : ''}
-              ${currentTab === 'rejected' ? `
-                <button onclick="acao('approve','${escapeHtml(p.nick)}')"
-                  class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                  ✅ Aprovar
-                </button>
-              ` : ''}
-              <button onclick="acao('remove','${escapeHtml(p.nick)}')"
-                class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-                🗑️
-              </button>
-            </div>
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = lista.map(p => {
+        const safeNick = escapeHtml(p.nick);
+        let actionsHtml = '';
+
+        if (currentTab === 'pending') {
+          actionsHtml = `
+            <button onclick="acao('approve','${safeNick}')"
+              class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Aprovar na Whitelist">
+              ✅ Aprovar
+            </button>
+            <button onclick="acao('reject','${safeNick}')"
+              class="bg-orange-800 hover:bg-orange-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Rejeitar pedido">
+              ❌ Rejeitar
+            </button>
+            <button onclick="acao('ban','${safeNick}')"
+              class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Banir Nick">
+              🔨 Banir
+            </button>
+          `;
+        } else if (currentTab === 'approved') {
+          actionsHtml = `
+            <button onclick="acao('reject','${safeNick}')"
+              class="bg-orange-700 hover:bg-orange-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Suspender acesso">
+              🚫 Suspender
+            </button>
+            <button onclick="acao('ban','${safeNick}')"
+              class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Banir jogador">
+              🔨 Banir
+            </button>
+          `;
+        } else if (currentTab === 'rejected') {
+          actionsHtml = `
+            <button onclick="acao('approve','${safeNick}')"
+              class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Aprovar jogador">
+              ✅ Aprovar
+            </button>
+            <button onclick="acao('ban','${safeNick}')"
+              class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Banir jogador">
+              🔨 Banir
+            </button>
+          `;
+        } else if (currentTab === 'banned') {
+          actionsHtml = `
+            <button onclick="acao('unban','${safeNick}')"
+              class="bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Desbanir jogador">
+              🔓 Desbanir
+            </button>
+            <button onclick="acao('approve','${safeNick}')"
+              class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Aprovar direto">
+              ✅ Aprovar
+            </button>
+          `;
+        }
+
+        actionsHtml += `
+          <button onclick="acao('remove','${safeNick}')"
+            class="bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition" title="Excluir registro">
+            🗑️
+          </button>
+        `;
+
+        return `
+          <tr class="hover:bg-gray-800/50 transition ${currentTab === 'banned' ? 'bg-red-950/20' : ''}">
+            <td class="px-5 py-4">
+              <div class="flex items-center gap-2">
+                <span class="text-lg">${currentTab === 'banned' ? '⛔' : '🧑‍💻'}</span>
+                <span class="font-semibold text-white">${safeNick}</span>
+                ${currentTab === 'banned' ? '<span class="text-xs bg-red-900 text-red-300 px-2 py-0.5 rounded font-bold">BANIDO</span>' : ''}
+              </div>
+            </td>
+            <td class="px-5 py-4 text-gray-400 text-xs">${formatarData(p.requested_at)}</td>
+            <td class="px-5 py-4 text-gray-400 text-xs">${formatarData(p.updated_at)}</td>
+            <td class="px-5 py-4 text-right">
+              <div class="flex gap-2 justify-end flex-wrap">
+                ${actionsHtml}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
 
     async function acao(tipo, nick) {
       let res;
       if (tipo === 'remove') {
-        if (!confirm(`Remover ${nick} permanentemente?`)) return;
+        if (!confirm(`Remover ${nick} permanentemente do registro?`)) return;
         res = await fetch(`/api/admin/remove/${encodeURIComponent(nick)}`, { method: 'DELETE' });
+      } else if (tipo === 'ban') {
+        if (!confirm(`BANIR ${nick} do servidor? Ele não conseguirá mais entrar.`)) return;
+        res = await fetch(`/api/admin/ban/${encodeURIComponent(nick)}`, { method: 'POST' });
       } else {
         res = await fetch(`/api/admin/${tipo}/${encodeURIComponent(nick)}`, { method: 'POST' });
       }
@@ -315,6 +372,17 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nick })
       });
+      const data = await res.json();
+      mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
+      document.getElementById('add-nick').value = '';
+      carregarJogadores();
+    }
+
+    async function banirManual() {
+      const nick = document.getElementById('add-nick').value.trim();
+      if (!nick) return;
+      if (!confirm(`Tem certeza que deseja BANIR o jogador '${nick}'?`)) return;
+      const res = await fetch(`/api/admin/ban/${encodeURIComponent(nick)}`, { method: 'POST' });
       const data = await res.json();
       mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
       document.getElementById('add-nick').value = '';
@@ -357,49 +425,39 @@
         body: JSON.stringify({ currentPassword, newPassword })
       });
       const data = await res.json();
-
-      if (res.ok) {
+      if (data.success) {
         fecharModalSenha();
-        mostrarFeedback(data.message || '🔐 Senha alterada!', 'green');
+        mostrarFeedback('🔑 Senha alterada com sucesso!', 'green');
       } else {
-        errEl.textContent = data.error || 'Erro ao alterar senha.';
+        errEl.textContent = data.error || 'Erro ao trocar senha.';
         errEl.classList.remove('hidden');
       }
     }
 
+    // ── Helpers ────────────────────────────────────────────────────────────
     function mostrarFeedback(msg, cor) {
       const el = document.getElementById('feedback');
       el.textContent = msg;
-      el.className = `mb-4 p-3 rounded-lg text-sm font-semibold text-center fade-in bg-${cor}-900/40 border border-${cor}-700 text-${cor}-300`;
+      el.className = `mb-4 p-3 rounded-lg text-sm font-semibold text-center fade-in ${
+        cor === 'green' ? 'bg-green-900/60 text-green-300 border border-green-600' : 'bg-red-900/60 text-red-300 border border-red-600'
+      }`;
       el.classList.remove('hidden');
       setTimeout(() => el.classList.add('hidden'), 4000);
     }
 
-    function formatarData(str) {
-      if (!str) return '-';
-      return new Date(str).toLocaleString('pt-BR');
+    function formatarData(iso) {
+      if (!iso) return '-';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      } catch { return iso; }
     }
 
     function escapeHtml(str) {
-      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      return String(str || '').replace(/[&<>"']/g, m => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+      }[m]));
     }
-
-    // ── Init ──────────────────────────────────────────────────────────────
-    mostrarAba('pending');
-
-    // Fechar modal clicando fora
-    document.getElementById('modal-senha').addEventListener('click', e => {
-      if (e.target === document.getElementById('modal-senha')) fecharModalSenha();
-    });
-
-    // Enter no login
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        if (!document.getElementById('login-screen').classList.contains('hidden')) {
-          fazerLogin();
-        }
-      }
-    });
   </script>
 </body>
 </html>
