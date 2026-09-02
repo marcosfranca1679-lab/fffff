@@ -39,12 +39,23 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .connectTimeout(Duration.ofSeconds(6))
             .build();
         getServer().getPluginManager().registerEvents(this, this);
-        log.info("Mapa Bermuda Whitelist - ATIVA!");
+        log.info("Mapa Bermuda Whitelist & Ban - ATIVA! Conectada em: " + API_URL);
     }
 
     @Override
     public void onDisable() {
         log.info("[Whitelist] Plugin desativado.");
+    }
+
+    private Component buildBanMessage(String cleanName) {
+        return Component.text()
+            .append(Component.text("VOCE FOI BANIDO DO SERVIDOR!\n\n", NamedTextColor.DARK_RED, TextDecoration.BOLD))
+            .append(Component.text("Nick: ", NamedTextColor.RED))
+            .append(Component.text(cleanName + "\n\n", NamedTextColor.WHITE, TextDecoration.BOLD))
+            .append(Component.text("Seu acesso foi bloqueado pelo administrador.\n\n", NamedTextColor.YELLOW))
+            .append(Component.text("Mais informacoes em:\n", NamedTextColor.GRAY))
+            .append(Component.text("fffff-autoforge.vercel.app", NamedTextColor.AQUA))
+            .build();
     }
 
     private Component buildKickMessage(String cleanName) {
@@ -75,21 +86,26 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL + encodedName))
                 .timeout(Duration.ofSeconds(5))
-                .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.0")
+                .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.2")
                 .GET()
                 .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            String body = response.body() != null ? response.body() : "";
 
-            boolean allowed = response.statusCode() == 200
-                && response.body() != null
-                && response.body().contains("\"allowed\":true");
+            boolean banned  = body.contains("\"banned\":true");
+            boolean allowed = body.contains("\"allowed\":true");
 
-            if (allowed) {
-                log.info("[Whitelist] '" + cleanName + "' aprovado! Acesso liberado.");
-            } else {
-                log.info("[Whitelist] '" + cleanName + "' NAO aprovado! Expulsando...");
+            if (banned) {
+                log.info("[Whitelist] 🔨 '" + cleanName + "' esta BANIDO! Bloqueando entrada...");
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessage(cleanName));
+
+            } else if (!allowed) {
+                log.info("[Whitelist] ❌ '" + cleanName + "' NAO aprovado. Expulsando...");
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
+
+            } else {
+                log.info("[Whitelist] ✅ '" + cleanName + "' aprovado! Acesso liberado.");
             }
 
         } catch (Exception e) {
