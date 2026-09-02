@@ -1,0 +1,7 @@
+name: MapaBermudaWhitelist
+version: "1.0.0"
+main: com.mapabermuda.whitelist.WhitelistPlugin
+api-version: "1.21"
+description: "Whitelist automática conectada ao site Mapa Bermuda via Vercel + Supabase"
+authors:
+  - MarcosFreanca
