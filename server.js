@@ -375,7 +375,26 @@ app.get('/api/bans', async (req, res) => {
       .order('updated_at', { ascending: false });
 
     if (error) throw error;
-    res.json(data || []);
+    
+    const validBans = [];
+    for (const b of (data || [])) {
+      const ban = parseBanInfo(b.ban_reason);
+      if (ban.expired) {
+        // Desbane automaticamente no banco
+        supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', b.nick).catch(() => {});
+      } else {
+        validBans.push({
+          nick: b.nick,
+          ban_reason: ban.reason,
+          remaining: ban.remaining,
+          isPermanent: ban.isPermanent,
+          platform: b.platform,
+          updated_at: b.updated_at
+        });
+      }
+    }
+
+    res.json(validBans);
   } catch (err) {
     res.json([]);
   }
@@ -459,19 +478,81 @@ app.post('/api/admin/reject/:nick', requireAdmin, async (req, res) => {
   }
 });
 
-// Banir
+// Helper para calcular e formatar expiração e tempo restante de banimento
+function parseBanInfo(banReason) {
+  if (!banReason) {
+    return { reason: 'Violação das regras do servidor', isPermanent: true, remaining: 'Permanente', expired: false };
+  }
+
+  const match = banReason.match(/\[EXPIRA:([^\]]+)\]/);
+  if (!match) {
+    return { reason: banReason, isPermanent: true, remaining: 'Permanente', expired: false };
+  }
+
+  const expireIso = match[1];
+  const cleanReason = banReason.replace(/\[EXPIRA:[^\]]+\]/, '').trim() || 'Violação das regras';
+  const expireTime = new Date(expireIso).getTime();
+  const now = Date.now();
+
+  if (now >= expireTime) {
+    return { reason: cleanReason, isPermanent: false, remaining: 'Expirado', expired: true };
+  }
+
+  const diffMs = expireTime - now;
+  const diffMins = Math.floor(diffMs / (60 * 1000));
+  const diffHours = Math.floor(diffMs / (3600 * 1000));
+  const diffDays = Math.floor(diffMs / (24 * 3600 * 1000));
+
+  let remaining = '';
+  if (diffDays > 0) {
+    const restHours = diffHours % 24;
+    remaining = `${diffDays}d` + (restHours > 0 ? ` ${restHours}h` : '');
+  } else if (diffHours > 0) {
+    const restMins = diffMins % 60;
+    remaining = `${diffHours}h` + (restMins > 0 ? ` ${restMins}m` : '');
+  } else {
+    remaining = `${Math.max(1, diffMins)} minuto(s)`;
+  }
+
+  return { reason: cleanReason, isPermanent: false, remaining, expired: false };
+}
+
+// Banir com motivo e tempo (Minutos, Horas, Dias ou Permanente)
 app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
   try {
     const nick = req.params.nick.trim();
-    const reason = (req.body.reason || 'Violação das regras do servidor').trim();
+    const reasonText = (req.body.reason || 'Violação das regras do servidor').trim();
+    const durationUnit = req.body.durationUnit || 'permanent'; // 'minutes', 'hours', 'days', 'permanent'
+    const durationValue = parseInt(req.body.durationValue, 10) || 0;
+
+    let fullReason = reasonText;
+    let remainingLabel = 'Permanente';
+
+    if (durationUnit !== 'permanent' && durationValue > 0) {
+      const ms = durationUnit === 'minutes' ? durationValue * 60 * 1000
+               : durationUnit === 'hours' ? durationValue * 3600 * 1000
+               : durationValue * 24 * 3600 * 1000;
+      const expireDate = new Date(Date.now() + ms);
+      fullReason = `${reasonText} [EXPIRA:${expireDate.toISOString()}]`;
+      remainingLabel = `${durationValue} ${durationUnit}`;
+    }
+
     const now = new Date().toISOString();
 
     const { error } = await supabase
       .from('players')
-      .upsert({ nick, status: 'banned', ban_reason: reason, updated_at: now }, { onConflict: 'nick' });
+      .upsert({ 
+        nick, 
+        status: 'banned', 
+        ban_reason: fullReason, 
+        updated_at: now 
+      }, { onConflict: 'nick' });
 
     if (error) throw error;
-    res.json({ success: true, message: `🔨 ${nick} foi BANIDO!` });
+    res.json({ 
+      success: true, 
+      message: `🔨 ${nick} foi BANIDO! Duração: ${remainingLabel}.` 
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -543,7 +624,26 @@ app.get('/api/check/:nick', async (req, res) => {
     }
 
     if (player.status === 'banned') {
-      return res.json({ allowed: false, banned: true, reason: player.ban_reason || 'Banido pelo Administrador', nick });
+      const ban = parseBanInfo(player.ban_reason);
+
+      // Se o tempo do ban expirou, libera o jogador e desbane automaticamente!
+      if (ban.expired) {
+        await supabase
+          .from('players')
+          .update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() })
+          .ilike('nick', nick);
+
+        return res.json({ allowed: true, banned: false, nick });
+      }
+
+      return res.json({ 
+        allowed: false, 
+        banned: true, 
+        reason: ban.reason, 
+        remaining: ban.remaining,
+        isPermanent: ban.isPermanent,
+        nick 
+      });
     }
 
     const allowed = player.status === 'approved';
