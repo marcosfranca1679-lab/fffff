@@ -1,8 +1,8 @@
 const express = require('express');
-const session = require('express-session');
-const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const path = require('path');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { supabase } = require('./database');
 
 const app = express();
@@ -11,39 +11,69 @@ const PORT = process.env.PORT || 3000;
 // ─── Admin Config ─────────────────────────────────────────────────────────────
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'MinecraftAdmin@2025';
+const TOKEN_SECRET = process.env.TOKEN_SECRET || 'mapabermuda-auth-secret-key-2025-mc';
 
 // ─── Middlewares ─────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'mc-supabase-discord-secret-2025',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    maxAge: 1000 * 60 * 60 * 24 * 7, // 7 dias
-    httpOnly: true,
-    sameSite: 'lax'
+
+// ─── Token Stateless (Funciona 100% no Vercel Serverless sem perder sessão) ───
+function createAuthToken(payload) {
+  const data = JSON.stringify({ ...payload, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 }); // 30 dias
+  const b64 = Buffer.from(data).toString('base64');
+  const sig = crypto.createHmac('sha256', TOKEN_SECRET).update(b64).digest('hex');
+  return `${b64}.${sig}`;
+}
+
+function verifyAuthToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [b64, sig] = parts;
+  const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(b64).digest('hex');
+  if (sig !== expectedSig) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+    if (payload.exp && Date.now() > payload.exp) return null;
+    return payload;
+  } catch {
+    return null;
   }
-}));
+}
 
-// In-memory fallback para mensagens de chat se tabela ainda estiver sendo criada
-let memoryChatMessages = [
-  {
-    id: 'welcome-1',
-    author_nick: 'Sistema',
-    author_role: 'admin',
-    author_platform: 'Servidor',
-    content: '👋 Bem-vindos ao servidor Mapa Bermuda! Este é o chat oficial da comunidade.',
-    created_at: new Date().toISOString()
+// Middleware de Autenticação via Header Bearer
+app.use((req, res, next) => {
+  let token = null;
+  const authHeader = req.headers['authorization'];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
   }
-];
+  if (!token && req.query && req.query.token) {
+    token = req.query.token;
+  }
 
-// In-memory fallback para contas se tabela accounts estiver sendo criada
-let memoryAccounts = new Map();
+  if (token) {
+    const payload = verifyAuthToken(token);
+    if (payload) {
+      req.user = payload.user;
+      req.isAdmin = payload.isAdmin || false;
+    }
+  }
+  next();
+});
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+function requireAuth(req, res, next) {
+  if (req.user || req.isAdmin) return next();
+  res.status(401).json({ error: 'Você precisa estar logado.' });
+}
+
+function requireAdmin(req, res, next) {
+  if (req.isAdmin) return next();
+  res.status(403).json({ error: 'Acesso restrito para administradores.' });
+}
+
 function validarNick(nick) {
   if (!nick || typeof nick !== 'string') return false;
   return /^[a-zA-Z0-9_.]{3,20}$/.test(nick.trim());
@@ -54,23 +84,13 @@ function validarEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-function requireAuth(req, res, next) {
-  if (req.session && (req.session.user || req.session.isAdmin)) return next();
-  res.status(401).json({ error: 'Você precisa estar logado.' });
-}
-
-function requireAdmin(req, res, next) {
-  if (req.session && req.session.isAdmin) return next();
-  res.status(403).json({ error: 'Acesso restrito para administradores.' });
-}
-
 // ════════════════════════════════════════════════════════════════════════════
-//  AUTENTICAÇÃO & CONTAS (Jogadores e Admin)
+//  AUTENTICAÇÃO & CONTAS
 // ════════════════════════════════════════════════════════════════════════════
 
-// Obter dados da sessão atual
+// Dados do usuário autenticado atual
 app.get('/api/auth/me', async (req, res) => {
-  if (req.session && req.session.isAdmin) {
+  if (req.isAdmin) {
     return res.json({
       authenticated: true,
       isAdmin: true,
@@ -84,9 +104,8 @@ app.get('/api/auth/me', async (req, res) => {
     });
   }
 
-  if (req.session && req.session.user) {
-    const user = req.session.user;
-    // Pega o status atualizado do jogador no Supabase
+  if (req.user) {
+    const user = req.user;
     let status = 'pending';
     let banReason = null;
     try {
@@ -125,68 +144,47 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres.' });
     }
     if (!validarNick(nick)) {
-      return res.status(400).json({ error: 'Nick inválido (3-20 letras, números ou _).' });
+      return res.status(400).json({ error: 'Nick inválido (3 a 20 letras ou números).' });
     }
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanNick = nick.trim();
     const cleanPlatform = platform || 'Bedrock (Celular)';
 
-    // Verifica se é o nick reservado do admin
     if (cleanNick.toLowerCase() === 'admin' || cleanEmail.includes('admin@')) {
-      return res.status(400).json({ error: 'Este nome está reservado para a moderação.' });
+      return res.status(400).json({ error: 'Este nome está reservado.' });
     }
 
     // Hash da senha
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
-    // Tenta salvar na tabela accounts do Supabase
-    let accountCreated = false;
-    try {
-      const { error: accError } = await supabase
-        .from('accounts')
-        .insert([{
-          email: cleanEmail,
-          password_hash,
-          nick: cleanNick,
-          platform: cleanPlatform,
-          role: 'player'
-        }]);
-
-      if (accError) {
-        if (accError.code === '23505') { // unique violation
-          return res.status(400).json({ error: 'Já existe uma conta cadastrada com este Email ou Nick.' });
-        }
-        throw accError;
-      }
-      accountCreated = true;
-    } catch (dbErr) {
-      // Fallback em memória caso o SQL ainda não tenha sido rodado
-      console.warn('Fallback de conta em memória:', dbErr.message);
-      if (memoryAccounts.has(cleanEmail)) {
-        return res.status(400).json({ error: 'Já existe uma conta com este Email.' });
-      }
-      memoryAccounts.set(cleanEmail, {
+    // Salva na tabela accounts
+    const { error: accError } = await supabase
+      .from('accounts')
+      .insert([{
         email: cleanEmail,
         password_hash,
         nick: cleanNick,
         platform: cleanPlatform,
         role: 'player'
-      });
+      }]);
+
+    if (accError) {
+      if (accError.code === '23505') {
+        return res.status(400).json({ error: 'Já existe uma conta com este Email ou Nick.' });
+      }
+      throw accError;
     }
 
-    // Registra/atualiza o nick na tabela de players com status pending
-    try {
-      await supabase
-        .from('players')
-        .upsert(
-          { nick: cleanNick, status: 'pending', platform: cleanPlatform, updated_at: new Date().toISOString() },
-          { onConflict: 'nick' }
-        );
-    } catch (_) {}
+    // Registra na tabela players como pending
+    await supabase
+      .from('players')
+      .upsert(
+        { nick: cleanNick, status: 'pending', platform: cleanPlatform, updated_at: new Date().toISOString() },
+        { onConflict: 'nick' }
+      );
 
-    // Inicia sessão automaticamente
     const userData = {
       email: cleanEmail,
       nick: cleanNick,
@@ -194,13 +192,14 @@ app.post('/api/auth/register', async (req, res) => {
       role: 'player'
     };
 
-    req.session.user = userData;
-    req.session.isAdmin = false;
+    const token = createAuthToken({ user: userData, isAdmin: false });
 
     res.json({
       success: true,
       message: 'Conta criada com sucesso! Solicitação de Whitelist enviada.',
-      user: userData
+      token,
+      user: userData,
+      isAdmin: false
     });
   } catch (err) {
     console.error('Erro em register:', err);
@@ -208,7 +207,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Login (para Jogadores e Admin existente)
+// Login (Jogadores e Admin Existente)
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { login, password } = req.body || {};
@@ -218,49 +217,37 @@ app.post('/api/auth/login', async (req, res) => {
 
     const cleanLogin = login.trim();
 
-    // 1. CHECA SE É O ADMIN EXISTENTE (Sem precisar de conta nova!)
+    // 1. ADMIN EXISTENTE
     if (
       cleanLogin === ADMIN_USER &&
       (password === ADMIN_PASS || password === 'MinecraftAdmin@2025' || password === 'senha123')
     ) {
-      req.session.isAdmin = true;
-      req.session.user = {
+      const adminUser = {
         nick: 'Administrador',
         email: 'admin@mapabermuda.com',
         role: 'admin',
         platform: 'PC / Java & Bedrock'
       };
+      const token = createAuthToken({ user: adminUser, isAdmin: true });
       return res.json({
         success: true,
+        token,
         isAdmin: true,
-        user: req.session.user
+        user: adminUser
       });
     }
 
-    // 2. CHECA SE É UM JOGADOR NO SUPABASE
-    let account = null;
-    try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .or(`email.ilike.${cleanLogin},nick.ilike.${cleanLogin}`)
-        .maybeSingle();
+    // 2. JOGADOR NO SUPABASE
+    const { data: account, error: findError } = await supabase
+      .from('accounts')
+      .select('*')
+      .or(`email.ilike.${cleanLogin},nick.ilike.${cleanLogin}`)
+      .maybeSingle();
 
-      if (!error && data) {
-        account = data;
-      }
-    } catch (_) {}
-
-    // Fallback em memória se não achou no banco
-    if (!account && memoryAccounts.has(cleanLogin.toLowerCase())) {
-      account = memoryAccounts.get(cleanLogin.toLowerCase());
-    }
-
-    if (!account) {
+    if (findError || !account) {
       return res.status(401).json({ error: 'Email ou Nick não encontrado. Crie sua conta!' });
     }
 
-    // Valida senha com bcrypt
     const match = await bcrypt.compare(password, account.password_hash);
     if (!match) {
       return res.status(401).json({ error: 'Senha incorreta.' });
@@ -273,12 +260,13 @@ app.post('/api/auth/login', async (req, res) => {
       role: account.role || 'player'
     };
 
-    req.session.user = userData;
-    req.session.isAdmin = account.role === 'admin';
+    const isAdmin = account.role === 'admin';
+    const token = createAuthToken({ user: userData, isAdmin });
 
     res.json({
       success: true,
-      isAdmin: req.session.isAdmin,
+      token,
+      isAdmin,
       user: userData
     });
   } catch (err) {
@@ -287,14 +275,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Logout
-app.post('/api/auth/logout', (req, res) => {
-  req.session.destroy();
-  res.json({ success: true });
-});
-
 // ════════════════════════════════════════════════════════════════════════════
-//  CHAT ESTILO DISCORD (#geral)
+//  CHAT DA COMUNIDADE (#chat-geral)
 // ════════════════════════════════════════════════════════════════════════════
 
 // Listar mensagens
@@ -306,13 +288,11 @@ app.get('/api/chat', async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(60);
 
-    if (!error && data) {
-      return res.json(data.reverse());
-    }
-  } catch (_) {}
-
-  // Fallback
-  res.json(memoryChatMessages.slice(-60));
+    if (error) throw error;
+    res.json((data || []).reverse());
+  } catch (err) {
+    res.json([]);
+  }
 });
 
 // Enviar mensagem no chat
@@ -322,9 +302,9 @@ app.post('/api/chat', requireAuth, async (req, res) => {
     if (!content) return res.status(400).json({ error: 'Mensagem vazia.' });
     if (content.length > 500) return res.status(400).json({ error: 'Mensagem muito longa (máx 500 caracteres).' });
 
-    const user = req.session.user;
-    const authorNick = user ? user.nick : 'Admin';
-    const authorRole = req.session.isAdmin ? 'admin' : (user?.role || 'player');
+    const user = req.user;
+    const authorNick = req.isAdmin ? 'Admin' : (user ? user.nick : 'Jogador');
+    const authorRole = req.isAdmin ? 'admin' : (user?.role || 'player');
     const authorPlatform = user?.platform || 'PC';
 
     const newMsg = {
@@ -335,31 +315,22 @@ app.post('/api/chat', requireAuth, async (req, res) => {
       created_at: new Date().toISOString()
     };
 
-    // Tenta salvar no Supabase
-    try {
-      const { data, error } = await supabase
-        .from('messages')
-        .insert([newMsg])
-        .select()
-        .single();
-      if (!error && data) {
-        return res.json({ success: true, message: data });
-      }
-    } catch (_) {}
+    const { data, error } = await supabase
+      .from('messages')
+      .insert([newMsg])
+      .select()
+      .single();
 
-    // Fallback em memória
-    newMsg.id = 'msg-' + Date.now();
-    memoryChatMessages.push(newMsg);
-    if (memoryChatMessages.length > 200) memoryChatMessages.shift();
-
-    res.json({ success: true, message: newMsg });
+    if (error) throw error;
+    res.json({ success: true, message: data });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Erro ao enviar mensagem no chat:', err);
+    res.status(500).json({ error: 'Erro ao enviar mensagem: ' + err.message });
   }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-//  MURAL DE BANIMENTOS (#banimentos)
+//  MURAL DE BANIMENTOS (#mural-banidos)
 // ════════════════════════════════════════════════════════════════════════════
 app.get('/api/bans', async (req, res) => {
   try {
@@ -369,18 +340,17 @@ app.get('/api/bans', async (req, res) => {
       .eq('status', 'banned')
       .order('updated_at', { ascending: false });
 
-    if (!error && data) {
-      return res.json(data);
-    }
-  } catch (_) {}
-  res.json([]);
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.json([]);
+  }
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-//  ROTAS DO ADMIN (Apenas visíveis para o Administrador)
+//  ROTAS DO ADMIN
 // ════════════════════════════════════════════════════════════════════════════
 
-// Listar todos os jogadores
 app.get('/api/admin/players', requireAdmin, async (req, res) => {
   try {
     const search = (req.query.search || '').trim();
@@ -405,7 +375,6 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
   }
 });
 
-// Estatísticas
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
     const { data, error } = await supabase.from('players').select('status');
@@ -430,7 +399,7 @@ app.post('/api/admin/approve/:nick', requireAdmin, async (req, res) => {
     const nick = req.params.nick.trim();
     const { error } = await supabase
       .from('players')
-      .update({ status: 'approved', updated_at: new Date().toISOString() })
+      .update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() })
       .ilike('nick', nick);
 
     if (error) throw error;
@@ -456,7 +425,7 @@ app.post('/api/admin/reject/:nick', requireAdmin, async (req, res) => {
   }
 });
 
-// Banir (com motivo opcional)
+// Banir
 app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
   try {
     const nick = req.params.nick.trim();
@@ -484,7 +453,7 @@ app.post('/api/admin/unban/:nick', requireAdmin, async (req, res) => {
       .ilike('nick', nick);
 
     if (error) throw error;
-    res.json({ success: true, message: `✅ ${nick} foi desbanido (aguardando aprovação)!` });
+    res.json({ success: true, message: `✅ ${nick} foi desbanido!` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -525,7 +494,7 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── CHECK (usado pelo Plugin Java do Minecraft) ──────────────────────────
+// ─── CHECK (Minecraft Plugin) ─────────────────────────────────────────────
 app.get('/api/check/:nick', async (req, res) => {
   try {
     const nick = req.params.nick.trim();
