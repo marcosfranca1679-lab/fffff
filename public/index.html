@@ -2,13 +2,18 @@
 <html lang="pt-BR" class="h-full">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Mapa Bermuda — Comunidade & Servidor</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <style>
-    body { font-family: 'Inter', sans-serif; }
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
     .pixel { font-family: 'Press Start 2P', monospace; }
+    
     /* Discord Theme Colors */
     .bg-discord-darkest { background-color: #1e1f22; }
     .bg-discord-sidebar { background-color: #2b2d31; }
@@ -23,150 +28,129 @@
     .discord-pill {
       transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
     }
-    .discord-pill:hover {
+    .discord-pill:hover, .discord-pill.active {
       border-radius: 16px;
       background-color: #5865F2;
       color: white;
     }
-    .discord-pill.active {
-      border-radius: 16px;
-      background-color: #5865F2;
-      color: white;
-    }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #2b2d31; }
+    
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #1a1b1e; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #111214; }
   </style>
 </head>
-<body class="h-full bg-discord-chat text-gray-200 flex overflow-hidden select-none">
+<body class="h-full bg-discord-chat text-gray-200 flex flex-col md:flex-row overflow-hidden select-none">
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       BARRA LATERAL DE ÍCONES (DE CIMA PARA BAIXO)
+       BACKDROP MOBILE (Quando abre o menu no celular)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <aside class="w-[72px] bg-discord-darkest flex flex-col items-center py-3 gap-2 flex-shrink-0 z-30">
+  <div id="mobile-backdrop" onclick="fecharDrawerMobile()" class="hidden fixed inset-0 bg-black/70 z-40 md:hidden backdrop-blur-xs transition-opacity"></div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       BARRA LATERAL DE ÍCONES (DESKTOP: SEMPRE VISÍVEL | MOBILE: SLIDE DRAWER)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <aside id="sidebar-icons" class="fixed md:static inset-y-0 left-0 w-[68px] bg-discord-darkest flex flex-col items-center py-3 gap-2 flex-shrink-0 z-50 -translate-x-full md:translate-x-0 transition-transform duration-200 ease-out border-r border-discord/30 md:border-none">
     <div class="relative group">
-      <button onclick="mudarCanal('geral')" class="discord-pill w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-2xl shadow-md transition-all duration-200 hover:scale-105 active:scale-95" title="Mapa Bermuda">
+      <button onclick="mudarCanal('geral')" class="discord-pill w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-2xl shadow transition" title="Mapa Bermuda">
         ⛏️
       </button>
-      <span class="absolute left-0 top-3 w-1 h-6 bg-white rounded-r-full scale-0 group-hover:scale-100 transition-all origin-left"></span>
+      <span class="hidden md:block absolute left-0 top-3 w-1 h-6 bg-white rounded-r-full scale-0 group-hover:scale-100 transition-all origin-left"></span>
     </div>
 
     <div class="w-8 h-[2px] bg-discord-input rounded-full my-1"></div>
 
-    <!-- Canal: Geral / Status -->
-    <div class="relative group">
-      <button onclick="mudarCanal('geral')" id="btn-icon-geral" class="discord-pill active w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-xl transition-all duration-200" title="Visão Geral & Servidor">
-        🏠
-      </button>
-      <div class="absolute left-[80px] top-2 bg-black text-white text-xs font-bold px-2 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-        Visão Geral & Servidor
-      </div>
-    </div>
+    <button onclick="mudarCanal('geral')" id="btn-icon-geral" class="discord-pill active w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-xl transition" title="Geral / Status">
+      🏠
+    </button>
+    <button onclick="mudarCanal('chat')" id="btn-icon-chat" class="discord-pill w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-xl transition" title="Chat">
+      💬
+    </button>
+    <button onclick="mudarCanal('bans')" id="btn-icon-bans" class="discord-pill w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-xl transition" title="Banimentos">
+      ⛔
+    </button>
 
-    <!-- Canal: Chat da Comunidade -->
-    <div class="relative group">
-      <button onclick="mudarCanal('chat')" id="btn-icon-chat" class="discord-pill w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-xl transition-all duration-200" title="Chat da Comunidade">
-        💬
-      </button>
-      <div class="absolute left-[80px] top-2 bg-black text-white text-xs font-bold px-2 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-        Chat da Comunidade
-      </div>
-    </div>
-
-    <!-- Canal: Lista de Banidos -->
-    <div class="relative group">
-      <button onclick="mudarCanal('bans')" id="btn-icon-bans" class="discord-pill w-12 h-12 bg-discord-sidebar rounded-[24px] flex items-center justify-center text-xl transition-all duration-200" title="Lista de Banidos">
-        ⛔
-      </button>
-      <div class="absolute left-[80px] top-2 bg-black text-white text-xs font-bold px-2 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-        Mural de Banimentos
-      </div>
-    </div>
-
-    <!-- Canal: Painel Admin (Apenas para Admin) -->
     <div id="icon-admin-wrapper" class="hidden relative group mt-auto mb-2">
-      <div class="w-8 h-[2px] bg-red-900/50 rounded-full my-2 mx-auto"></div>
-      <button onclick="mudarCanal('admin')" id="btn-icon-admin" class="discord-pill w-12 h-12 bg-red-950/80 border border-red-700/50 rounded-[24px] flex items-center justify-center text-xl transition-all duration-200" title="Painel Administrativo">
+      <div class="w-8 h-[2px] bg-red-900/50 rounded-full my-1 mx-auto"></div>
+      <button onclick="mudarCanal('admin')" id="btn-icon-admin" class="discord-pill w-12 h-12 bg-red-950/80 border border-red-700/50 rounded-[24px] flex items-center justify-center text-xl transition" title="Painel Admin">
         🛡️
       </button>
-      <div class="absolute left-[80px] top-2 bg-red-900 text-white text-xs font-bold px-2 py-1.5 rounded-md shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-        🛡️ Painel Administrativo
-      </div>
     </div>
   </aside>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       COLUNA DE CANAIS (ESTILO DISCORD)
+       COLUNA DE CANAIS (DESKTOP: FIXO | MOBILE: SLIDE DRAWER AO LADO DOS ÍCONES)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <aside class="w-60 bg-discord-sidebar flex flex-col flex-shrink-0 border-r border-discord/30 z-20">
-    <div class="h-12 border-b border-discord/50 px-4 flex items-center justify-between shadow-sm">
+  <aside id="sidebar-channels" class="fixed md:static inset-y-0 left-[68px] md:left-0 w-64 bg-discord-sidebar flex flex-col flex-shrink-0 border-r border-discord/30 z-50 -translate-x-[400px] md:translate-x-0 transition-transform duration-200 ease-out shadow-2xl md:shadow-none">
+    <div class="h-13 border-b border-discord/50 px-4 py-3 flex items-center justify-between shadow-sm">
       <div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 bg-green-500 rounded-full inline-block animate-pulse"></span>
-        <span class="font-bold text-sm tracking-wide text-white">MAPA BERMUDA</span>
+        <span class="font-bold text-sm text-white">MAPA BERMUDA</span>
       </div>
-      <span class="text-xs text-discord-muted">MC 1.21</span>
+      <button onclick="fecharDrawerMobile()" class="md:hidden text-discord-muted hover:text-white p-1 text-lg">✕</button>
     </div>
 
     <div class="flex-1 overflow-y-auto px-2 py-3 space-y-4">
       <div>
         <div class="text-[11px] font-bold text-discord-muted uppercase px-2 mb-1 tracking-wider">Informações</div>
-        <button onclick="mudarCanal('geral')" id="channel-btn-geral" class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm font-medium text-white bg-discord-input/80 hover:bg-discord-input transition text-left">
+        <button onclick="mudarCanal('geral')" id="channel-btn-geral" class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-white bg-discord-input/80 transition text-left">
           <span class="text-discord-muted text-base">#</span> <span>geral-status</span>
         </button>
-        <button onclick="mudarCanal('bans')" id="channel-btn-bans" class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm font-medium text-discord-muted hover:text-white hover:bg-discord-input/40 transition text-left mt-0.5">
+        <button onclick="mudarCanal('bans')" id="channel-btn-bans" class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-discord-muted hover:text-white hover:bg-discord-input/40 transition text-left mt-0.5">
           <span class="text-discord-muted text-base">#</span> <span>mural-banidos</span>
         </button>
       </div>
 
       <div>
         <div class="text-[11px] font-bold text-discord-muted uppercase px-2 mb-1 tracking-wider">Comunidade</div>
-        <button onclick="mudarCanal('chat')" id="channel-btn-chat" class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm font-medium text-discord-muted hover:text-white hover:bg-discord-input/40 transition text-left">
+        <button onclick="mudarCanal('chat')" id="channel-btn-chat" class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-discord-muted hover:text-white hover:bg-discord-input/40 transition text-left">
           <span class="text-discord-muted text-base">#</span> <span>chat-geral</span>
         </button>
       </div>
 
       <div id="channel-admin-section" class="hidden">
         <div class="text-[11px] font-bold text-red-400 uppercase px-2 mb-1 tracking-wider">Administração</div>
-        <button onclick="mudarCanal('admin')" id="channel-btn-admin" class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm font-medium text-red-300 hover:text-white hover:bg-red-900/30 transition text-left">
+        <button onclick="mudarCanal('admin')" id="channel-btn-admin" class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-red-300 hover:text-white hover:bg-red-900/30 transition text-left">
           <span class="text-red-400 text-base">#</span> <span>gerenciar-whitelist</span>
         </button>
       </div>
     </div>
 
     <!-- Perfil do Usuário no Rodapé -->
-    <div class="h-14 bg-discord-darkest/60 px-3 flex items-center justify-between border-t border-discord/30">
+    <div class="h-14 bg-discord-darkest/70 px-3 flex items-center justify-between border-t border-discord/30 flex-shrink-0">
       <div class="flex items-center gap-2 overflow-hidden">
         <div class="relative">
-          <div id="user-avatar" class="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center font-bold text-xs text-white">
-            ?
-          </div>
-          <span id="user-online-dot" class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-discord-darkest"></span>
+          <div id="user-avatar" class="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center font-bold text-xs text-white">?</div>
+          <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-discord-darkest"></span>
         </div>
         <div class="overflow-hidden leading-tight">
-          <div id="user-nick-display" class="font-bold text-xs text-white truncate">Carregando...</div>
-          <div id="user-role-display" class="text-[10px] text-discord-muted truncate">Jogador</div>
+          <div id="user-nick-display" class="font-bold text-xs text-white truncate max-w-[120px]">Carregando...</div>
+          <div id="user-role-display" class="text-[10px] text-discord-muted truncate max-w-[120px]">Jogador</div>
         </div>
       </div>
-      <button onclick="fazerLogout()" class="text-discord-muted hover:text-red-400 p-1.5 rounded hover:bg-discord-input/50 transition" title="Sair da Conta">
+      <button onclick="fazerLogout()" class="text-discord-muted hover:text-red-400 p-2 rounded hover:bg-discord-input/50 transition" title="Sair da Conta">
         🚪
       </button>
     </div>
   </aside>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       ÁREA PRINCIPAL DE CONTEÚDO
+       ÁREA PRINCIPAL DE CONTEÚDO (100% RESPONSIVA, SEM CORTES)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <main class="flex-1 flex flex-col h-full overflow-hidden bg-discord-chat">
+  <main class="flex-1 flex flex-col h-full min-w-0 overflow-hidden bg-discord-chat relative">
     
-    <header class="h-12 border-b border-discord px-4 flex items-center justify-between flex-shrink-0 shadow-sm bg-discord-chat">
-      <div class="flex items-center gap-2">
-        <span class="text-discord-muted text-xl font-bold">#</span>
-        <span id="current-channel-title" class="font-bold text-sm text-white">geral-status</span>
-        <span class="text-discord-muted text-xs hidden sm:inline pl-2 border-l border-discord" id="current-channel-desc">Status da sua Whitelist e conexão com o servidor</span>
+    <!-- Topbar com Botão Hamburger para Celular -->
+    <header class="h-12 border-b border-discord px-3 md:px-4 flex items-center justify-between flex-shrink-0 shadow-sm bg-discord-chat z-10">
+      <div class="flex items-center gap-2 overflow-hidden">
+        <!-- Botão Hamburger no Celular -->
+        <button onclick="abrirDrawerMobile()" class="md:hidden text-discord-muted hover:text-white p-1.5 rounded-lg hover:bg-discord-input transition flex items-center justify-center">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
+        <span class="text-discord-muted text-lg font-bold">#</span>
+        <span id="current-channel-title" class="font-bold text-sm text-white truncate">geral-status</span>
       </div>
-      <div class="flex items-center gap-3">
-        <span id="server-badge" class="bg-green-950/80 border border-green-700/50 text-green-400 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5">
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <span class="bg-green-950/80 border border-green-700/50 text-green-400 text-[11px] px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1.5">
           <span class="w-2 h-2 bg-green-400 rounded-full animate-ping"></span> Online
         </span>
       </div>
@@ -174,77 +158,86 @@
 
     <div id="feedback" class="hidden px-4 py-2 text-xs font-semibold text-center z-20"></div>
 
-    <!-- ── CONTEÚDO: GERAL / STATUS ────────────────────────────────────────── -->
-    <section id="view-geral" class="flex-1 overflow-y-auto p-6 max-w-4xl w-full mx-auto space-y-6">
-      <div class="bg-discord-sidebar border border-discord/50 rounded-xl p-5 shadow-lg">
-        <div class="flex items-center justify-between gap-4 flex-wrap pb-4 border-b border-discord/40">
+    <!-- ── 1. CANAL: GERAL / STATUS (100% ADAPTADO A TELAS PEQUENAS) ────────── -->
+    <section id="view-geral" class="flex-1 overflow-y-auto p-4 md:p-6 max-w-4xl w-full mx-auto space-y-4">
+      <div class="bg-discord-sidebar border border-discord/50 rounded-2xl p-4 md:p-5 shadow-lg">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-discord/40">
           <div class="flex items-center gap-3">
-            <div class="w-12 h-12 rounded-full bg-discord-blurple flex items-center justify-center text-2xl shadow">
+            <div class="w-12 h-12 rounded-full bg-discord-blurple flex items-center justify-center text-2xl shadow flex-shrink-0">
               🎮
             </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="text-lg font-bold text-white" id="profile-nick">Carregando...</span>
-                <span id="profile-platform-badge" class="bg-discord-input text-gray-300 text-xs px-2 py-0.5 rounded font-medium">Bedrock</span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-base md:text-lg font-bold text-white truncate" id="profile-nick">Carregando...</span>
+                <span id="profile-platform-badge" class="bg-discord-input text-gray-300 text-[10px] md:text-xs px-2 py-0.5 rounded font-medium">Bedrock</span>
               </div>
-              <span class="text-xs text-discord-muted" id="profile-email">email@carregando.com</span>
+              <span class="text-xs text-discord-muted block truncate" id="profile-email">email@carregando.com</span>
             </div>
           </div>
-          <div id="whitelist-status-box" class="px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2">
+          <div id="whitelist-status-box" class="px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold flex items-center justify-center gap-2 w-full sm:w-auto">
             ⏳ Verificando...
           </div>
         </div>
-
-        <div class="pt-4 text-xs text-gray-400 leading-relaxed" id="whitelist-status-desc">
-          Aguarde a verificação do seu acesso à Whitelist...
+        <div class="pt-3 text-xs text-gray-400 leading-relaxed" id="whitelist-status-desc">
+          Aguarde a verificação do seu acesso...
         </div>
       </div>
 
-      <div class="bg-discord-sidebar border border-discord/50 rounded-xl p-5 shadow-lg space-y-4">
-        <h2 class="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          🌐 Dados de Conexão do Servidor
+      <div class="bg-discord-sidebar border border-discord/50 rounded-2xl p-4 md:p-5 shadow-lg space-y-3">
+        <h2 class="text-xs md:text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          🌐 Conectar no Servidor
         </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div class="bg-discord-darkest/70 p-4 rounded-lg border border-discord/40">
-            <div class="text-xs font-bold text-green-400 mb-1">📱 Minecraft Celular / Bedrock</div>
-            <div class="text-xs text-gray-300">IP: <code class="bg-discord-input px-2 py-0.5 rounded text-white font-mono">dettt343.aternos.me</code></div>
-            <div class="text-xs text-gray-300 mt-1">Porta: <code class="bg-discord-input px-2 py-0.5 rounded text-white font-mono">24164</code></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-discord-darkest/80 p-3.5 rounded-xl border border-discord/40 space-y-1.5">
+            <div class="text-xs font-bold text-green-400 flex items-center gap-1">📱 Celular / Bedrock</div>
+            <div class="text-xs text-gray-300 flex justify-between items-center bg-discord-input px-2.5 py-1.5 rounded">
+              <span>IP: <b>dettt343.aternos.me</b></span>
+              <button onclick="copiarTexto('dettt343.aternos.me')" class="text-discord-blurple text-[10px] font-bold">Copiar</button>
+            </div>
+            <div class="text-xs text-gray-300 flex justify-between items-center bg-discord-input px-2.5 py-1.5 rounded">
+              <span>Porta: <b>24164</b></span>
+              <button onclick="copiarTexto('24164')" class="text-discord-blurple text-[10px] font-bold">Copiar</button>
+            </div>
           </div>
-          <div class="bg-discord-darkest/70 p-4 rounded-lg border border-discord/40">
-            <div class="text-xs font-bold text-blue-400 mb-1">💻 Minecraft PC / Java Edition</div>
-            <div class="text-xs text-gray-300">IP: <code class="bg-discord-input px-2 py-0.5 rounded text-white font-mono">dettt343.aternos.me:24164</code></div>
-            <div class="text-xs text-gray-300 mt-1">Versão: <span class="text-white">PaperMC 1.21+</span></div>
+
+          <div class="bg-discord-darkest/80 p-3.5 rounded-xl border border-discord/40 space-y-1.5">
+            <div class="text-xs font-bold text-blue-400 flex items-center gap-1">💻 PC / Java Edition</div>
+            <div class="text-xs text-gray-300 flex justify-between items-center bg-discord-input px-2.5 py-1.5 rounded">
+              <span class="truncate">IP: <b>dettt343.aternos.me:24164</b></span>
+              <button onclick="copiarTexto('dettt343.aternos.me:24164')" class="text-discord-blurple text-[10px] font-bold ml-2">Copiar</button>
+            </div>
+            <div class="text-xs text-discord-muted pt-1">Versão: <span class="text-white font-medium">PaperMC 1.21+</span></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ── CONTEÚDO: CHAT DA COMUNIDADE ────────────────────────────────────── -->
+    <!-- ── 2. CANAL: CHAT DA COMUNIDADE (#chat-geral) ─────────────────────── -->
     <section id="view-chat" class="hidden flex-1 flex flex-col h-full overflow-hidden">
-      <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3">
-        <!-- Mensagens inseridas via JS -->
+      <div id="chat-messages" class="flex-1 overflow-y-auto px-3 py-2 md:p-4 space-y-2.5">
+        <!-- Renderizado dinamicamente -->
       </div>
-      <div class="p-4 bg-discord-chat flex-shrink-0">
-        <form onsubmit="enviarMensagemChat(event)" class="bg-discord-input rounded-lg flex items-center px-4 py-2.5 gap-2 border border-transparent focus-within:border-discord-blurple transition">
-          <input id="chat-input" type="text" maxlength="400" placeholder="Conversar em #chat-geral (aperte Enter para enviar)..." class="bg-transparent flex-1 text-sm text-white focus:outline-none placeholder-discord-muted" />
-          <button type="submit" id="btn-chat-send" class="bg-discord-blurple hover:bg-discord-blurple/80 text-white font-bold text-xs px-3 py-1.5 rounded transition">
+      <div class="p-2.5 md:p-4 bg-discord-chat flex-shrink-0 border-t border-discord/30">
+        <form onsubmit="enviarMensagemChat(event)" class="bg-discord-input rounded-xl flex items-center px-3 py-2 gap-2 border border-transparent focus-within:border-discord-blurple transition shadow-inner">
+          <input id="chat-input" type="text" maxlength="400" placeholder="Conversar em #chat-geral..." class="bg-transparent flex-1 text-xs md:text-sm text-white focus:outline-none placeholder-discord-muted" />
+          <button type="submit" id="btn-chat-send" class="bg-discord-blurple hover:bg-discord-blurple/80 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition flex-shrink-0">
             Enviar
           </button>
         </form>
       </div>
     </section>
 
-    <!-- ── CONTEÚDO: MURAL DE BANIMENTOS ──────────────────────────────────── -->
-    <section id="view-bans" class="hidden flex-1 overflow-y-auto p-6 max-w-4xl w-full mx-auto">
-      <div class="bg-discord-sidebar border border-discord/50 rounded-xl p-5 shadow-lg">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-base font-bold text-red-400 flex items-center gap-2">
-            ⛔ Mural Oficial de Banimentos
+    <!-- ── 3. CANAL: MURAL DE BANIMENTOS ──────────────────────────────────── -->
+    <section id="view-bans" class="hidden flex-1 overflow-y-auto p-4 md:p-6 max-w-4xl w-full mx-auto space-y-3">
+      <div class="bg-discord-sidebar border border-discord/50 rounded-2xl p-4 md:p-5 shadow-lg">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm md:text-base font-bold text-red-400 flex items-center gap-2">
+            ⛔ Mural de Banimentos
           </h2>
-          <span id="bans-count" class="text-xs bg-red-950 text-red-300 px-2.5 py-1 rounded-full border border-red-800 font-bold">0 Banidos</span>
+          <span id="bans-count" class="text-xs bg-red-950 text-red-300 px-2.5 py-0.5 rounded-full border border-red-800 font-bold">0 Banidos</span>
         </div>
         <p class="text-xs text-discord-muted mb-4">
-          Jogadores banidos pelo administrador não conseguem entrar no servidor. O mural se atualiza automaticamente em tempo real!
+          Jogadores banidos pelo administrador não conseguem entrar no servidor. Atualizado em tempo real!
         </p>
         <div id="bans-list" class="space-y-2">
           <!-- Renderizado dinamicamente -->
@@ -252,88 +245,79 @@
       </div>
     </section>
 
-    <!-- ── CONTEÚDO: PAINEL ADMIN ──────────────────────────────────────────── -->
-    <section id="view-admin" class="hidden flex-1 overflow-y-auto p-6 max-w-6xl w-full mx-auto space-y-5">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="admin-stats-grid">
+    <!-- ── 4. CANAL: PAINEL ADMIN (CARDS RESPONSIVOS NO CELULAR!) ──────────── -->
+    <section id="view-admin" class="hidden flex-1 overflow-y-auto p-3 md:p-6 max-w-6xl w-full mx-auto space-y-4">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 md:gap-3" id="admin-stats-grid">
         <!-- Renderizado dinamicamente -->
       </div>
 
-      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between flex-wrap bg-discord-sidebar p-4 rounded-xl border border-discord/40">
-        <div class="flex gap-2 flex-wrap">
-          <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"  class="px-3 py-1.5 rounded-md text-xs font-bold transition">⏳ Pendentes</button>
-          <button onclick="mudarAbaAdmin('approved')" id="admin-tab-approved" class="px-3 py-1.5 rounded-md text-xs font-bold transition">✅ Aprovados</button>
-          <button onclick="mudarAbaAdmin('rejected')" id="admin-tab-rejected" class="px-3 py-1.5 rounded-md text-xs font-bold transition">❌ Rejeitados</button>
-          <button onclick="mudarAbaAdmin('banned')"   id="admin-tab-banned"   class="px-3 py-1.5 rounded-md text-xs font-bold transition">🔨 Banidos</button>
+      <div class="flex flex-col gap-3 bg-discord-sidebar p-3.5 md:p-4 rounded-2xl border border-discord/40">
+        <!-- Abas -->
+        <div class="grid grid-cols-2 sm:flex gap-1.5">
+          <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"  class="px-3 py-2 rounded-lg text-xs font-bold transition text-center">⏳ Pendentes</button>
+          <button onclick="mudarAbaAdmin('approved')" id="admin-tab-approved" class="px-3 py-2 rounded-lg text-xs font-bold transition text-center">✅ Aprovados</button>
+          <button onclick="mudarAbaAdmin('rejected')" id="admin-tab-rejected" class="px-3 py-2 rounded-lg text-xs font-bold transition text-center">❌ Rejeitados</button>
+          <button onclick="mudarAbaAdmin('banned')"   id="admin-tab-banned"   class="px-3 py-2 rounded-lg text-xs font-bold transition text-center">🔨 Banidos</button>
         </div>
-        <div class="flex gap-2">
-          <input id="admin-quick-nick" type="text" placeholder="Nick exato..." class="bg-discord-darkest border border-discord px-3 py-1.5 rounded text-xs text-white focus:outline-none w-36" />
-          <button onclick="adicionarManualAdmin()" class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-1.5 rounded transition">
+        <!-- Adicionar / Banir Rápido -->
+        <div class="flex gap-2 w-full">
+          <input id="admin-quick-nick" type="text" placeholder="Nick exato..." class="bg-discord-darkest border border-discord px-3 py-2 rounded-lg text-xs text-white focus:outline-none flex-1 min-w-0" />
+          <button onclick="adicionarManualAdmin()" class="bg-green-700 hover:bg-green-600 text-white text-xs font-bold px-3 py-2 rounded-lg transition whitespace-nowrap">
             + Aprovar
           </button>
-          <button onclick="banirManualAdmin()" class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-1.5 rounded transition">
+          <button onclick="banirManualAdmin()" class="bg-red-800 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-lg transition whitespace-nowrap">
             🔨 Banir
           </button>
         </div>
       </div>
 
-      <div class="bg-discord-sidebar border border-discord/50 rounded-xl overflow-hidden shadow">
-        <table class="w-full text-xs text-left">
-          <thead class="bg-discord-darkest text-discord-muted uppercase text-[10px] tracking-wider border-b border-discord/50">
-            <tr>
-              <th class="px-4 py-3">Jogador</th>
-              <th class="px-4 py-3">Plataforma</th>
-              <th class="px-4 py-3">Data</th>
-              <th class="px-4 py-3 text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody id="admin-players-table" class="divide-y divide-discord/30">
-            <!-- Renderizado dinamicamente -->
-          </tbody>
-        </table>
-        <div id="admin-empty-msg" class="hidden text-center text-discord-muted py-8 text-xs">
-          Nenhum jogador encontrado nesta categoria.
-        </div>
+      <!-- Lista Responsiva (Cards em Telas Pequenas, sem cortar nada!) -->
+      <div id="admin-players-container" class="space-y-2">
+        <!-- Renderizado dinamicamente -->
+      </div>
+      <div id="admin-empty-msg" class="hidden text-center text-discord-muted py-8 text-xs bg-discord-sidebar rounded-2xl border border-discord/40">
+        Nenhum jogador encontrado nesta categoria.
       </div>
     </section>
 
   </main>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       MODAL DE AUTENTICAÇÃO (LOGIN / CADASTRO)
+       MODAL DE AUTENTICAÇÃO (LOGIN / CADASTRO 100% RESPONSIVO)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <div id="auth-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-    <div class="bg-discord-sidebar border border-discord/70 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4">
+  <div id="auth-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-3 md:p-4 overflow-y-auto">
+    <div class="bg-discord-sidebar border border-discord/70 rounded-2xl w-full max-w-sm md:max-w-md p-5 md:p-6 shadow-2xl space-y-4 my-auto">
       <div class="text-center space-y-1">
         <div class="text-3xl">⛏️</div>
-        <h2 class="font-bold text-xl text-white">Bem-vindo ao Mapa Bermuda</h2>
-        <p class="text-xs text-discord-muted">Faça login ou crie sua conta para entrar na Whitelist</p>
+        <h2 class="font-bold text-lg md:text-xl text-white">Mapa Bermuda</h2>
+        <p class="text-xs text-discord-muted">Faça login ou crie sua conta para a Whitelist</p>
       </div>
 
       <div class="flex border-b border-discord">
-        <button onclick="alternarAuthTab('login')" id="tab-btn-login" class="flex-1 py-2 text-center text-sm font-bold text-discord-blurple border-b-2 border-discord-blurple transition">
+        <button onclick="alternarAuthTab('login')" id="tab-btn-login" class="flex-1 py-2 text-center text-xs md:text-sm font-bold text-discord-blurple border-b-2 border-discord-blurple transition">
           Entrar
         </button>
-        <button onclick="alternarAuthTab('register')" id="tab-btn-register" class="flex-1 py-2 text-center text-sm font-bold text-discord-muted hover:text-white transition">
+        <button onclick="alternarAuthTab('register')" id="tab-btn-register" class="flex-1 py-2 text-center text-xs md:text-sm font-bold text-discord-muted hover:text-white transition">
           Criar Conta
         </button>
       </div>
 
-      <div id="auth-error" class="hidden bg-red-950/80 border border-red-700 text-red-300 text-xs p-2.5 rounded-lg text-center font-medium"></div>
+      <div id="auth-error" class="hidden bg-red-950/80 border border-red-700 text-red-300 text-xs p-2.5 rounded-xl text-center font-medium"></div>
 
       <!-- FORM LOGIN -->
       <form id="form-login" onsubmit="realizarLogin(event)" class="space-y-3">
         <div>
           <label class="text-[11px] font-bold text-discord-muted uppercase">Email ou Usuário (Admin)</label>
-          <input id="login-input" type="text" required placeholder="seu@email.com ou admin" class="w-full bg-discord-input border border-discord/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
+          <input id="login-input" type="text" required placeholder="seu@email.com ou admin" class="w-full bg-discord-input border border-discord/60 rounded-xl px-3 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
         </div>
         <div>
           <label class="text-[11px] font-bold text-discord-muted uppercase">Senha</label>
-          <input id="login-pass" type="password" required placeholder="••••••••" class="w-full bg-discord-input border border-discord/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
+          <input id="login-pass" type="password" required placeholder="••••••••" class="w-full bg-discord-input border border-discord/60 rounded-xl px-3 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
         </div>
-        <button type="submit" id="btn-login-submit" class="w-full bg-discord-blurple hover:bg-discord-blurple/80 text-white font-bold py-2.5 rounded-lg text-sm transition mt-2">
+        <button type="submit" id="btn-login-submit" class="w-full bg-discord-blurple hover:bg-discord-blurple/80 text-white font-bold py-2.5 rounded-xl text-sm transition mt-1 shadow">
           Entrar
         </button>
-        <div class="text-[11px] text-center text-discord-muted">
+        <div class="text-[10px] md:text-[11px] text-center text-discord-muted">
           💡 Administrador: use o usuário <code class="text-white">admin</code> e sua senha.
         </div>
       </form>
@@ -342,27 +326,26 @@
       <form id="form-register" onsubmit="realizarCadastro(event)" class="hidden space-y-3">
         <div>
           <label class="text-[11px] font-bold text-discord-muted uppercase">Email</label>
-          <input id="reg-email" type="email" required placeholder="seu@email.com" class="w-full bg-discord-input border border-discord/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
+          <input id="reg-email" type="email" required placeholder="seu@email.com" class="w-full bg-discord-input border border-discord/60 rounded-xl px-3 py-2 text-xs md:text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
         </div>
         <div>
-          <label class="text-[11px] font-bold text-discord-muted uppercase">Nick Exato no Minecraft</label>
-          <input id="reg-nick" type="text" maxlength="20" required placeholder="Ex: willcraft333281" class="w-full bg-discord-input border border-discord/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
-          <span class="text-[10px] text-discord-muted">Digite exatamente como aparece no jogo.</span>
+          <label class="text-[11px] font-bold text-discord-muted uppercase">Nick no Minecraft</label>
+          <input id="reg-nick" type="text" maxlength="20" required placeholder="Ex: willcraft333281" class="w-full bg-discord-input border border-discord/60 rounded-xl px-3 py-2 text-xs md:text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
         </div>
         <div>
-          <label class="text-[11px] font-bold text-discord-muted uppercase">Plataforma onde Joga</label>
-          <select id="reg-platform" class="w-full bg-discord-input border border-discord/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord-blurple mt-1">
-            <option value="Bedrock (Celular / Android / iOS)">📱 Bedrock (Celular / Android / iOS)</option>
-            <option value="Java (PC / Computador)">💻 Java Edition (PC / Windows / Mac)</option>
-            <option value="Bedrock (PC Windows Edition)">🖥️ Bedrock (PC Windows 10/11)</option>
-            <option value="Console (Xbox / PlayStation / Switch)">🎮 Console (Xbox / PS / Switch)</option>
+          <label class="text-[11px] font-bold text-discord-muted uppercase">Plataforma</label>
+          <select id="reg-platform" class="w-full bg-discord-input border border-discord/60 rounded-xl px-3 py-2 text-xs md:text-sm text-white focus:outline-none focus:border-discord-blurple mt-1">
+            <option value="Bedrock (Celular)">📱 Bedrock (Celular / Android / iOS)</option>
+            <option value="Java (PC)">💻 Java Edition (PC / Windows / Mac)</option>
+            <option value="Bedrock (PC)">🖥️ Bedrock (PC Windows Edition)</option>
+            <option value="Console">🎮 Console (Xbox / PS / Switch)</option>
           </select>
         </div>
         <div>
           <label class="text-[11px] font-bold text-discord-muted uppercase">Senha</label>
-          <input id="reg-pass" type="password" minlength="6" required placeholder="Mínimo 6 caracteres" class="w-full bg-discord-input border border-discord/60 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
+          <input id="reg-pass" type="password" minlength="6" required placeholder="Mínimo 6 caracteres" class="w-full bg-discord-input border border-discord/60 rounded-xl px-3 py-2 text-xs md:text-sm text-white focus:outline-none focus:border-discord-blurple mt-1" />
         </div>
-        <button type="submit" id="btn-reg-submit" class="w-full bg-discord-blurple hover:bg-discord-blurple/80 text-white font-bold py-2.5 rounded-lg text-sm transition mt-2">
+        <button type="submit" id="btn-reg-submit" class="w-full bg-discord-blurple hover:bg-discord-blurple/80 text-white font-bold py-2.5 rounded-xl text-sm transition mt-1 shadow">
           Criar Conta & Pedir Whitelist
         </button>
       </form>
@@ -370,7 +353,7 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       SCRIPT COMPLETO COM TOKEN STATELESS E AUTO-REFRESH CONTÍNUO
+       SCRIPT COMPLETO
   ══════════════════════════════════════════════════════════════════════════ -->
   <script>
     let currentUser = null;
@@ -380,7 +363,20 @@
     let adminData = { pending: [], approved: [], rejected: [], banned: [] };
     let lastChatCount = 0;
 
-    // ── Helper de Requisições com Token Bearer ───────────────────────────────
+    // ── Drawer Mobile ────────────────────────────────────────────────────────
+    function abrirDrawerMobile() {
+      document.getElementById('sidebar-icons').classList.remove('-translate-x-full');
+      document.getElementById('sidebar-channels').classList.remove('-translate-x-[400px]');
+      document.getElementById('mobile-backdrop').classList.remove('hidden');
+    }
+
+    function fecharDrawerMobile() {
+      document.getElementById('sidebar-icons').classList.add('-translate-x-full');
+      document.getElementById('sidebar-channels').classList.add('-translate-x-[400px]');
+      document.getElementById('mobile-backdrop').classList.add('hidden');
+    }
+
+    // ── Helper API Fetch com Bearer Token ────────────────────────────────────
     async function apiFetch(url, options = {}) {
       options.headers = options.headers || {};
       const token = localStorage.getItem('mb_token');
@@ -400,27 +396,11 @@
       iniciarAutoRefresh();
     });
 
-    // ── Loop de Auto-Refresh (Tudo se atualiza sem recarregar!) ──────────────
     function iniciarAutoRefresh() {
-      // Chat atualiza a cada 2.5 segundos
-      setInterval(() => {
-        carregarChat();
-      }, 2500);
-
-      // Mural de bans atualiza a cada 3 segundos
-      setInterval(() => {
-        carregarBans();
-      }, 3000);
-
-      // Se for Admin, atualiza tabela e contadores a cada 3 segundos
-      setInterval(() => {
-        if (isUserAdmin) carregarAdminData();
-      }, 3000);
-
-      // Atualiza o status do jogador logado a cada 5 segundos
-      setInterval(() => {
-        atualizarMeuStatusSilencioso();
-      }, 5000);
+      setInterval(() => carregarChat(), 2500);
+      setInterval(() => carregarBans(), 3000);
+      setInterval(() => { if (isUserAdmin) carregarAdminData(); }, 3000);
+      setInterval(() => atualizarMeuStatusSilencioso(), 5000);
     }
 
     // ── Sessão ───────────────────────────────────────────────────────────────
@@ -469,33 +449,34 @@
       const st = data.whitelistStatus;
 
       if (isUserAdmin) {
-        box.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-purple-900/60 text-purple-300 border border-purple-600';
+        box.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-900/60 text-purple-300 border border-purple-600';
         box.innerHTML = '👑 Administrador';
         desc.innerHTML = 'Você tem acesso irrestrito ao servidor e ao painel de moderação.';
         document.getElementById('icon-admin-wrapper').classList.remove('hidden');
         document.getElementById('channel-admin-section').classList.remove('hidden');
       } else if (st === 'approved') {
-        box.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-green-900/60 text-green-300 border border-green-600';
+        box.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-green-900/60 text-green-300 border border-green-600';
         box.innerHTML = '✅ Whitelist Aprovada!';
-        desc.innerHTML = 'Parabéns! Seu Nick está liberado. Você já pode abrir o Minecraft e entrar no servidor!';
+        desc.innerHTML = 'Parabéns! Seu Nick está liberado. Você já pode abrir o Minecraft e jogar!';
       } else if (st === 'banned') {
-        box.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-red-950 text-red-300 border border-red-700';
+        box.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-red-950 text-red-300 border border-red-700';
         box.innerHTML = '🔨 Banido';
         desc.innerHTML = `Seu nick foi banido pelo administrador. Motivo: ${data.banReason || 'Violação das regras'}.`;
       } else if (st === 'rejected') {
-        box.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-orange-900/60 text-orange-300 border border-orange-600';
+        box.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-900/60 text-orange-300 border border-orange-600';
         box.innerHTML = '❌ Pedido Rejeitado';
         desc.innerHTML = 'Seu pedido de entrada foi recusado pelo administrador.';
       } else {
-        box.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-yellow-900/60 text-yellow-300 border border-yellow-600';
+        box.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-yellow-900/60 text-yellow-300 border border-yellow-600';
         box.innerHTML = '⏳ Aguardando Aprovação';
-        desc.innerHTML = 'Sua conta foi criada! O administrador precisa aprovar seu nick para você conseguir entrar.';
+        desc.innerHTML = 'Sua conta foi criada! Aguarde a aprovação do administrador para entrar.';
       }
     }
 
     // ── Troca de Canais ──────────────────────────────────────────────────────
     function mudarCanal(canal) {
       currentChannel = canal;
+      fecharDrawerMobile();
       
       ['geral', 'chat', 'bans', 'admin'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
@@ -524,15 +505,14 @@
       }
 
       const titles = {
-        geral: { t: 'geral-status', d: 'Status da sua Whitelist e conexão com o servidor' },
-        chat:  { t: 'chat-geral', d: 'Converse em tempo real com todos os jogadores do servidor' },
-        bans:  { t: 'mural-banidos', d: 'Lista oficial de jogadores banidos pelo administrador' },
-        admin: { t: 'gerenciar-whitelist', d: 'Painel exclusivo de moderação e aprovações' }
+        geral: 'geral-status',
+        chat:  'chat-geral',
+        bans:  'mural-banidos',
+        admin: 'gerenciar-whitelist'
       };
 
       if (titles[canal]) {
-        document.getElementById('current-channel-title').textContent = titles[canal].t;
-        document.getElementById('current-channel-desc').textContent = titles[canal].d;
+        document.getElementById('current-channel-title').textContent = titles[canal];
       }
 
       if (canal === 'chat') scrollChatToBottom();
@@ -552,22 +532,22 @@
         container.innerHTML = msgs.map(m => {
           const isMsgAdmin = m.author_role === 'admin';
           const roleBadge = isMsgAdmin 
-            ? '<span class="bg-red-900/80 text-red-300 text-[10px] px-1.5 py-0.5 rounded font-bold ml-1">ADMIN</span>'
-            : `<span class="bg-discord-input text-discord-muted text-[10px] px-1.5 py-0.5 rounded ml-1">${escapeHtml(m.author_platform || 'Player')}</span>`;
+            ? '<span class="bg-red-900/80 text-red-300 text-[9px] px-1 py-0.5 rounded font-bold ml-1">ADMIN</span>'
+            : `<span class="bg-discord-input text-discord-muted text-[9px] px-1 py-0.5 rounded ml-1">${escapeHtml(m.author_platform || 'Player')}</span>`;
 
           const initial = escapeHtml(m.author_nick || 'J').substring(0, 1).toUpperCase();
           const avatarColor = isMsgAdmin ? 'bg-red-700' : 'bg-discord-blurple';
 
           return `
-            <div class="flex items-start gap-3 hover:bg-discord-input/20 px-2 py-1 rounded transition">
-              <div class="w-9 h-9 rounded-full ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5">
+            <div class="flex items-start gap-2.5 hover:bg-discord-input/20 px-1.5 py-1 rounded-xl transition">
+              <div class="w-8 h-8 rounded-full ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5">
                 ${initial}
               </div>
-              <div class="flex-1 overflow-hidden">
-                <div class="flex items-center gap-1.5">
-                  <span class="font-bold text-xs ${isMsgAdmin ? 'text-red-400' : 'text-white'}">${escapeHtml(m.author_nick)}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1 flex-wrap">
+                  <span class="font-bold text-xs ${isMsgAdmin ? 'text-red-400' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
                   ${roleBadge}
-                  <span class="text-[10px] text-discord-muted ml-1">${formatarHora(m.created_at)}</span>
+                  <span class="text-[9px] text-discord-muted ml-1">${formatarHora(m.created_at)}</span>
                 </div>
                 <div class="text-xs text-gray-200 mt-0.5 break-words">${escapeHtml(m.content)}</div>
               </div>
@@ -622,25 +602,20 @@
 
         if (!container) return;
         if (bans.length === 0) {
-          container.innerHTML = '<div class="text-center text-discord-muted py-8 text-xs">Nenhum jogador banido no momento. Paz no servidor! ✌️</div>';
+          container.innerHTML = '<div class="text-center text-discord-muted py-6 text-xs">Nenhum jogador banido no momento. ✌️</div>';
           return;
         }
 
         container.innerHTML = bans.map(b => `
-          <div class="flex items-center justify-between p-3.5 bg-discord-darkest/80 rounded-xl border border-red-900/40 hover:border-red-700/60 transition shadow-sm">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-red-950 border border-red-800 flex items-center justify-center text-lg flex-shrink-0">
-                ⛔
-              </div>
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class="font-bold text-sm text-red-400">${escapeHtml(b.nick)}</span>
-                  <span class="text-[10px] bg-red-950 text-red-300 border border-red-800 px-1.5 py-0.5 rounded font-bold uppercase">BANIDO</span>
-                </div>
-                <div class="text-xs text-discord-muted mt-0.5">Motivo: <span class="text-gray-300 font-medium">${escapeHtml(b.ban_reason || 'Violação de regras do servidor')}</span></div>
+          <div class="flex items-center justify-between p-3 bg-discord-darkest/80 rounded-xl border border-red-900/40 shadow-sm gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-full bg-red-950 border border-red-800 flex items-center justify-center text-sm flex-shrink-0">⛔</div>
+              <div class="min-w-0">
+                <div class="font-bold text-xs md:text-sm text-red-400 truncate">${escapeHtml(b.nick)}</div>
+                <div class="text-[11px] text-discord-muted truncate">Motivo: <span class="text-gray-300">${escapeHtml(b.ban_reason || 'Violação de regras')}</span></div>
               </div>
             </div>
-            <div class="text-right text-[11px] text-discord-muted">
+            <div class="text-[10px] text-discord-muted whitespace-nowrap flex-shrink-0">
               ${formatarData(b.updated_at)}
             </div>
           </div>
@@ -648,7 +623,7 @@
       } catch (_) {}
     }
 
-    // ── Painel Administrativo (#gerenciar-whitelist) ─────────────────────────
+    // ── Painel Admin (Cards Limpos e Adaptados ao Celular) ────────────────────
     async function carregarAdminData() {
       if (!isUserAdmin) return;
       try {
@@ -667,21 +642,21 @@
       const b = (adminData.banned || []).length;
 
       document.getElementById('admin-stats-grid').innerHTML = `
-        <div onclick="mudarAbaAdmin('pending')" class="bg-yellow-950/40 border border-yellow-700/50 p-3 rounded-lg text-center cursor-pointer hover:bg-yellow-900/40 transition">
-          <div class="text-2xl font-bold text-yellow-400">${p}</div>
-          <div class="text-[11px] text-yellow-300">⏳ Pendentes</div>
+        <div onclick="mudarAbaAdmin('pending')" class="bg-yellow-950/40 border border-yellow-700/50 p-2.5 rounded-xl text-center cursor-pointer hover:bg-yellow-900/40 transition">
+          <div class="text-xl md:text-2xl font-bold text-yellow-400">${p}</div>
+          <div class="text-[10px] md:text-[11px] text-yellow-300">⏳ Pendentes</div>
         </div>
-        <div onclick="mudarAbaAdmin('approved')" class="bg-green-950/40 border border-green-700/50 p-3 rounded-lg text-center cursor-pointer hover:bg-green-900/40 transition">
-          <div class="text-2xl font-bold text-green-400">${a}</div>
-          <div class="text-[11px] text-green-300">✅ Aprovados</div>
+        <div onclick="mudarAbaAdmin('approved')" class="bg-green-950/40 border border-green-700/50 p-2.5 rounded-xl text-center cursor-pointer hover:bg-green-900/40 transition">
+          <div class="text-xl md:text-2xl font-bold text-green-400">${a}</div>
+          <div class="text-[10px] md:text-[11px] text-green-300">✅ Aprovados</div>
         </div>
-        <div onclick="mudarAbaAdmin('rejected')" class="bg-orange-950/40 border border-orange-700/50 p-3 rounded-lg text-center cursor-pointer hover:bg-orange-900/40 transition">
-          <div class="text-2xl font-bold text-orange-400">${r}</div>
-          <div class="text-[11px] text-orange-300">❌ Rejeitados</div>
+        <div onclick="mudarAbaAdmin('rejected')" class="bg-orange-950/40 border border-orange-700/50 p-2.5 rounded-xl text-center cursor-pointer hover:bg-orange-900/40 transition">
+          <div class="text-xl md:text-2xl font-bold text-orange-400">${r}</div>
+          <div class="text-[10px] md:text-[11px] text-orange-300">❌ Rejeitados</div>
         </div>
-        <div onclick="mudarAbaAdmin('banned')" class="bg-red-950/50 border border-red-700/50 p-3 rounded-lg text-center cursor-pointer hover:bg-red-900/50 transition">
-          <div class="text-2xl font-bold text-red-400">${b}</div>
-          <div class="text-[11px] text-red-300">🔨 Banidos</div>
+        <div onclick="mudarAbaAdmin('banned')" class="bg-red-950/50 border border-red-700/50 p-2.5 rounded-xl text-center cursor-pointer hover:bg-red-900/50 transition">
+          <div class="text-xl md:text-2xl font-bold text-red-400">${b}</div>
+          <div class="text-[10px] md:text-[11px] text-red-300">🔨 Banidos</div>
         </div>
       `;
     }
@@ -695,60 +670,68 @@
       ['pending','approved','rejected','banned'].forEach(t => {
         const btn = document.getElementById(`admin-tab-${t}`);
         if (!btn) return;
-        btn.className = `px-3 py-1.5 rounded-md text-xs font-bold transition ${t === adminTab ? 'bg-discord-blurple text-white shadow' : 'text-discord-muted hover:bg-discord-input'}`;
+        btn.className = `px-3 py-2 rounded-lg text-xs font-bold transition text-center ${t === adminTab ? 'bg-discord-blurple text-white shadow' : 'text-discord-muted hover:bg-discord-input'}`;
       });
 
       const lista = adminData[adminTab] || [];
-      const tbody = document.getElementById('admin-players-table');
+      const container = document.getElementById('admin-players-container');
       const empty = document.getElementById('admin-empty-msg');
 
       if (lista.length === 0) {
-        tbody.innerHTML = '';
+        container.innerHTML = '';
         empty.classList.remove('hidden');
         return;
       }
       empty.classList.add('hidden');
 
-      tbody.innerHTML = lista.map(p => {
+      // Cards limpos e responsivos no celular
+      container.innerHTML = lista.map(p => {
         const safeNick = escapeHtml(p.nick);
         let actions = '';
 
         if (adminTab === 'pending') {
           actions = `
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="bg-green-700 hover:bg-green-600 text-white px-2.5 py-1 rounded font-bold transition">✅ Aprovar</button>
-            <button onclick="acaoAdmin('reject','${safeNick}')" class="bg-orange-800 hover:bg-orange-700 text-white px-2.5 py-1 rounded font-bold transition">❌ Rejeitar</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="bg-red-800 hover:bg-red-700 text-white px-2.5 py-1 rounded font-bold transition">🔨 Banir</button>
+            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">✅ Aprovar</button>
+            <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 sm:flex-none bg-orange-800 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">❌ Rejeitar</button>
+            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🔨 Banir</button>
           `;
         } else if (adminTab === 'approved') {
           actions = `
-            <button onclick="acaoAdmin('reject','${safeNick}')" class="bg-orange-800 hover:bg-orange-700 text-white px-2.5 py-1 rounded font-bold transition">🚫 Suspender</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="bg-red-800 hover:bg-red-700 text-white px-2.5 py-1 rounded font-bold transition">🔨 Banir</button>
+            <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 sm:flex-none bg-orange-800 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🚫 Suspender</button>
+            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🔨 Banir</button>
           `;
         } else if (adminTab === 'rejected') {
           actions = `
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="bg-green-700 hover:bg-green-600 text-white px-2.5 py-1 rounded font-bold transition">✅ Aprovar</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="bg-red-800 hover:bg-red-700 text-white px-2.5 py-1 rounded font-bold transition">🔨 Banir</button>
+            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">✅ Aprovar</button>
+            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-red-800 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🔨 Banir</button>
           `;
         } else if (adminTab === 'banned') {
           actions = `
-            <button onclick="acaoAdmin('unban','${safeNick}')" class="bg-blue-700 hover:bg-blue-600 text-white px-2.5 py-1 rounded font-bold transition">🔓 Desbanir</button>
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="bg-green-700 hover:bg-green-600 text-white px-2.5 py-1 rounded font-bold transition">✅ Aprovar</button>
+            <button onclick="acaoAdmin('unban','${safeNick}')" class="flex-1 sm:flex-none bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🔓 Desbanir</button>
+            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">✅ Aprovar</button>
           `;
         }
 
-        actions += `<button onclick="acaoAdmin('remove','${safeNick}')" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded font-bold transition" title="Excluir">🗑️</button>`;
+        actions += `<button onclick="acaoAdmin('remove','${safeNick}')" class="bg-gray-700 hover:bg-gray-600 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold transition" title="Excluir">🗑️</button>`;
 
         return `
-          <tr class="hover:bg-discord-input/30 transition">
-            <td class="px-4 py-3 font-semibold text-white">
-              <span class="mr-1">${adminTab === 'banned' ? '⛔' : '🧑‍💻'}</span> ${safeNick}
-            </td>
-            <td class="px-4 py-3 text-discord-muted">${escapeHtml(p.platform || 'Bedrock')}</td>
-            <td class="px-4 py-3 text-discord-muted">${formatarData(p.requested_at)}</td>
-            <td class="px-4 py-3 text-right">
-              <div class="flex gap-1.5 justify-end flex-wrap">${actions}</div>
-            </td>
-          </tr>
+          <div class="bg-discord-sidebar border border-discord/40 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-discord/70 transition">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-full ${adminTab === 'banned' ? 'bg-red-950 text-red-400' : 'bg-discord-input text-discord-blurple'} flex items-center justify-center text-lg flex-shrink-0">
+                ${adminTab === 'banned' ? '⛔' : '🧑‍💻'}
+              </div>
+              <div class="min-w-0">
+                <div class="font-bold text-sm text-white truncate">${safeNick}</div>
+                <div class="text-[11px] text-discord-muted flex items-center gap-2 mt-0.5">
+                  <span class="bg-discord-darkest px-2 py-0.5 rounded text-gray-300 font-medium">${escapeHtml(p.platform || 'Bedrock')}</span>
+                  <span>${formatarData(p.requested_at)}</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
+              ${actions}
+            </div>
+          </div>
         `;
       }).join('');
     }
@@ -766,7 +749,6 @@
       const data = await res.json();
       mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
 
-      // Atualiza INSTANTANEAMENTE as tabelas e o mural de bans sem precisar recarregar a página!
       await carregarAdminData();
       await carregarBans();
     }
@@ -793,7 +775,6 @@
       mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
       document.getElementById('admin-quick-nick').value = '';
       
-      // Atualiza na mesma hora!
       await carregarAdminData();
       await carregarBans();
     }
@@ -813,12 +794,12 @@
       document.getElementById('form-register').classList.toggle('hidden', isLogin);
 
       document.getElementById('tab-btn-login').className = isLogin 
-        ? 'flex-1 py-2 text-center text-sm font-bold text-discord-blurple border-b-2 border-discord-blurple transition'
-        : 'flex-1 py-2 text-center text-sm font-bold text-discord-muted hover:text-white transition';
+        ? 'flex-1 py-2 text-center text-xs md:text-sm font-bold text-discord-blurple border-b-2 border-discord-blurple transition'
+        : 'flex-1 py-2 text-center text-xs md:text-sm font-bold text-discord-muted hover:text-white transition';
 
       document.getElementById('tab-btn-register').className = !isLogin 
-        ? 'flex-1 py-2 text-center text-sm font-bold text-discord-blurple border-b-2 border-discord-blurple transition'
-        : 'flex-1 py-2 text-center text-sm font-bold text-discord-muted hover:text-white transition';
+        ? 'flex-1 py-2 text-center text-xs md:text-sm font-bold text-discord-blurple border-b-2 border-discord-blurple transition'
+        : 'flex-1 py-2 text-center text-xs md:text-sm font-bold text-discord-muted hover:text-white transition';
 
       document.getElementById('auth-error').classList.add('hidden');
     }
@@ -899,14 +880,19 @@
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+    function copiarTexto(texto) {
+      navigator.clipboard.writeText(texto);
+      mostrarFeedback(`Copiado: ${texto}`, 'green');
+    }
+
     function mostrarFeedback(msg, cor) {
       const el = document.getElementById('feedback');
       el.textContent = msg;
-      el.className = `px-4 py-2 text-xs font-semibold text-center z-20 ${
-        cor === 'green' ? 'bg-green-900/90 text-green-200 border-b border-green-700' : 'bg-red-900/90 text-red-200 border-b border-red-700'
+      el.className = `px-3 py-1.5 text-xs font-semibold text-center z-20 ${
+        cor === 'green' ? 'bg-green-900/95 text-green-200 border-b border-green-700' : 'bg-red-900/95 text-red-200 border-b border-red-700'
       }`;
       el.classList.remove('hidden');
-      setTimeout(() => el.classList.add('hidden'), 4000);
+      setTimeout(() => el.classList.add('hidden'), 3500);
     }
 
     function formatarData(iso) {
