@@ -362,45 +362,165 @@
     <!-- ── 4. SUBDIVISÃO: PAINEL ADMINISTRATIVO (#gerenciar-whitelist) ─────── -->
     <section id="view-admin" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-3">
       
-      <!-- Stats 2x2 no mobile -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="admin-stats-grid">
-        <!-- Renderizado dinamicamente -->
-      </div>
+      <!-- Stats Cards 2x2 mobile -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="admin-stats-grid"></div>
 
-      <!-- Barra de Controle do Admin -->
-      <div class="glass-card p-3 md:p-4 rounded-2xl shadow-lg space-y-2.5">
-        <!-- Abas 2x2 no mobile -->
-        <div class="grid grid-cols-2 sm:flex gap-1.5">
-          <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"  class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition text-center">⏳ Pendentes</button>
-          <button onclick="mudarAbaAdmin('approved')" id="admin-tab-approved" class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition text-center">✅ Aprovados</button>
-          <button onclick="mudarAbaAdmin('rejected')" id="admin-tab-rejected" class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition text-center">❌ Rejeitados</button>
-          <button onclick="mudarAbaAdmin('banned')"   id="admin-tab-banned"   class="px-2.5 py-1.5 rounded-lg text-xs font-bold transition text-center">🔨 Banidos</button>
+      <!-- Módulos do Admin: 3 abas principais -->
+      <div class="glass-card rounded-2xl shadow-lg overflow-hidden">
+        <!-- Navegação de módulos -->
+        <div class="flex border-b border-white/[0.08] bg-black/30">
+          <button onclick="mudarModuloAdmin('whitelist')" id="admin-mod-whitelist"
+            class="flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
+            📋 Whitelist
+          </button>
+          <button onclick="mudarModuloAdmin('banimentos')" id="admin-mod-banimentos"
+            class="flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
+            🔨 Banimentos
+          </button>
+          <button onclick="mudarModuloAdmin('manutencao')" id="admin-mod-manutencao"
+            class="flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
+            🧹 Manutenção
+          </button>
         </div>
-        
-        <!-- Ações Rápidas adaptadas para o celular -->
-        <div class="space-y-1.5">
-          <input id="admin-quick-nick" type="text" placeholder="Digitar nick exato..." class="w-full bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500" />
-          <div class="grid grid-cols-3 gap-1.5">
-            <button onclick="adicionarManualAdmin()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-1.5 rounded-lg transition text-center">
-              + Aprovar
+
+        <!-- ── MÓDULO WHITELIST ─────────────────────────────────────── -->
+        <div id="admin-mod-content-whitelist" class="p-3 md:p-4 space-y-3">
+          <!-- Sub-abas da whitelist -->
+          <div class="flex gap-1.5 flex-wrap">
+            <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"
+              class="px-3 py-1.5 rounded-xl text-xs font-bold transition">⏳ Pendentes</button>
+            <button onclick="mudarAbaAdmin('approved')" id="admin-tab-approved"
+              class="px-3 py-1.5 rounded-xl text-xs font-bold transition">✅ Aprovados</button>
+            <button onclick="mudarAbaAdmin('rejected')" id="admin-tab-rejected"
+              class="px-3 py-1.5 rounded-xl text-xs font-bold transition">❌ Rejeitados</button>
+          </div>
+
+          <!-- Adicionar manual -->
+          <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06] space-y-2">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Adicionar jogador manual</div>
+            <div class="flex gap-2">
+              <input id="admin-add-nick" type="text" placeholder="Nick exato..." 
+                class="flex-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500" />
+              <select id="admin-add-platform" class="bg-black/60 border border-white/[0.1] px-2 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-emerald-500">
+                <option value="Bedrock">Bedrock</option>
+                <option value="Java">Java</option>
+              </select>
+            </div>
+            <button onclick="adicionarManualAdmin()" 
+              class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
+              ✅ Aprovar & Adicionar
             </button>
-            <button onclick="banirManualAdmin()" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-1.5 rounded-lg transition text-center">
-              🔨 Banir
-            </button>
-            <button onclick="limparChatAdmin()" class="bg-rose-950/90 hover:bg-rose-900 border border-rose-800/50 text-rose-300 text-xs font-bold py-1.5 rounded-lg transition text-center">
-              🧹 Limpar
-            </button>
+          </div>
+
+          <!-- Lista de jogadores -->
+          <div id="admin-players-container" class="space-y-2"></div>
+          <div id="admin-empty-msg" class="hidden text-center text-slate-400 py-6 text-xs">
+            Nenhum jogador encontrado nesta categoria.
+          </div>
+        </div>
+
+        <!-- ── MÓDULO BANIMENTOS ────────────────────────────────────── -->
+        <div id="admin-mod-content-banimentos" class="hidden p-3 md:p-4 space-y-3">
+          <!-- Formulário de banimento -->
+          <div class="bg-black/40 rounded-xl p-3 md:p-4 border border-rose-500/20 space-y-3">
+            <div class="flex items-center gap-2 pb-1 border-b border-white/[0.06]">
+              <span class="text-rose-400 text-base">🔨</span>
+              <span class="text-xs font-bold text-white">Banir Jogador</span>
+            </div>
+
+            <div class="space-y-2">
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nick do Jogador</label>
+                <input id="ban-nick-input" type="text" placeholder="Nick exato do jogador..."
+                  class="w-full mt-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500" />
+              </div>
+
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Motivo do Banimento</label>
+                <textarea id="ban-reason-input" rows="2" placeholder="Ex: Uso de hacks, comportamento tóxico..."
+                  class="w-full mt-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500 resize-none"></textarea>
+              </div>
+
+              <div>
+                <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Duração do Ban</label>
+                <div class="flex gap-2 mt-1">
+                  <input id="ban-duration-value" type="number" min="1" placeholder="Ex: 7"
+                    class="w-24 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500" />
+                  <select id="ban-duration-unit"
+                    class="flex-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500">
+                    <option value="permanent">♾️ Permanente</option>
+                    <option value="minutes">⏱️ Minutos</option>
+                    <option value="hours">🕐 Horas</option>
+                    <option value="days">📅 Dias</option>
+                  </select>
+                </div>
+                <div class="text-[10px] text-slate-500 mt-1">Deixe o campo de número vazio para ban permanente.</div>
+              </div>
+
+              <button onclick="executarBanimento()"
+                class="w-full bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
+                🔨 Aplicar Banimento
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de banidos ativos -->
+          <div>
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <span>Lista de Banidos</span>
+              <span id="admin-bans-count" class="bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full text-[9px] font-bold">0</span>
+            </div>
+            <div id="admin-bans-list" class="space-y-2">
+              <div class="text-center text-slate-400 text-xs py-4">Carregando...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── MÓDULO MANUTENÇÃO ────────────────────────────────────── -->
+        <div id="admin-mod-content-manutencao" class="hidden p-3 md:p-4 space-y-3">
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ações do Servidor</div>
+
+          <!-- Limpar Chat -->
+          <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06] flex items-start gap-3">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-lg flex-shrink-0">🧹</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white mb-0.5">Limpar Histórico do Chat</div>
+              <div class="text-[10px] text-slate-400 mb-2">Remove todas as mensagens do chat imediatamente. Esta ação é irreversível.</div>
+              <button onclick="limparChatAdmin()"
+                class="bg-rose-700 hover:bg-rose-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold transition">
+                🗑️ Limpar Chat Agora
+              </button>
+            </div>
+          </div>
+
+          <!-- Limpeza automática 30d -->
+          <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06] flex items-start gap-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-lg flex-shrink-0">📅</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white mb-0.5">Limpeza Automática</div>
+              <div class="text-[10px] text-slate-400">Mensagens com mais de <span class="text-amber-300 font-bold">30 dias</span> são apagadas automaticamente pelo servidor a cada 24 horas.</div>
+            </div>
+          </div>
+
+          <!-- Estatísticas rápidas -->
+          <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06]">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Estatísticas</div>
+            <div id="manutencao-stats" class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-black/40 rounded-lg p-2 text-center">
+                <div class="text-base font-black text-emerald-400" id="stat-total">–</div>
+                <div class="text-[10px] text-slate-400">Total de Jogadores</div>
+              </div>
+              <div class="bg-black/40 rounded-lg p-2 text-center">
+                <div class="text-base font-black text-amber-400" id="stat-pending">–</div>
+                <div class="text-[10px] text-slate-400">Aguardando Aprovação</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div id="admin-players-container" class="space-y-2">
-        <!-- Renderizado dinamicamente -->
-      </div>
-      <div id="admin-empty-msg" class="hidden text-center text-slate-400 py-6 text-xs glass-card rounded-xl">
-        Nenhum jogador encontrado nesta categoria.
-      </div>
     </section>
+
 
   </main>
 
@@ -618,7 +738,7 @@
       }
 
       if (canalId === 'chat') scrollChatToBottom();
-      if (canalId === 'admin' && isUserAdmin) carregarAdminData();
+      if (canalId === 'admin' && isUserAdmin) { carregarAdminData(); mudarModuloAdmin(adminModulo || 'whitelist'); }
       if (canalId === 'bans') carregarBans();
     }
 
@@ -809,6 +929,110 @@
       } catch (_) {}
     }
 
+    // ── Painel Admin Modular ──────────────────────────────────────────────────
+    let adminModulo = 'whitelist';
+
+    function mudarModuloAdmin(modulo) {
+      adminModulo = modulo;
+      const mods = ['whitelist', 'banimentos', 'manutencao'];
+      mods.forEach(m => {
+        const btn = document.getElementById(`admin-mod-${m}`);
+        const content = document.getElementById(`admin-mod-content-${m}`);
+        if (!btn || !content) return;
+        if (m === modulo) {
+          btn.className = 'flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20';
+          content.classList.remove('hidden');
+        } else {
+          btn.className = 'flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.04]';
+          content.classList.add('hidden');
+        }
+      });
+
+      if (modulo === 'banimentos') carregarAdminBans();
+      if (modulo === 'manutencao') atualizarStatsManu();
+    }
+
+    async function carregarAdminBans() {
+      const container = document.getElementById('admin-bans-list');
+      const badge = document.getElementById('admin-bans-count');
+      if (!container) return;
+      try {
+        const res = await apiFetch('/api/bans');
+        const bans = await res.json();
+        if (badge) badge.textContent = bans.length;
+
+        if (bans.length === 0) {
+          container.innerHTML = '<div class="text-center text-slate-400 text-xs py-6">Nenhum jogador banido no momento. ✌️</div>';
+          return;
+        }
+        container.innerHTML = bans.map(b => `
+          <div class="bg-black/50 rounded-xl p-3 border border-rose-500/25 flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <div class="w-8 h-8 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-sm flex-shrink-0">⛔</div>
+              <div class="min-w-0">
+                <div class="font-extrabold text-xs text-rose-300 truncate">${escapeHtml(b.nick)}</div>
+                <div class="text-[10px] text-slate-400 truncate">Motivo: <span class="text-slate-200">${escapeHtml(b.ban_reason || 'Violação de regras')}</span></div>
+                <div class="text-[10px] mt-0.5 ${b.isPermanent ? 'text-rose-400' : 'text-amber-400'}">
+                  ⏰ ${b.isPermanent ? '♾️ Permanente' : 'Restante: ' + escapeHtml(b.remaining)}
+                </div>
+              </div>
+            </div>
+            <div class="flex gap-1.5 flex-shrink-0">
+              <button onclick="acaoAdmin('unban','${escapeHtml(b.nick)}')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🔓 Desbanir</button>
+              <button onclick="acaoAdmin('remove','${escapeHtml(b.nick)}')" class="bg-white/[0.08] hover:bg-white/[0.16] text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (_) {
+        container.innerHTML = '<div class="text-center text-slate-400 text-xs py-4">Erro ao carregar lista de banidos.</div>';
+      }
+    }
+
+    function atualizarStatsManu() {
+      const p = (adminData.pending || []).length;
+      const total = (adminData.pending || []).length + (adminData.approved || []).length +
+                    (adminData.rejected || []).length + (adminData.banned || []).length;
+      const stTotal = document.getElementById('stat-total');
+      const stPend = document.getElementById('stat-pending');
+      if (stTotal) stTotal.textContent = total;
+      if (stPend) stPend.textContent = p;
+    }
+
+    async function executarBanimento() {
+      const nick = (document.getElementById('ban-nick-input').value || '').trim();
+      const reason = (document.getElementById('ban-reason-input').value || '').trim() || 'Violação das regras do servidor';
+      const durationValue = document.getElementById('ban-duration-value').value.trim();
+      const durationUnit = document.getElementById('ban-duration-unit').value;
+
+      if (!nick) { mostrarFeedback('Digite o nick do jogador!', 'red'); return; }
+
+      if (!confirm(`🔨 BANIR ${nick}?\n\nMotivo: ${reason}\nDuração: ${durationUnit === 'permanent' ? 'Permanente' : durationValue + ' ' + durationUnit}`)) return;
+
+      try {
+        const body = { reason, durationUnit };
+        if (durationUnit !== 'permanent' && durationValue) body.durationValue = parseInt(durationValue, 10);
+
+        const res = await apiFetch(`/api/admin/ban/${encodeURIComponent(nick)}`, {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
+
+        if (res.ok) {
+          document.getElementById('ban-nick-input').value = '';
+          document.getElementById('ban-reason-input').value = '';
+          document.getElementById('ban-duration-value').value = '';
+          document.getElementById('ban-duration-unit').value = 'permanent';
+          await carregarAdminData();
+          await carregarAdminBans();
+          await carregarBans(); // atualiza mural público
+        }
+      } catch (err) {
+        mostrarFeedback('Erro ao banir jogador.', 'red');
+      }
+    }
+
     // ── Painel Admin (Cards Limpos e Adaptados ao Celular) ────────────────────
     async function carregarAdminData() {
       if (!isUserAdmin) return;
@@ -818,6 +1042,7 @@
         adminData = await res.json();
         renderAdminStats();
         renderAdminTabela();
+        atualizarStatsManu();
       } catch (_) {}
     }
 
@@ -828,19 +1053,19 @@
       const b = (adminData.banned || []).length;
 
       document.getElementById('admin-stats-grid').innerHTML = `
-        <div onclick="mudarAbaAdmin('pending')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-amber-500/50 transition">
+        <div onclick="mudarModuloAdmin('whitelist');mudarAbaAdmin('pending')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-amber-500/50 transition">
           <div class="text-base md:text-xl font-black text-amber-400 drop-shadow">${p}</div>
           <div class="text-[10px] text-amber-300 font-bold">⏳ Pendentes</div>
         </div>
-        <div onclick="mudarAbaAdmin('approved')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-emerald-500/50 transition">
+        <div onclick="mudarModuloAdmin('whitelist');mudarAbaAdmin('approved')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-emerald-500/50 transition">
           <div class="text-base md:text-xl font-black text-emerald-400 drop-shadow">${a}</div>
           <div class="text-[10px] text-emerald-300 font-bold">✅ Aprovados</div>
         </div>
-        <div onclick="mudarAbaAdmin('rejected')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-orange-500/50 transition">
+        <div onclick="mudarModuloAdmin('whitelist');mudarAbaAdmin('rejected')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-orange-500/50 transition">
           <div class="text-base md:text-xl font-black text-orange-400 drop-shadow">${r}</div>
           <div class="text-[10px] text-orange-300 font-bold">❌ Rejeitados</div>
         </div>
-        <div onclick="mudarAbaAdmin('banned')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-rose-500/50 transition">
+        <div onclick="mudarModuloAdmin('banimentos')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-rose-500/50 transition">
           <div class="text-base md:text-xl font-black text-rose-400 drop-shadow">${b}</div>
           <div class="text-[10px] text-rose-300 font-bold">🔨 Banidos</div>
         </div>
@@ -853,10 +1078,12 @@
     }
 
     function renderAdminTabela() {
-      ['pending','approved','rejected','banned'].forEach(t => {
+      ['pending','approved','rejected'].forEach(t => {
         const btn = document.getElementById(`admin-tab-${t}`);
         if (!btn) return;
-        btn.className = `px-2 py-1.5 rounded-lg text-xs font-bold transition text-center ${t === adminTab ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm' : 'text-slate-300 bg-white/[0.04] hover:bg-white/[0.1]'}`;
+        btn.className = `px-3 py-1.5 rounded-xl text-xs font-bold transition ${t === adminTab
+          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-sm'
+          : 'text-slate-300 bg-white/[0.04] hover:bg-white/[0.1]'}`;
       });
 
       const lista = adminData[adminTab] || [];
@@ -878,22 +1105,17 @@
           actions = `
             <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">✅ Aprovar</button>
             <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 bg-orange-700 hover:bg-orange-600 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">❌ Rejeitar</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
+            <button onclick="preencherBanForm('${safeNick}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
           `;
         } else if (adminTab === 'approved') {
           actions = `
             <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 bg-orange-700 hover:bg-orange-600 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🚫 Suspender</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
+            <button onclick="preencherBanForm('${safeNick}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
           `;
         } else if (adminTab === 'rejected') {
           actions = `
             <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">✅ Aprovar</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
-          `;
-        } else if (adminTab === 'banned') {
-          actions = `
-            <button onclick="acaoAdmin('unban','${safeNick}')" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔓 Desbanir</button>
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">✅ Aprovar</button>
+            <button onclick="preencherBanForm('${safeNick}')" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-1.5 rounded-lg text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
           `;
         }
 
@@ -901,21 +1123,17 @@
 
         return `
           <div class="glass-card p-3 rounded-xl flex flex-col gap-2.5 shadow-sm border border-white/[0.08]">
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2 min-w-0">
-                <div class="w-8 h-8 rounded-xl ${adminTab === 'banned' ? 'bg-rose-500/25 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40'} flex items-center justify-center text-sm flex-shrink-0 font-bold">
-                  ${adminTab === 'banned' ? '⛔' : '🧑‍💻'}
-                </div>
-                <div class="min-w-0">
-                  <div class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</div>
-                  <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
-                    <span class="bg-black/50 px-1.5 py-0.5 rounded text-emerald-300 font-semibold">${escapeHtml(p.platform || 'Bedrock')}</span>
-                    <span class="font-mono text-[9px] text-slate-400">${formatarData(p.requested_at)}</span>
-                  </div>
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-xl bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm flex-shrink-0 font-bold">🧑‍💻</div>
+              <div class="min-w-0 flex-1">
+                <div class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</div>
+                <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                  <span class="bg-black/50 px-1.5 py-0.5 rounded text-emerald-300 font-semibold">${escapeHtml(p.platform || 'Bedrock')}</span>
+                  <span class="font-mono text-[9px] text-slate-400">${formatarData(p.requested_at)}</span>
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-1.5 w-full flex-wrap pt-0.5">
+            <div class="flex items-center gap-1.5 w-full flex-wrap">
               ${actions}
             </div>
           </div>
@@ -923,9 +1141,17 @@
       }).join('');
     }
 
+    // Preenche o formulário de banimento e troca para a aba de banimentos
+    function preencherBanForm(nick) {
+      const el = document.getElementById('ban-nick-input');
+      if (el) el.value = nick;
+      mudarModuloAdmin('banimentos');
+      const banEl = document.getElementById('ban-nick-input');
+      if (banEl) { banEl.focus(); banEl.select(); }
+    }
+
     async function acaoAdmin(tipo, nick) {
       if (tipo === 'remove' && !confirm(`Remover ${nick} permanentemente?`)) return;
-      if (tipo === 'ban' && !confirm(`Tem certeza que deseja BANIR ${nick}?`)) return;
 
       let res;
       if (tipo === 'remove') {
@@ -938,32 +1164,22 @@
 
       await carregarAdminData();
       await carregarBans();
+      if (adminModulo === 'banimentos') await carregarAdminBans();
     }
 
     async function adicionarManualAdmin() {
-      const nick = document.getElementById('admin-quick-nick').value.trim();
+      const nick = (document.getElementById('admin-add-nick') || document.getElementById('admin-quick-nick') || {value:''}).value.trim();
+      const platform = (document.getElementById('admin-add-platform') || {value:'Bedrock'}).value;
       if (!nick) return;
       const res = await apiFetch('/api/admin/add', {
         method: 'POST',
-        body: JSON.stringify({ nick })
+        body: JSON.stringify({ nick, platform })
       });
       const data = await res.json();
       mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
-      document.getElementById('admin-quick-nick').value = '';
+      const inp = document.getElementById('admin-add-nick') || document.getElementById('admin-quick-nick');
+      if (inp) inp.value = '';
       await carregarAdminData();
-    }
-
-    async function banirManualAdmin() {
-      const nick = document.getElementById('admin-quick-nick').value.trim();
-      if (!nick) return;
-      if (!confirm(`BANIR ${nick}?`)) return;
-      const res = await apiFetch(`/api/admin/ban/${encodeURIComponent(nick)}`, { method: 'POST' });
-      const data = await res.json();
-      mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
-      document.getElementById('admin-quick-nick').value = '';
-      
-      await carregarAdminData();
-      await carregarBans();
     }
 
     // ── Login / Cadastro ─────────────────────────────────────────────────────
