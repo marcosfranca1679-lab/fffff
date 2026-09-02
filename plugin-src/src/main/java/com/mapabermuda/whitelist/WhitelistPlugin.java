@@ -1,7 +1,8 @@
 package com.mapabermuda.whitelist;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -20,10 +21,8 @@ import java.util.logging.Logger;
 
 public class WhitelistPlugin extends JavaPlugin implements Listener {
 
-    // ─── URL da API do site (Vercel + Supabase) ───────────────────────────────
     private static final String API_URL = "https://fffff-autoforge.vercel.app/api/check/";
 
-    // ─── Admins liberados sem verificação (em letras minúsculas) ──────────────
     private static final Set<String> BYPASS = Set.of(
         "admin",
         "marcos",
@@ -39,12 +38,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(6))
             .build();
-
         getServer().getPluginManager().registerEvents(this, this);
-        log.info("╔══════════════════════════════════════╗");
-        log.info("║  Mapa Bermuda Whitelist - ATIVA!     ║");
-        log.info("║  Conectada em: " + API_URL.substring(0, 30) + "... ║");
-        log.info("╚══════════════════════════════════════╝");
+        log.info("Mapa Bermuda Whitelist - ATIVA!");
     }
 
     @Override
@@ -52,21 +47,28 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         log.info("[Whitelist] Plugin desativado.");
     }
 
-    // ─── Evento assíncrono (perfeito para requisições web!) ──────────────────
+    private Component buildKickMessage(String cleanName) {
+        return Component.text()
+            .append(Component.text("ACESSO NEGADO!\n\n", NamedTextColor.RED, TextDecoration.BOLD))
+            .append(Component.text("O nick '", NamedTextColor.YELLOW))
+            .append(Component.text(cleanName, NamedTextColor.WHITE, TextDecoration.BOLD))
+            .append(Component.text("' nao esta na Whitelist.\n\n", NamedTextColor.YELLOW))
+            .append(Component.text("Solicite acesso em:\n", NamedTextColor.WHITE))
+            .append(Component.text("fffff-autoforge.vercel.app", NamedTextColor.GREEN))
+            .build();
+    }
+
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onAsyncPreLogin(AsyncPlayerPreLoginEvent event) {
         String name = event.getName();
-
-        // Remove o prefixo '.' do Geyser para jogadores de Bedrock/Celular
         String cleanName = name.startsWith(".") ? name.substring(1) : name;
 
-        // Verifica se é um Admin liberado
         if (BYPASS.contains(cleanName.toLowerCase())) {
-            log.info("[Whitelist] ✅ Admin detectado: " + cleanName + " - Acesso liberado!");
+            log.info("[Whitelist] Admin: " + cleanName + " - Liberado!");
             return;
         }
 
-        log.info("[Whitelist] 🔍 Verificando '" + cleanName + "' na API...");
+        log.info("[Whitelist] Verificando '" + cleanName + "' na API...");
 
         try {
             String encodedName = URLEncoder.encode(cleanName, StandardCharsets.UTF_8);
@@ -84,28 +86,16 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 && response.body().contains("\"allowed\":true");
 
             if (allowed) {
-                log.info("[Whitelist] ✅ '" + cleanName + "' aprovado no site! Acesso liberado.");
+                log.info("[Whitelist] '" + cleanName + "' aprovado! Acesso liberado.");
             } else {
-                log.info("[Whitelist] ❌ '" + cleanName + "' NÃO aprovado no site! Expulsando...");
-                Component kickMsg = LegacyComponentSerializer.legacySection().deserialize(
-                    "&c&l╔══════════════════════════╗\n" +
-                    "&c&l║     ACESSO NEGADO!       ║\n" +
-                    "&c&l╚══════════════════════════╝\n\n" +
-                    "&eSeu Nick &f'" + cleanName + "' &enão está\n" +
-                    "&ena Whitelist do servidor.\n\n" +
-                    "&fSolicite acesso em:\n" +
-                    "&bfffff-autoforge.vercel.app"
-                );
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, kickMsg);
+                log.info("[Whitelist] '" + cleanName + "' NAO aprovado! Expulsando...");
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
             }
 
         } catch (Exception e) {
-            log.warning("[Whitelist] ⚠️ Erro ao consultar API para '" + cleanName + "': " + e.getMessage());
-            // Em caso de falha na API, bloqueia por segurança
+            log.warning("[Whitelist] Erro na API para '" + cleanName + "': " + e.getMessage());
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                LegacyComponentSerializer.legacySection().deserialize(
-                    "&c[Whitelist] Erro ao verificar permissão.\n&eTente novamente em alguns segundos."
-                )
+                Component.text("Erro ao verificar whitelist. Tente novamente.", NamedTextColor.RED)
             );
         }
     }
