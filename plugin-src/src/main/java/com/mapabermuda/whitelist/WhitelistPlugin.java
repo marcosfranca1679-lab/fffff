@@ -47,13 +47,34 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         log.info("[Whitelist] Plugin desativado.");
     }
 
-    private Component buildBanMessage(String cleanName) {
+    private String extractJsonField(String json, String field) {
+        try {
+            String search = "\"" + field + "\":\"";
+            int start = json.indexOf(search);
+            if (start != -1) {
+                start += search.length();
+                int end = json.indexOf("\"", start);
+                if (end != -1) return json.substring(start, end);
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private Component buildBanMessage(String cleanName, String body) {
+        String reason = extractJsonField(body, "reason");
+        String remaining = extractJsonField(body, "remaining");
+        if (reason == null || reason.isBlank()) reason = "Violacao das regras do servidor";
+        if (remaining == null || remaining.isBlank()) remaining = "Permanente";
+
         return Component.text()
-            .append(Component.text("VOCE FOI BANIDO DO SERVIDOR!\n\n", NamedTextColor.DARK_RED, TextDecoration.BOLD))
-            .append(Component.text("Nick: ", NamedTextColor.RED))
-            .append(Component.text(cleanName + "\n\n", NamedTextColor.WHITE, TextDecoration.BOLD))
-            .append(Component.text("Seu acesso foi bloqueado pelo administrador.\n\n", NamedTextColor.YELLOW))
-            .append(Component.text("Mais informacoes em:\n", NamedTextColor.GRAY))
+            .append(Component.text("VOCE ESTA BANIDO DO SERVIDOR!\n\n", NamedTextColor.DARK_RED, TextDecoration.BOLD))
+            .append(Component.text("Nick: ", NamedTextColor.GRAY))
+            .append(Component.text(cleanName + "\n", NamedTextColor.WHITE, TextDecoration.BOLD))
+            .append(Component.text("Motivo: ", NamedTextColor.RED))
+            .append(Component.text(reason + "\n", NamedTextColor.YELLOW))
+            .append(Component.text("Tempo Restante: ", NamedTextColor.RED))
+            .append(Component.text(remaining + "\n\n", NamedTextColor.GOLD, TextDecoration.BOLD))
+            .append(Component.text("Mais informacoes no site:\n", NamedTextColor.GRAY))
             .append(Component.text("fffff-autoforge.vercel.app", NamedTextColor.AQUA))
             .build();
     }
@@ -86,7 +107,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL + encodedName))
                 .timeout(Duration.ofSeconds(5))
-                .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.2")
+                .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.3")
                 .GET()
                 .build();
 
@@ -98,7 +119,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
             if (banned) {
                 log.info("[Whitelist] 🔨 '" + cleanName + "' esta BANIDO! Bloqueando entrada...");
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessage(cleanName));
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessage(cleanName, body));
 
             } else if (!allowed) {
                 log.info("[Whitelist] ❌ '" + cleanName + "' NAO aprovado. Expulsando...");
