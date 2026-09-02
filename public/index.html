@@ -654,16 +654,16 @@
 
     function mudarAbaAdmin(aba) {
       adminTab = aba;
-      ['pending','approved','rejected','banned'].forEach(t => {
-        const btn = document.getElementById(`admin-tab-${t}`);
-        if (!btn) return;
-        btn.className = `px-3 py-1.5 rounded-md text-xs font-bold transition ${t === aba ? 'bg-discord-blurple text-white' : 'text-discord-muted hover:bg-discord-input'}`;
-      });
       renderAdminTabela();
     }
 
     function renderAdminTabela() {
-      mudarAbaAdmin(adminTab);
+      ['pending','approved','rejected','banned'].forEach(t => {
+        const btn = document.getElementById(`admin-tab-${t}`);
+        if (!btn) return;
+        btn.className = `px-3 py-1.5 rounded-md text-xs font-bold transition ${t === adminTab ? 'bg-discord-blurple text-white shadow' : 'text-discord-muted hover:bg-discord-input'}`;
+      });
+
       const lista = adminData[adminTab] || [];
       const tbody = document.getElementById('admin-players-table');
       const empty = document.getElementById('admin-empty-msg');
