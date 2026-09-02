@@ -60,7 +60,8 @@ function statusMessage(status) {
   const msgs = {
     pending:  '⏳ Aguardando aprovação do administrador...',
     approved: '✅ Acesso liberado! Você pode entrar no servidor.',
-    rejected: '❌ Seu acesso foi negado pelo administrador.'
+    rejected: '❌ Seu acesso foi negado pelo administrador.',
+    banned:   '🔨 Você foi BANIDO deste servidor.'
   };
   return msgs[status] || 'Status desconhecido';
 }
@@ -113,7 +114,8 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
     res.json({
       pending:  players.filter(p => p.status === 'pending'),
       approved: players.filter(p => p.status === 'approved'),
-      rejected: players.filter(p => p.status === 'rejected')
+      rejected: players.filter(p => p.status === 'rejected'),
+      banned:   players.filter(p => p.status === 'banned')
     });
   } catch (err) {
     console.error('Erro ao listar jogadores:', err);
@@ -132,6 +134,7 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
       pending:  list.filter(p => p.status === 'pending').length,
       approved: list.filter(p => p.status === 'approved').length,
       rejected: list.filter(p => p.status === 'rejected').length,
+      banned:   list.filter(p => p.status === 'banned').length,
       total: list.length
     });
   } catch (err) {
@@ -166,6 +169,38 @@ app.post('/api/admin/reject/:nick', requireAdmin, async (req, res) => {
 
     if (error) throw error;
     res.json({ success: true, message: `❌ ${nick} rejeitado.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Banir jogador
+app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('players')
+      .upsert({ nick, status: 'banned', updated_at: now }, { onConflict: 'nick' });
+
+    if (error) throw error;
+    res.json({ success: true, message: `🔨 ${nick} foi BANIDO com sucesso!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Desbanir jogador (volta para pendente ou remove ban)
+app.post('/api/admin/unban/:nick', requireAdmin, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { error } = await supabase
+      .from('players')
+      .update({ status: 'pending', updated_at: new Date().toISOString() })
+      .ilike('nick', nick);
+
+    if (error) throw error;
+    res.json({ success: true, message: `✅ ${nick} foi desbanido (aguardando aprovação)!` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -206,7 +241,7 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-//  ROTAS PÚBLICAS (Jogador e Addon)
+//  ROTAS PÚBLICAS (Jogador e Plugin)
 // ════════════════════════════════════════════════════════════════════════════
 
 // Solicitar acesso
@@ -225,6 +260,9 @@ app.post('/api/request', async (req, res) => {
     if (findError) throw findError;
 
     if (existing) {
+      if (existing.status === 'banned') {
+        return res.status(403).json({ error: '🔨 Você está BANIDO deste servidor.' });
+      }
       return res.json({ status: existing.status, message: statusMessage(existing.status) });
     }
 
@@ -261,7 +299,8 @@ app.get('/api/status/:nick', async (req, res) => {
   }
 });
 
-// Addon Check (usado no Minecraft Bedrock)
+// ─── CHECK (usado pelo Plugin do Minecraft) ───────────────────────────────
+// Retorna: { allowed: bool, banned: bool, nick: string }
 app.get('/api/check/:nick', async (req, res) => {
   try {
     const nick = req.params.nick.trim();
@@ -271,10 +310,18 @@ app.get('/api/check/:nick', async (req, res) => {
       .ilike('nick', nick)
       .maybeSingle();
 
-    const allowed = !error && player && player.status === 'approved';
-    res.json({ allowed: !!allowed, nick });
+    if (error || !player) {
+      return res.json({ allowed: false, banned: false, nick });
+    }
+
+    if (player.status === 'banned') {
+      return res.json({ allowed: false, banned: true, nick });
+    }
+
+    const allowed = player.status === 'approved';
+    res.json({ allowed: !!allowed, banned: false, nick });
   } catch (err) {
-    res.json({ allowed: false, nick: req.params.nick });
+    res.json({ allowed: false, banned: false, nick: req.params.nick });
   }
 });
 
