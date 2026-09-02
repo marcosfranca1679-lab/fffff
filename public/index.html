@@ -11,9 +11,8 @@
       font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
       -webkit-tap-highlight-color: transparent;
       padding-bottom: env(safe-area-inset-bottom);
-      /* Fundo 100% Autêntico de Minecraft com Degradê que valoriza o visual */
       background: 
-        linear-gradient(180deg, rgba(8, 12, 22, 0.65) 0%, rgba(10, 16, 30, 0.76) 45%, rgba(6, 9, 16, 0.90) 100%),
+        linear-gradient(180deg, rgba(8, 12, 22, 0.68) 0%, rgba(10, 16, 30, 0.78) 45%, rgba(6, 9, 16, 0.92) 100%),
         url('/bg.jpg');
       background-size: cover;
       background-position: center;
@@ -23,23 +22,26 @@
     
     /* Vidro Fosco Moderno */
     .glass-rail {
-      background: rgba(10, 15, 28, 0.78);
+      background: rgba(10, 15, 28, 0.82);
       backdrop-filter: blur(24px);
       -webkit-backdrop-filter: blur(24px);
       border-right: 1px solid rgba(255, 255, 255, 0.1);
     }
+    .glass-bottom-bar {
+      background: rgba(10, 15, 28, 0.92);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+    }
     .glass-card {
-      background: rgba(15, 23, 42, 0.72);
+      background: rgba(15, 23, 42, 0.78);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
-    }
-    .glass-card:hover {
-      border-color: rgba(255, 255, 255, 0.18);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
     }
     .glass-flyout {
-      background: rgba(10, 16, 30, 0.94);
+      background: rgba(10, 16, 30, 0.96);
       backdrop-filter: blur(28px);
       -webkit-backdrop-filter: blur(28px);
       border: 1px solid rgba(255, 255, 255, 0.12);
@@ -47,13 +49,11 @@
     }
 
     /* ══════════════════════════════════════════════════════════════════════════
-         ÍCONES 3D COLORIDOS COM PROFUNDIDADE, RELEVO E GLOW
+         ÍCONES 3D COLORIDOS
     ══════════════════════════════════════════════════════════════════════════ */
     .btn-3d {
       position: relative;
-      width: 52px;
-      height: 52px;
-      border-radius: 16px;
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -63,7 +63,7 @@
       border-left: 1px solid rgba(255, 255, 255, 0.2);
     }
     .btn-3d:hover {
-      transform: translateY(-4px) scale(1.04);
+      transform: translateY(-3px) scale(1.04);
     }
     .btn-3d:active {
       transform: translateY(2px) scale(0.98);
@@ -72,137 +72,116 @@
     /* 1. Logo / Servidor 3D (Diamante Azul) */
     .btn-3d-diamond {
       background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%);
-      box-shadow: 0 5px 0 #075985, 0 12px 24px rgba(14, 165, 233, 0.45);
-    }
-    .btn-3d-diamond:active {
-      box-shadow: 0 2px 0 #075985, 0 6px 12px rgba(14, 165, 233, 0.4);
+      box-shadow: 0 4px 0 #075985, 0 10px 20px rgba(14, 165, 233, 0.4);
     }
 
     /* 2. Status / Info 3D (Esmeralda Verde Neon) */
     .btn-3d-emerald {
       background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
-      box-shadow: 0 5px 0 #047857, 0 12px 24px rgba(16, 185, 129, 0.45);
-    }
-    .btn-3d-emerald:active {
-      box-shadow: 0 2px 0 #047857, 0 6px 12px rgba(16, 185, 129, 0.4);
+      box-shadow: 0 4px 0 #047857, 0 10px 20px rgba(16, 185, 129, 0.4);
     }
     .btn-3d-emerald.active {
       filter: brightness(1.15);
-      box-shadow: 0 5px 0 #047857, 0 0 28px rgba(16, 185, 129, 0.7);
+      box-shadow: 0 4px 0 #047857, 0 0 24px rgba(16, 185, 129, 0.7);
     }
 
     /* 3. Chat / Comunidade 3D (Ametista Roxo/Violeta) */
     .btn-3d-amethyst {
       background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 50%, #6d28d9 100%);
-      box-shadow: 0 5px 0 #5b21b6, 0 12px 24px rgba(139, 92, 246, 0.45);
-    }
-    .btn-3d-amethyst:active {
-      box-shadow: 0 2px 0 #5b21b6, 0 6px 12px rgba(139, 92, 246, 0.4);
+      box-shadow: 0 4px 0 #5b21b6, 0 10px 20px rgba(139, 92, 246, 0.4);
     }
     .btn-3d-amethyst.active {
       filter: brightness(1.15);
-      box-shadow: 0 5px 0 #5b21b6, 0 0 28px rgba(139, 92, 246, 0.7);
+      box-shadow: 0 4px 0 #5b21b6, 0 0 24px rgba(139, 92, 246, 0.7);
     }
 
     /* 4. Admin 3D (Rubi Carmesim / Ouro) */
     .btn-3d-ruby {
       background: linear-gradient(135deg, #fb7185 0%, #e11d48 50%, #be123c 100%);
-      box-shadow: 0 5px 0 #9f1239, 0 12px 24px rgba(225, 29, 72, 0.5);
-    }
-    .btn-3d-ruby:active {
-      box-shadow: 0 2px 0 #9f1239, 0 6px 12px rgba(225, 29, 72, 0.4);
+      box-shadow: 0 4px 0 #9f1239, 0 10px 20px rgba(225, 29, 72, 0.45);
     }
     .btn-3d-ruby.active {
       filter: brightness(1.15);
-      box-shadow: 0 5px 0 #9f1239, 0 0 28px rgba(225, 29, 72, 0.75);
+      box-shadow: 0 4px 0 #9f1239, 0 0 24px rgba(225, 29, 72, 0.75);
     }
 
-    /* 5. Logout 3D (Netherite Escuro) */
+    /* 5. Logout 3D */
     .btn-3d-dark {
       background: linear-gradient(135deg, #475569 0%, #334155 50%, #1e293b 100%);
-      box-shadow: 0 4px 0 #0f172a, 0 8px 16px rgba(0, 0, 0, 0.4);
-    }
-    .btn-3d-dark:active {
-      box-shadow: 0 1px 0 #0f172a, 0 4px 8px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 3px 0 #0f172a, 0 6px 12px rgba(0, 0, 0, 0.4);
     }
 
-    /* Indicador ativo lateral */
+    /* Indicador ativo lateral no Desktop */
     .active-pill-dot {
       position: absolute;
       left: -14px;
-      width: 5px;
-      height: 24px;
+      width: 4px;
+      height: 22px;
       border-radius: 0 4px 4px 0;
       background: #ffffff;
       box-shadow: 0 0 12px #ffffff;
     }
 
     /* Scrollbars */
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 8px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
   </style>
 </head>
-<body class="h-full text-slate-100 flex overflow-hidden select-none">
+<body class="h-full text-slate-100 flex flex-col md:flex-row overflow-hidden select-none">
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       BARRA LATERAL COM ÍCONES 3D COLORIDOS
+       DESKTOP ONLY: BARRA LATERAL COM ÍCONES 3D (ESCONDIDA NO CELULAR!)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <aside class="w-[76px] md:w-[84px] glass-rail flex flex-col items-center py-4 gap-3.5 flex-shrink-0 z-40">
+  <aside class="hidden md:flex w-[80px] glass-rail flex-col items-center py-4 gap-3.5 flex-shrink-0 z-40">
     
-    <!-- 1. LOGO PRINCIPAL (3D Diamante) -->
+    <!-- Logo -->
     <div class="relative group">
-      <button onclick="alternarSubmenu('info')" class="btn-3d btn-3d-diamond" title="Mapa Bermuda">
-        <!-- Ícone 3D Picareta / Bloco -->
-        <span class="text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">⛏️</span>
+      <button onclick="alternarSubmenu('info')" class="btn-3d btn-3d-diamond w-12 h-12" title="Mapa Bermuda">
+        <span class="text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">⛏️</span>
       </button>
     </div>
 
-    <!-- Divisor com Brilho -->
-    <div class="w-9 h-[2px] bg-gradient-to-r from-transparent via-white/20 to-transparent my-0.5"></div>
+    <div class="w-8 h-[2px] bg-gradient-to-r from-transparent via-white/20 to-transparent my-0.5"></div>
 
-    <!-- 2. ÍCONE STATUS / INFO 3D (Esmeralda Verde Neon) -->
+    <!-- Status -->
     <div class="relative group flex flex-col items-center">
       <span id="dot-cat-info" class="active-pill-dot"></span>
-      <button onclick="alternarSubmenu('info')" id="icon-cat-info" class="btn-3d btn-3d-emerald active" title="Status do Servidor">
-        <!-- 3D Beacon / Bússola SVG -->
-        <svg class="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <button onclick="alternarSubmenu('info')" id="icon-cat-info" class="btn-3d btn-3d-emerald w-12 h-12 active" title="Status do Servidor">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"></circle>
           <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="rgba(255,255,255,0.2)"></polygon>
         </svg>
       </button>
-      <span class="text-[10px] font-bold text-emerald-300 drop-shadow mt-1 tracking-tight">Status</span>
+      <span class="text-[10px] font-bold text-emerald-300 drop-shadow mt-1">Status</span>
     </div>
 
-    <!-- 3. ÍCONE CHAT 3D (Ametista Roxo/Violeta) -->
+    <!-- Chat -->
     <div class="relative group flex flex-col items-center">
       <span id="dot-cat-comunidade" class="hidden active-pill-dot"></span>
-      <button onclick="alternarSubmenu('comunidade')" id="icon-cat-comunidade" class="btn-3d btn-3d-amethyst" title="Chat da Comunidade">
-        <!-- 3D Chat Bubble SVG -->
-        <svg class="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <button onclick="alternarSubmenu('comunidade')" id="icon-cat-comunidade" class="btn-3d btn-3d-amethyst w-12 h-12" title="Chat da Comunidade">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" fill="rgba(255,255,255,0.2)"></path>
         </svg>
       </button>
-      <span class="text-[10px] font-bold text-purple-300 drop-shadow mt-1 tracking-tight">Chat</span>
+      <span class="text-[10px] font-bold text-purple-300 drop-shadow mt-1">Chat</span>
     </div>
 
-    <!-- 4. ÍCONE ADMIN 3D (Rubi Carmesim / Ouro) -->
+    <!-- Admin -->
     <div id="wrapper-icon-admin" class="hidden relative group flex flex-col items-center mt-1">
       <span id="dot-cat-admin" class="hidden active-pill-dot"></span>
-      <button onclick="alternarSubmenu('admin')" id="icon-cat-admin" class="btn-3d btn-3d-ruby" title="Painel de Moderação">
-        <!-- 3D Escudo SVG -->
-        <svg class="w-6 h-6 text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)]" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+      <button onclick="alternarSubmenu('admin')" id="icon-cat-admin" class="btn-3d btn-3d-ruby w-12 h-12" title="Painel de Moderação">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" fill="rgba(255,255,255,0.2)"></path>
           <path d="M9.5 12a2.5 2.5 0 1 0 5 0 2.5 2.5 0 1 0-5 0"></path>
         </svg>
       </button>
-      <span class="text-[10px] font-bold text-rose-300 drop-shadow mt-1 tracking-tight">Admin</span>
+      <span class="text-[10px] font-bold text-rose-300 drop-shadow mt-1">Admin</span>
     </div>
 
-    <!-- RODAPÉ DA BARRA LATERAL -->
+    <!-- Rodapé Desktop -->
     <div class="mt-auto flex flex-col items-center gap-3">
-      <button onclick="fazerLogout()" class="btn-3d btn-3d-dark w-11 h-11 rounded-xl" title="Sair da Conta">
+      <button onclick="fazerLogout()" class="btn-3d btn-3d-dark w-10 h-10 rounded-xl" title="Sair da Conta">
         <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
           <polyline points="16 17 21 12 16 7"></polyline>
@@ -210,26 +189,25 @@
         </svg>
       </button>
       
-      <!-- Avatar do Usuário com Efeito 3D -->
-      <div id="user-avatar-badge" class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-sm font-extrabold text-slate-950 shadow-lg shadow-amber-500/30 border-t border-white/50">
+      <div id="user-avatar-badge" class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-xs font-extrabold text-slate-950 shadow-lg border-t border-white/50">
         ?
       </div>
     </div>
   </aside>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       PAINEL FLYOUT DAS SUBDIVISÕES (ABRE AO CLICAR NO ÍCONE)
+       PAINEL FLYOUT DAS SUBDIVISÕES (DESKTOP: LATERAL | MOBILE: BOTTOM SHEET)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <div id="subdivisions-backdrop" onclick="fecharSubmenu()" class="hidden fixed inset-0 bg-black/65 z-30 transition-opacity backdrop-blur-xs"></div>
+  <div id="subdivisions-backdrop" onclick="fecharSubmenu()" class="hidden fixed inset-0 bg-black/70 z-50 transition-opacity backdrop-blur-xs"></div>
 
-  <aside id="subdivisions-panel" class="fixed left-[76px] md:left-[84px] inset-y-0 w-72 glass-flyout flex flex-col z-30 transition-transform duration-250 ease-out -translate-x-[420px]">
+  <aside id="subdivisions-panel" class="fixed left-0 md:left-[80px] bottom-0 md:bottom-auto md:inset-y-0 w-full md:w-72 glass-flyout flex flex-col z-50 rounded-t-3xl md:rounded-none transition-transform duration-250 ease-out translate-y-full md:translate-y-0 md:-translate-x-[420px] max-h-[75vh] md:max-h-full">
     
-    <div class="h-16 border-b border-white/[0.1] px-5 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span id="submenu-header-icon" class="text-2xl drop-shadow">ℹ️</span>
+    <div class="h-14 md:h-16 border-b border-white/[0.1] px-5 flex items-center justify-between flex-shrink-0">
+      <div class="flex items-center gap-2.5">
+        <span id="submenu-header-icon" class="text-xl">ℹ️</span>
         <div>
           <span id="submenu-header-title" class="font-extrabold text-sm text-white tracking-wide block">INFORMAÇÕES</span>
-          <span class="text-[10px] text-slate-400">Selecione uma opção</span>
+          <span class="text-[10px] text-slate-400">Selecione para navegar</span>
         </div>
       </div>
       <button onclick="fecharSubmenu()" class="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/[0.15] text-slate-300 hover:text-white flex items-center justify-center text-sm transition">
@@ -242,103 +220,110 @@
       <!-- Inserido dinamicamente via JS -->
     </div>
 
-    <!-- Rodapé com Perfil -->
-    <div class="p-3.5 bg-black/40 border-t border-white/[0.1] flex items-center justify-between text-xs">
+    <!-- Rodapé -->
+    <div class="p-3 bg-black/40 border-t border-white/[0.1] flex items-center justify-between text-xs flex-shrink-0">
       <div class="truncate">
         <div id="drawer-user-nick" class="font-bold text-white truncate">Carregando...</div>
         <div id="drawer-user-role" class="text-[11px] text-emerald-400 font-semibold truncate">Jogador</div>
       </div>
+      <button onclick="fazerLogout()" class="md:hidden text-rose-400 font-bold px-2 py-1 text-xs">Sair 🚪</button>
     </div>
   </aside>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       ÁREA PRINCIPAL DE CONTEÚDO (SOBRE O FUNDO MINECRAFT COM DEGRADÊ)
+       ÁREA PRINCIPAL DE CONTEÚDO (100% DA LARGURA NO CELULAR, SEM CORTES!)
   ══════════════════════════════════════════════════════════════════════════ -->
-  <main class="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative">
+  <main class="flex-1 flex flex-col h-full min-w-0 overflow-hidden relative pb-16 md:pb-0">
     
-    <!-- Topbar Limpa -->
-    <header class="h-14 md:h-16 border-b border-white/[0.1] px-4 md:px-6 flex items-center justify-between flex-shrink-0 shadow-lg bg-slate-950/60 backdrop-blur-xl z-10">
-      <div class="flex items-center gap-3 overflow-hidden">
-        <button onclick="abrirSubmenuAtual()" class="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white transition flex items-center gap-2 group shadow-sm" title="Alternar Subdivisões">
-          <span class="text-emerald-400 text-lg font-bold">#</span>
+    <!-- Topbar Limpa (SEM "Servidor Online" ou botões extras no topo!) -->
+    <header class="h-14 border-b border-white/[0.1] px-4 flex items-center justify-between flex-shrink-0 bg-slate-950/70 backdrop-blur-xl z-10">
+      <div class="flex items-center gap-2 overflow-hidden w-full">
+        <button onclick="abrirSubmenuAtual()" class="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white transition flex items-center gap-2 group shadow-sm max-w-full truncate" title="Alternar Subdivisões">
+          <span class="text-emerald-400 text-lg font-bold flex-shrink-0">#</span>
           <span id="current-channel-title" class="font-extrabold text-sm md:text-base text-white truncate">geral-status</span>
-          <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
+          <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-transform group-hover:translate-y-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"></path></svg>
         </button>
-      </div>
-
-      <div class="flex items-center gap-2.5">
-        <button id="btn-header-clear-chat" onclick="limparChatAdmin()" class="hidden bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-200 text-xs px-3 py-1.5 rounded-xl transition font-bold items-center gap-1.5 shadow-md">
-          🧹 Limpar Chat
-        </button>
-        
-        <!-- Status do Servidor -->
-        <span class="bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs px-3 py-1.5 rounded-full font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/15 backdrop-blur-md">
-          <span class="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-ping"></span>
-          <span>Servidor Online</span>
-        </span>
       </div>
     </header>
 
-    <div id="feedback" class="hidden px-4 py-2.5 text-xs font-semibold text-center z-20"></div>
+    <div id="feedback" class="hidden px-4 py-2 text-xs font-semibold text-center z-20"></div>
 
     <!-- ── 1. SUBDIVISÃO: GERAL / STATUS (#geral-status) ───────────────────── -->
-    <section id="view-geral" class="flex-1 overflow-y-auto p-4 md:p-8 max-w-4xl w-full mx-auto space-y-5">
+    <section id="view-geral" class="flex-1 overflow-y-auto p-3.5 md:p-8 max-w-4xl w-full mx-auto space-y-4">
       
       <!-- Card do Perfil -->
-      <div class="glass-card rounded-3xl p-5 md:p-6 shadow-2xl relative overflow-hidden">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-white/[0.1]">
-          <div class="flex items-center gap-4">
-            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-3xl shadow-lg shadow-emerald-500/30 flex-shrink-0 border-t border-white/40">
+      <div class="glass-card rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-xl relative overflow-hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-4 border-b border-white/[0.1]">
+          <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-xl md:rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-2xl shadow-md flex-shrink-0 border-t border-white/40">
               🎮
             </div>
             <div class="min-w-0">
-              <div class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-lg md:text-xl font-extrabold text-white truncate tracking-tight" id="profile-nick">Carregando...</span>
-                <span id="profile-platform-badge" class="bg-white/[0.08] text-emerald-300 border border-white/[0.12] text-xs px-2.5 py-0.5 rounded-lg font-semibold">Bedrock</span>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-base md:text-xl font-extrabold text-white truncate tracking-tight" id="profile-nick">Carregando...</span>
+                <span id="profile-platform-badge" class="bg-white/[0.08] text-emerald-300 border border-white/[0.12] text-[11px] px-2 py-0.5 rounded-lg font-semibold">Bedrock</span>
               </div>
               <span class="text-xs text-slate-400 block truncate mt-0.5" id="profile-email">email@carregando.com</span>
             </div>
           </div>
-          <div id="whitelist-status-box" class="px-4 py-2 rounded-xl text-xs md:text-sm font-bold flex items-center justify-center gap-2 w-full sm:w-auto shadow-md">
+          <div id="whitelist-status-box" class="px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-bold flex items-center justify-center gap-2 w-full sm:w-auto shadow-md">
             ⏳ Verificando...
           </div>
         </div>
 
-        <div class="pt-4 text-xs md:text-sm text-slate-200 leading-relaxed" id="whitelist-status-desc">
+        <div class="pt-3 text-xs md:text-sm text-slate-200 leading-relaxed" id="whitelist-status-desc">
           Aguarde a verificação do seu acesso...
         </div>
       </div>
 
-      <!-- Dados de Conexão -->
-      <div class="glass-card rounded-3xl p-5 md:p-6 shadow-2xl space-y-4">
+      <!-- Dados de Conexão (100% adaptado para celular, NADA é cortado!) -->
+      <div class="glass-card rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-xl space-y-3.5">
         <h2 class="text-xs md:text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           <span class="text-emerald-400 text-lg">🌐</span> Conexão com o Servidor
         </h2>
         
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <!-- Celular -->
-          <div class="bg-slate-950/60 p-4 rounded-2xl border border-white/[0.08] space-y-3 hover:border-emerald-500/40 transition duration-200">
+          <div class="bg-slate-950/70 p-3.5 md:p-4 rounded-xl md:rounded-2xl border border-white/[0.08] space-y-2.5">
             <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
               <span>📱</span> Minecraft Celular / Bedrock
             </div>
-            <div class="text-xs text-slate-300 flex justify-between items-center bg-black/40 px-3 py-2.5 rounded-xl border border-white/[0.06]">
-              <span>IP: <b class="text-white font-mono">dettt343.aternos.me</b></span>
-              <button onclick="copiarTexto('dettt343.aternos.me')" class="text-emerald-400 hover:text-white text-[11px] font-bold bg-white/[0.08] px-2.5 py-1 rounded-lg transition">Copiar</button>
+            <!-- IP Box que nunca corta -->
+            <div class="flex items-center justify-between gap-2 bg-black/60 px-3 py-2.5 rounded-xl border border-white/[0.06]">
+              <div class="min-w-0 flex-1">
+                <span class="text-[10px] text-slate-400 block uppercase font-bold">IP:</span>
+                <span class="text-xs md:text-sm font-bold text-white font-mono break-all select-all">dettt343.aternos.me</span>
+              </div>
+              <button onclick="copiarTexto('dettt343.aternos.me')" class="text-emerald-400 hover:text-white text-xs font-bold bg-white/[0.1] px-3 py-1.5 rounded-lg transition flex-shrink-0">
+                Copiar
+              </button>
             </div>
-            <div class="text-xs text-slate-300 flex justify-between items-center bg-black/40 px-3 py-2.5 rounded-xl border border-white/[0.06]">
-              <span>Porta: <b class="text-white font-mono">24164</b></span>
-              <button onclick="copiarTexto('24164')" class="text-emerald-400 hover:text-white text-[11px] font-bold bg-white/[0.08] px-2.5 py-1 rounded-lg transition">Copiar</button>
+            <!-- Porta Box -->
+            <div class="flex items-center justify-between gap-2 bg-black/60 px-3 py-2.5 rounded-xl border border-white/[0.06]">
+              <div>
+                <span class="text-[10px] text-slate-400 block uppercase font-bold">Porta:</span>
+                <span class="text-xs md:text-sm font-bold text-white font-mono select-all">24164</span>
+              </div>
+              <button onclick="copiarTexto('24164')" class="text-emerald-400 hover:text-white text-xs font-bold bg-white/[0.1] px-3 py-1.5 rounded-lg transition flex-shrink-0">
+                Copiar
+              </button>
             </div>
           </div>
 
           <!-- PC -->
-          <div class="bg-slate-950/60 p-4 rounded-2xl border border-white/[0.08] space-y-3 hover:border-cyan-500/40 transition duration-200">
+          <div class="bg-slate-950/70 p-3.5 md:p-4 rounded-xl md:rounded-2xl border border-white/[0.08] space-y-2.5">
             <div class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
               <span>💻</span> Minecraft PC / Java Edition
             </div>
-            <div class="text-xs text-slate-300 flex justify-between items-center bg-black/40 px-3 py-2.5 rounded-xl border border-white/[0.06]">
-              <span class="truncate">IP: <b class="text-white font-mono">dettt343.aternos.me:24164</b></span>
-              <button onclick="copiarTexto('dettt343.aternos.me:24164')" class="text-cyan-400 hover:text-white text-[11px] font-bold bg-white/[0.08] px-2.5 py-1 rounded-lg transition ml-2">Copiar</button>
+            <!-- IP Java -->
+            <div class="flex items-center justify-between gap-2 bg-black/60 px-3 py-2.5 rounded-xl border border-white/[0.06]">
+              <div class="min-w-0 flex-1">
+                <span class="text-[10px] text-slate-400 block uppercase font-bold">IP & Porta:</span>
+                <span class="text-xs md:text-sm font-bold text-white font-mono break-all select-all">dettt343.aternos.me:24164</span>
+              </div>
+              <button onclick="copiarTexto('dettt343.aternos.me:24164')" class="text-cyan-400 hover:text-white text-xs font-bold bg-white/[0.1] px-3 py-1.5 rounded-lg transition flex-shrink-0">
+                Copiar
+              </button>
             </div>
             <div class="text-xs text-slate-400 pt-1">Versão: <span class="text-white font-medium">PaperMC 1.21+</span></div>
           </div>
@@ -348,14 +333,15 @@
 
     <!-- ── 2. SUBDIVISÃO: CHAT DA COMUNIDADE (#chat-geral) ────────────────── -->
     <section id="view-chat" class="hidden flex-1 flex flex-col h-full overflow-hidden">
-      <div id="chat-messages" class="flex-1 overflow-y-auto px-4 py-3 md:p-6 space-y-3">
+      <div id="chat-messages" class="flex-1 overflow-y-auto px-3.5 py-3 md:p-6 space-y-3">
         <!-- Mensagens inseridas via JS -->
       </div>
 
-      <div class="p-3 md:p-5 bg-slate-950/70 backdrop-blur-xl flex-shrink-0 border-t border-white/[0.1]">
-        <form onsubmit="enviarMensagemChat(event)" class="bg-black/50 rounded-2xl flex items-center px-4 py-2.5 gap-2.5 border border-white/[0.1] focus-within:border-purple-500/70 transition shadow-inner">
-          <input id="chat-input" type="text" maxlength="400" placeholder="Conversar em #chat-geral (Enter para enviar)..." class="bg-transparent flex-1 text-xs md:text-sm text-white focus:outline-none placeholder-slate-500" />
-          <button type="submit" id="btn-chat-send" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-purple-600/30 flex-shrink-0">
+      <!-- Barra de Chat (com largura total no celular!) -->
+      <div class="p-2.5 md:p-4 bg-slate-950/80 backdrop-blur-xl flex-shrink-0 border-t border-white/[0.1]">
+        <form onsubmit="enviarMensagemChat(event)" class="bg-black/60 rounded-2xl flex items-center px-3.5 py-2 gap-2 border border-white/[0.1] focus-within:border-purple-500/70 transition">
+          <input id="chat-input" type="text" maxlength="400" placeholder="Conversar em #chat-geral..." class="bg-transparent flex-1 text-xs md:text-sm text-white focus:outline-none placeholder-slate-500" />
+          <button type="submit" id="btn-chat-send" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex-shrink-0">
             Enviar
           </button>
         </form>
@@ -363,15 +349,15 @@
     </section>
 
     <!-- ── 3. SUBDIVISÃO: MURAL DE BANIMENTOS (#mural-banidos) ─────────────── -->
-    <section id="view-bans" class="hidden flex-1 overflow-y-auto p-4 md:p-8 max-w-4xl w-full mx-auto space-y-4">
-      <div class="glass-card rounded-3xl p-5 md:p-6 shadow-2xl">
+    <section id="view-bans" class="hidden flex-1 overflow-y-auto p-3.5 md:p-8 max-w-4xl w-full mx-auto space-y-4">
+      <div class="glass-card rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-xl">
         <div class="flex items-center justify-between mb-3">
           <h2 class="text-sm md:text-base font-extrabold text-rose-400 flex items-center gap-2">
             <span>⛔</span> Mural Oficial de Banimentos
           </h2>
-          <span id="bans-count" class="text-xs bg-rose-500/20 text-rose-300 border border-rose-500/40 px-3 py-1 rounded-full font-bold">0 Banidos</span>
+          <span id="bans-count" class="text-xs bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2.5 py-1 rounded-full font-bold">0 Banidos</span>
         </div>
-        <p class="text-xs text-slate-400 mb-5">
+        <p class="text-xs text-slate-400 mb-4">
           Jogadores banidos pelo administrador não conseguem entrar no servidor. Atualizado em tempo real.
         </p>
         <div id="bans-list" class="space-y-2.5">
@@ -381,39 +367,44 @@
     </section>
 
     <!-- ── 4. SUBDIVISÃO: PAINEL ADMINISTRATIVO (#gerenciar-whitelist) ─────── -->
-    <section id="view-admin" class="hidden flex-1 overflow-y-auto p-4 md:p-8 max-w-6xl w-full mx-auto space-y-5">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="admin-stats-grid">
+    <section id="view-admin" class="hidden flex-1 overflow-y-auto p-3.5 md:p-8 max-w-6xl w-full mx-auto space-y-4">
+      
+      <!-- Stats em Grid Perfeito -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="admin-stats-grid">
         <!-- Renderizado dinamicamente -->
       </div>
 
-      <div class="glass-card p-4 md:p-5 rounded-3xl shadow-2xl space-y-4">
-        <!-- Abas -->
+      <!-- Barra de Controle do Admin -->
+      <div class="glass-card p-3.5 md:p-5 rounded-2xl md:rounded-3xl shadow-xl space-y-3.5">
+        <!-- Abas 2x2 no mobile -->
         <div class="grid grid-cols-2 sm:flex gap-2">
-          <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"  class="px-4 py-2.5 rounded-xl text-xs font-bold transition text-center">⏳ Pendentes</button>
-          <button onclick="mudarAbaAdmin('approved')" id="admin-tab-approved" class="px-4 py-2.5 rounded-xl text-xs font-bold transition text-center">✅ Aprovados</button>
-          <button onclick="mudarAbaAdmin('rejected')" id="admin-tab-rejected" class="px-4 py-2.5 rounded-xl text-xs font-bold transition text-center">❌ Rejeitados</button>
-          <button onclick="mudarAbaAdmin('banned')"   id="admin-tab-banned"   class="px-4 py-2.5 rounded-xl text-xs font-bold transition text-center">🔨 Banidos</button>
+          <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"  class="px-3 py-2 rounded-xl text-xs font-bold transition text-center">⏳ Pendentes</button>
+          <button onclick="mudarAbaAdmin('approved')" id="admin-tab-approved" class="px-3 py-2 rounded-xl text-xs font-bold transition text-center">✅ Aprovados</button>
+          <button onclick="mudarAbaAdmin('rejected')" id="admin-tab-rejected" class="px-3 py-2 rounded-xl text-xs font-bold transition text-center">❌ Rejeitados</button>
+          <button onclick="mudarAbaAdmin('banned')"   id="admin-tab-banned"   class="px-3 py-2 rounded-xl text-xs font-bold transition text-center">🔨 Banidos</button>
         </div>
         
-        <!-- Ações Rápidas -->
-        <div class="flex gap-2 w-full flex-wrap pt-1">
-          <input id="admin-quick-nick" type="text" placeholder="Nick do jogador..." class="bg-black/50 border border-white/[0.1] px-4 py-2.5 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500/70 flex-1 min-w-[140px]" />
-          <button onclick="adicionarManualAdmin()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-md whitespace-nowrap">
-            + Aprovar
-          </button>
-          <button onclick="banirManualAdmin()" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-md whitespace-nowrap">
-            🔨 Banir
-          </button>
-          <button onclick="limparChatAdmin()" class="bg-rose-950/80 hover:bg-rose-900 border border-rose-800/40 text-rose-300 text-xs font-bold px-4 py-2.5 rounded-xl transition whitespace-nowrap">
-            🧹 Limpar Chat
-          </button>
+        <!-- Ações Rápidas em Linha / Bloco Limpo -->
+        <div class="space-y-2">
+          <input id="admin-quick-nick" type="text" placeholder="Digitar nick exato..." class="w-full bg-black/60 border border-white/[0.1] px-3.5 py-2 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500" />
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="adicionarManualAdmin()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2 rounded-xl transition shadow text-center">
+              + Aprovar
+            </button>
+            <button onclick="banirManualAdmin()" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-2 rounded-xl transition shadow text-center">
+              🔨 Banir
+            </button>
+            <button onclick="limparChatAdmin()" class="bg-rose-950/90 hover:bg-rose-900 border border-rose-800/50 text-rose-300 text-xs font-bold py-2 rounded-xl transition text-center">
+              🧹 Limpar
+            </button>
+          </div>
         </div>
       </div>
 
       <div id="admin-players-container" class="space-y-2.5">
         <!-- Renderizado dinamicamente -->
       </div>
-      <div id="admin-empty-msg" class="hidden text-center text-slate-400 py-10 text-xs glass-card rounded-3xl">
+      <div id="admin-empty-msg" class="hidden text-center text-slate-400 py-8 text-xs glass-card rounded-2xl">
         Nenhum jogador encontrado nesta categoria.
       </div>
     </section>
@@ -421,12 +412,49 @@
   </main>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       MODAL DE AUTENTICAÇÃO
+       MOBILE ONLY: BARRA DE NAVEGAÇÃO INFERIOR 3D (BOTTOM BAR PERFEITA!)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <nav class="flex md:hidden fixed bottom-0 left-0 right-0 h-16 glass-bottom-bar z-40 items-center justify-around px-2 shadow-2xl">
+    <!-- Info -->
+    <button onclick="alternarSubmenu('info')" class="flex flex-col items-center justify-center p-1">
+      <div class="btn-3d btn-3d-emerald w-10 h-10 active" id="mob-icon-info">
+        <span class="text-base">🧭</span>
+      </div>
+      <span class="text-[9px] font-bold text-emerald-300 mt-0.5">Status</span>
+    </button>
+
+    <!-- Chat -->
+    <button onclick="alternarSubmenu('comunidade')" class="flex flex-col items-center justify-center p-1">
+      <div class="btn-3d btn-3d-amethyst w-10 h-10" id="mob-icon-comunidade">
+        <span class="text-base">💬</span>
+      </div>
+      <span class="text-[9px] font-bold text-purple-300 mt-0.5">Chat</span>
+    </button>
+
+    <!-- Admin (se for admin) -->
+    <button onclick="alternarSubmenu('admin')" class="hidden flex-col items-center justify-center p-1" id="mob-wrapper-admin">
+      <div class="btn-3d btn-3d-ruby w-10 h-10" id="mob-icon-admin">
+        <span class="text-base">🛡️</span>
+      </div>
+      <span class="text-[9px] font-bold text-rose-300 mt-0.5">Admin</span>
+    </button>
+
+    <!-- Perfil / Sair -->
+    <button onclick="fazerLogout()" class="flex flex-col items-center justify-center p-1">
+      <div class="btn-3d btn-3d-dark w-10 h-10">
+        <span class="text-sm">🚪</span>
+      </div>
+      <span class="text-[9px] font-bold text-slate-400 mt-0.5">Sair</span>
+    </button>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       MODAL DE AUTENTICAÇÃO (100% RESPONSIVO)
   ══════════════════════════════════════════════════════════════════════════ -->
   <div id="auth-modal" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4 overflow-y-auto">
-    <div class="glass-card border border-white/15 rounded-3xl w-full max-w-md p-6 md:p-7 shadow-2xl space-y-4 my-auto">
+    <div class="glass-card border border-white/15 rounded-3xl w-full max-w-sm md:max-w-md p-5 md:p-7 shadow-2xl space-y-4 my-auto">
       <div class="text-center space-y-1">
-        <div class="text-4xl mb-1">⛏️</div>
+        <div class="text-3xl mb-1">⛏️</div>
         <h2 class="font-extrabold text-xl text-white tracking-tight">Mapa Bermuda</h2>
         <p class="text-xs text-slate-400">Entre na sua conta ou cadastre-se para a Whitelist</p>
       </div>
@@ -443,7 +471,7 @@
       <div id="auth-error" class="hidden bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs p-3 rounded-2xl text-center font-medium"></div>
 
       <!-- FORM LOGIN -->
-      <form id="form-login" onsubmit="realizarLogin(event)" class="space-y-3.5">
+      <form id="form-login" onsubmit="realizarLogin(event)" class="space-y-3">
         <div>
           <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Email ou Usuário (Admin)</label>
           <input id="login-input" type="text" required placeholder="seu@email.com ou admin" class="w-full bg-black/50 border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 mt-1" />
@@ -452,7 +480,7 @@
           <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Senha</label>
           <input id="login-pass" type="password" required placeholder="••••••••" class="w-full bg-black/50 border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 mt-1" />
         </div>
-        <button type="submit" id="btn-login-submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3 rounded-xl text-sm transition mt-1 shadow-lg shadow-emerald-600/30">
+        <button type="submit" id="btn-login-submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 rounded-xl text-sm transition mt-1 shadow-lg">
           Entrar
         </button>
         <div class="text-[11px] text-center text-slate-400">
@@ -461,7 +489,7 @@
       </form>
 
       <!-- FORM REGISTER -->
-      <form id="form-register" onsubmit="realizarCadastro(event)" class="hidden space-y-3.5">
+      <form id="form-register" onsubmit="realizarCadastro(event)" class="hidden space-y-3">
         <div>
           <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Email</label>
           <input id="reg-email" type="email" required placeholder="seu@email.com" class="w-full bg-black/50 border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 mt-1" />
@@ -483,7 +511,7 @@
           <label class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Senha</label>
           <input id="reg-pass" type="password" minlength="6" required placeholder="Mínimo 6 caracteres" class="w-full bg-black/50 border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 mt-1" />
         </div>
-        <button type="submit" id="btn-reg-submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-3 rounded-xl text-sm transition mt-1 shadow-lg shadow-emerald-600/30">
+        <button type="submit" id="btn-reg-submit" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 rounded-xl text-sm transition mt-1 shadow-lg">
           Criar Conta & Pedir Whitelist
         </button>
       </form>
@@ -491,7 +519,7 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
-       SCRIPT DO SISTEMA DE ÍCONES 3D E NAVEGAÇÃO
+       SCRIPT DO SISTEMA DE ÍCONES E NAVEGAÇÃO
   ══════════════════════════════════════════════════════════════════════════ -->
   <script>
     let currentUser = null;
@@ -553,7 +581,7 @@
       setInterval(() => atualizarMeuStatusSilencioso(), 5000);
     }
 
-    // ── Alternar Submenu 3D ──────────────────────────────────────────────────
+    // ── Alternar Submenu ─────────────────────────────────────────────────────
     function alternarSubmenu(categoria) {
       if (currentCategory === categoria && isSubmenuOpen) {
         fecharSubmenu();
@@ -567,18 +595,16 @@
       const data = categorySubdivisions[categoria];
       if (!data) return;
 
+      // Sincroniza botões ativos no desktop e no mobile
       ['info', 'comunidade', 'admin'].forEach(cat => {
-        const btn = document.getElementById(`icon-cat-${cat}`);
-        const dot = document.getElementById(`dot-cat-${cat}`);
-        if (btn) {
-          if (cat === categoria) {
-            btn.classList.add('active');
-            if (dot) dot.classList.remove('hidden');
-          } else {
-            btn.classList.remove('active');
-            if (dot) dot.classList.add('hidden');
-          }
-        }
+        const btnDesk = document.getElementById(`icon-cat-${cat}`);
+        const dotDesk = document.getElementById(`dot-cat-${cat}`);
+        const btnMob  = document.getElementById(`mob-icon-${cat}`);
+        
+        const isCat = cat === categoria;
+        if (btnDesk) btnDesk.classList.toggle('active', isCat);
+        if (dotDesk) dotDesk.classList.toggle('hidden', !isCat);
+        if (btnMob)  btnMob.classList.toggle('active', isCat);
       });
 
       document.getElementById('submenu-header-icon').textContent = data.icon;
@@ -599,14 +625,14 @@
       }).join('');
 
       const panel = document.getElementById('subdivisions-panel');
-      panel.classList.remove('-translate-x-[420px]');
+      panel.classList.remove('translate-y-full', 'md:-translate-x-[420px]');
       document.getElementById('subdivisions-backdrop').classList.remove('hidden');
       isSubmenuOpen = true;
     }
 
     function fecharSubmenu() {
       const panel = document.getElementById('subdivisions-panel');
-      panel.classList.add('-translate-x-[420px]');
+      panel.classList.add('translate-y-full', 'md:-translate-x-[420px]');
       document.getElementById('subdivisions-backdrop').classList.add('hidden');
       isSubmenuOpen = false;
     }
@@ -637,15 +663,6 @@
 
       if (titles[canalId]) {
         document.getElementById('current-channel-title').textContent = titles[canalId];
-      }
-
-      const clearBtn = document.getElementById('btn-header-clear-chat');
-      if (clearBtn) {
-        if (canalId === 'chat' && isUserAdmin) {
-          clearBtn.classList.remove('hidden');
-        } else {
-          clearBtn.classList.add('hidden');
-        }
       }
 
       if (canalId === 'chat') scrollChatToBottom();
@@ -687,7 +704,9 @@
     function configurarInterfaceUsuario(data) {
       const u = data.user;
       const initial = (u.nick || 'J').substring(0, 1).toUpperCase();
-      document.getElementById('user-avatar-badge').textContent = initial;
+      const avBadge = document.getElementById('user-avatar-badge');
+      if (avBadge) avBadge.textContent = initial;
+      
       document.getElementById('drawer-user-nick').textContent = u.nick;
       document.getElementById('drawer-user-role').textContent = isUserAdmin ? '👑 Administrador' : (u.platform || 'Jogador');
       
@@ -700,24 +719,26 @@
       const st = data.whitelistStatus;
 
       if (isUserAdmin) {
-        box.className = 'px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-purple-500/25 text-purple-300 border border-purple-500/40 shadow-md';
+        box.className = 'px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-bold bg-purple-500/25 text-purple-300 border border-purple-500/40 shadow-md';
         box.innerHTML = '👑 Administrador';
         desc.innerHTML = 'Você tem acesso irrestrito ao servidor e ao painel de moderação.';
         document.getElementById('wrapper-icon-admin').classList.remove('hidden');
+        document.getElementById('mob-wrapper-admin').classList.remove('hidden');
+        document.getElementById('mob-wrapper-admin').classList.add('flex');
       } else if (st === 'approved') {
-        box.className = 'px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-md';
+        box.className = 'px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-bold bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-md';
         box.innerHTML = '✅ Whitelist Aprovada!';
         desc.innerHTML = 'Parabéns! Seu Nick está liberado. Você já pode abrir o Minecraft e jogar!';
       } else if (st === 'banned') {
-        box.className = 'px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-rose-500/25 text-rose-300 border border-rose-500/40 shadow-md';
+        box.className = 'px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-bold bg-rose-500/25 text-rose-300 border border-rose-500/40 shadow-md';
         box.innerHTML = '🔨 Banido';
         desc.innerHTML = `Seu nick foi banido pelo administrador. Motivo: ${data.banReason || 'Violação das regras'}.`;
       } else if (st === 'rejected') {
-        box.className = 'px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-md';
+        box.className = 'px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-bold bg-amber-500/25 text-amber-300 border border-amber-500/40 shadow-md';
         box.innerHTML = '❌ Pedido Rejeitado';
         desc.innerHTML = 'Seu pedido de entrada foi recusado pelo administrador.';
       } else {
-        box.className = 'px-4 py-2 rounded-xl text-xs md:text-sm font-bold bg-yellow-500/25 text-yellow-300 border border-yellow-500/40 shadow-md';
+        box.className = 'px-3.5 py-1.5 rounded-xl text-xs md:text-sm font-bold bg-yellow-500/25 text-yellow-300 border border-yellow-500/40 shadow-md';
         box.innerHTML = '⏳ Aguardando Aprovação';
         desc.innerHTML = 'Sua conta foi criada! Aguarde a aprovação do administrador para entrar.';
       }
@@ -735,24 +756,24 @@
         container.innerHTML = msgs.map(m => {
           const isMsgAdmin = m.author_role === 'admin';
           const roleBadge = isMsgAdmin 
-            ? '<span class="bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] px-2 py-0.5 rounded-md font-extrabold ml-1">ADMIN</span>'
-            : `<span class="bg-white/[0.08] text-slate-300 text-[9px] px-2 py-0.5 rounded-md ml-1 font-medium">${escapeHtml(m.author_platform || 'Player')}</span>`;
+            ? '<span class="bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] px-1.5 py-0.5 rounded-md font-extrabold ml-1">ADMIN</span>'
+            : `<span class="bg-white/[0.08] text-slate-300 text-[9px] px-1.5 py-0.5 rounded-md ml-1 font-medium">${escapeHtml(m.author_platform || 'Player')}</span>`;
 
           const initial = escapeHtml(m.author_nick || 'J').substring(0, 1).toUpperCase();
           const avatarColor = isMsgAdmin ? 'bg-gradient-to-tr from-rose-600 to-pink-600' : 'bg-gradient-to-tr from-purple-600 to-indigo-600';
 
           return `
-            <div class="flex items-start gap-3 hover:bg-white/[0.04] p-2.5 rounded-2xl transition border border-transparent hover:border-white/[0.06]">
-              <div class="w-10 h-10 rounded-2xl ${avatarColor} flex items-center justify-center font-bold text-sm text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">
+            <div class="flex items-start gap-2.5 hover:bg-white/[0.04] p-2 rounded-2xl transition border border-transparent hover:border-white/[0.06]">
+              <div class="w-9 h-9 rounded-2xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">
                 ${initial}
               </div>
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-extrabold text-xs md:text-sm ${isMsgAdmin ? 'text-rose-400' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
                   ${roleBadge}
                   <span class="text-[9px] text-slate-400 ml-1 font-mono">${formatarHora(m.created_at)}</span>
                 </div>
-                <div class="text-xs md:text-sm text-slate-200 mt-1 break-words leading-relaxed">${escapeHtml(m.content)}</div>
+                <div class="text-xs md:text-sm text-slate-200 mt-0.5 break-words leading-relaxed">${escapeHtml(m.content)}</div>
               </div>
             </div>
           `;
@@ -817,14 +838,14 @@
 
         if (!container) return;
         if (bans.length === 0) {
-          container.innerHTML = '<div class="text-center text-slate-400 py-8 text-xs">Nenhum jogador banido no momento. ✌️</div>';
+          container.innerHTML = '<div class="text-center text-slate-400 py-6 text-xs">Nenhum jogador banido no momento. ✌️</div>';
           return;
         }
 
         container.innerHTML = bans.map(b => `
-          <div class="flex items-center justify-between p-4 bg-slate-950/70 hover:bg-slate-950/90 rounded-2xl border border-rose-500/25 shadow-md gap-3 transition">
+          <div class="flex items-center justify-between p-3.5 bg-slate-950/70 hover:bg-slate-950/90 rounded-2xl border border-rose-500/25 shadow-md gap-2.5 transition">
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-lg flex-shrink-0 font-bold shadow-sm">⛔</div>
+              <div class="w-9 h-9 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-base flex-shrink-0 font-bold">⛔</div>
               <div class="min-w-0">
                 <div class="font-extrabold text-xs md:text-sm text-rose-400 truncate">${escapeHtml(b.nick)}</div>
                 <div class="text-[11px] text-slate-400 truncate">Motivo: <span class="text-slate-200">${escapeHtml(b.ban_reason || 'Violação de regras')}</span></div>
@@ -838,7 +859,7 @@
       } catch (_) {}
     }
 
-    // ── Painel Admin (Cards Modernos 3D) ─────────────────────────────────────
+    // ── Painel Admin (Cards Limpos e Adaptados ao Celular) ────────────────────
     async function carregarAdminData() {
       if (!isUserAdmin) return;
       try {
@@ -857,21 +878,21 @@
       const b = (adminData.banned || []).length;
 
       document.getElementById('admin-stats-grid').innerHTML = `
-        <div onclick="mudarAbaAdmin('pending')" class="glass-card p-4 rounded-3xl text-center cursor-pointer hover:border-amber-500/50 transition">
-          <div class="text-xl md:text-2xl font-black text-amber-400 drop-shadow">${p}</div>
-          <div class="text-[10px] md:text-[11px] text-amber-300 font-bold mt-0.5">⏳ Pendentes</div>
+        <div onclick="mudarAbaAdmin('pending')" class="glass-card p-3 rounded-2xl text-center cursor-pointer hover:border-amber-500/50 transition">
+          <div class="text-lg md:text-2xl font-black text-amber-400 drop-shadow">${p}</div>
+          <div class="text-[10px] text-amber-300 font-bold mt-0.5">⏳ Pendentes</div>
         </div>
-        <div onclick="mudarAbaAdmin('approved')" class="glass-card p-4 rounded-3xl text-center cursor-pointer hover:border-emerald-500/50 transition">
-          <div class="text-xl md:text-2xl font-black text-emerald-400 drop-shadow">${a}</div>
-          <div class="text-[10px] md:text-[11px] text-emerald-300 font-bold mt-0.5">✅ Aprovados</div>
+        <div onclick="mudarAbaAdmin('approved')" class="glass-card p-3 rounded-2xl text-center cursor-pointer hover:border-emerald-500/50 transition">
+          <div class="text-lg md:text-2xl font-black text-emerald-400 drop-shadow">${a}</div>
+          <div class="text-[10px] text-emerald-300 font-bold mt-0.5">✅ Aprovados</div>
         </div>
-        <div onclick="mudarAbaAdmin('rejected')" class="glass-card p-4 rounded-3xl text-center cursor-pointer hover:border-orange-500/50 transition">
-          <div class="text-xl md:text-2xl font-black text-orange-400 drop-shadow">${r}</div>
-          <div class="text-[10px] md:text-[11px] text-orange-300 font-bold mt-0.5">❌ Rejeitados</div>
+        <div onclick="mudarAbaAdmin('rejected')" class="glass-card p-3 rounded-2xl text-center cursor-pointer hover:border-orange-500/50 transition">
+          <div class="text-lg md:text-2xl font-black text-orange-400 drop-shadow">${r}</div>
+          <div class="text-[10px] text-orange-300 font-bold mt-0.5">❌ Rejeitados</div>
         </div>
-        <div onclick="mudarAbaAdmin('banned')" class="glass-card p-4 rounded-3xl text-center cursor-pointer hover:border-rose-500/50 transition">
-          <div class="text-xl md:text-2xl font-black text-rose-400 drop-shadow">${b}</div>
-          <div class="text-[10px] md:text-[11px] text-rose-300 font-bold mt-0.5">🔨 Banidos</div>
+        <div onclick="mudarAbaAdmin('banned')" class="glass-card p-3 rounded-2xl text-center cursor-pointer hover:border-rose-500/50 transition">
+          <div class="text-lg md:text-2xl font-black text-rose-400 drop-shadow">${b}</div>
+          <div class="text-[10px] text-rose-300 font-bold mt-0.5">🔨 Banidos</div>
         </div>
       `;
     }
@@ -885,7 +906,7 @@
       ['pending','approved','rejected','banned'].forEach(t => {
         const btn = document.getElementById(`admin-tab-${t}`);
         if (!btn) return;
-        btn.className = `px-4 py-2.5 rounded-xl text-xs font-bold transition text-center ${t === adminTab ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/30' : 'text-slate-300 bg-white/[0.04] hover:bg-white/[0.1]'}`;
+        btn.className = `px-3 py-2 rounded-xl text-xs font-bold transition text-center ${t === adminTab ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'text-slate-300 bg-white/[0.04] hover:bg-white/[0.1]'}`;
       });
 
       const lista = adminData[adminTab] || [];
@@ -905,33 +926,33 @@
 
         if (adminTab === 'pending') {
           actions = `
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">✅ Aprovar</button>
-            <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 sm:flex-none bg-orange-700 hover:bg-orange-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">❌ Rejeitar</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">🔨 Banir</button>
+            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">✅ Aprovar</button>
+            <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 sm:flex-none bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">❌ Rejeitar</button>
+            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
           `;
         } else if (adminTab === 'approved') {
           actions = `
-            <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 sm:flex-none bg-orange-700 hover:bg-orange-600 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">🚫 Suspender</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">🔨 Banir</button>
+            <button onclick="acaoAdmin('reject','${safeNick}')" class="flex-1 sm:flex-none bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">🚫 Suspender</button>
+            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
           `;
         } else if (adminTab === 'rejected') {
           actions = `
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">✅ Aprovar</button>
-            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">🔨 Banir</button>
+            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">✅ Aprovar</button>
+            <button onclick="acaoAdmin('ban','${safeNick}')" class="flex-1 sm:flex-none bg-rose-600 hover:bg-rose-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">🔨 Banir</button>
           `;
         } else if (adminTab === 'banned') {
           actions = `
-            <button onclick="acaoAdmin('unban','${safeNick}')" class="flex-1 sm:flex-none bg-cyan-600 hover:bg-cyan-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">🔓 Desbanir</button>
-            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm">✅ Aprovar</button>
+            <button onclick="acaoAdmin('unban','${safeNick}')" class="flex-1 sm:flex-none bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">🔓 Desbanir</button>
+            <button onclick="acaoAdmin('approve','${safeNick}')" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm text-center">✅ Aprovar</button>
           `;
         }
 
         actions += `<button onclick="acaoAdmin('remove','${safeNick}')" class="bg-white/[0.08] hover:bg-white/[0.16] text-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition" title="Excluir">🗑️</button>`;
 
         return `
-          <div class="glass-card p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md hover:border-white/[0.2] transition">
-            <div class="flex items-center gap-3.5 min-w-0">
-              <div class="w-11 h-11 rounded-2xl ${adminTab === 'banned' ? 'bg-rose-500/25 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40'} flex items-center justify-center text-lg flex-shrink-0 font-bold shadow-md">
+          <div class="glass-card p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md border border-white/[0.08]">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-2xl ${adminTab === 'banned' ? 'bg-rose-500/25 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/40'} flex items-center justify-center text-base flex-shrink-0 font-bold">
                 ${adminTab === 'banned' ? '⛔' : '🧑‍💻'}
               </div>
               <div class="min-w-0">
@@ -942,7 +963,7 @@
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+            <div class="flex items-center gap-1.5 w-full sm:w-auto flex-wrap">
               ${actions}
             </div>
           </div>
@@ -1093,7 +1114,6 @@
       }
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
     function copiarTexto(texto) {
       navigator.clipboard.writeText(texto);
       mostrarFeedback(`Copiado: ${texto}`, 'green');
@@ -1102,7 +1122,7 @@
     function mostrarFeedback(msg, cor) {
       const el = document.getElementById('feedback');
       el.textContent = msg;
-      el.className = `px-4 py-2.5 text-xs font-semibold text-center z-20 ${
+      el.className = `px-4 py-2 text-xs font-semibold text-center z-20 ${
         cor === 'green' ? 'bg-emerald-500/20 text-emerald-200 border-b border-emerald-500/30' : 'bg-rose-500/20 text-rose-200 border-b border-rose-500/30'
       }`;
       el.classList.remove('hidden');
