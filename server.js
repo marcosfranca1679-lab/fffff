@@ -279,9 +279,22 @@ app.post('/api/auth/login', async (req, res) => {
 //  CHAT DA COMUNIDADE (#chat-geral)
 // ════════════════════════════════════════════════════════════════════════════
 
-// Listar mensagens
+// Função para apagar automaticamente mensagens com mais de 30 dias
+async function limparMensagens30Dias() {
+  try {
+    const limite = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from('messages').delete().lt('created_at', limite);
+  } catch (err) {
+    // Silencioso
+  }
+}
+
+// Listar mensagens (executa a limpeza de 30 dias periodicamente)
 app.get('/api/chat', async (req, res) => {
   try {
+    // Limpeza de 30 dias a cada chamada
+    limparMensagens30Dias().catch(() => {});
+
     const { data, error } = await supabase
       .from('messages')
       .select('*')
@@ -326,6 +339,27 @@ app.post('/api/chat', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Erro ao enviar mensagem no chat:', err);
     res.status(500).json({ error: 'Erro ao enviar mensagem: ' + err.message });
+  }
+});
+
+// Limpeza manual do chat pelo Administrador
+app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
+  try {
+    // Apaga todas as mensagens existentes
+    await supabase.from('messages').delete().neq('content', '___DUMMY_NEQ___');
+
+    // Insere mensagem de sistema informando que foi limpo
+    await supabase.from('messages').insert([{
+      author_nick: 'Sistema',
+      author_role: 'admin',
+      author_platform: 'Servidor',
+      content: '🧹 O histórico do chat foi limpo pelo Administrador.',
+      created_at: new Date().toISOString()
+    }]);
+
+    res.json({ success: true, message: '🧹 Histórico do chat foi limpo com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao limpar chat: ' + err.message });
   }
 });
 
