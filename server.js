@@ -581,10 +581,12 @@ function parseBanInfo(banReason) {
   return { reason: cleanReason, isPermanent: false, remaining, expired: false };
 }
 
-// Banir com motivo e tempo (Minutos, Horas, Dias ou Permanente)
-app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
+// Banir com motivo e tempo (Suporta Banir Nick, IP ou AMBOS de uma vez só)
+app.post('/api/admin/ban/:nick?', requireAdmin, async (req, res) => {
   try {
-    const nick = req.params.nick.trim();
+    const nick = (req.params.nick || req.body.nick || '').trim();
+    let ip = (req.body.ip || '').trim();
+    const banMode = req.body.banMode || (nick && (req.body.banIp || ip) ? 'both' : (nick ? 'nick' : 'ip'));
     const reasonText = (req.body.reason || 'Violação das regras do servidor').trim();
     const durationUnit = req.body.durationUnit || 'permanent'; // 'minutes', 'hours', 'days', 'permanent'
     const durationValue = parseInt(req.body.durationValue, 10) || 0;
@@ -603,35 +605,116 @@ app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
     }
 
     const now = new Date().toISOString();
+    let nickBanned = false;
+    let ipBanned = false;
 
-    const { error } = await supabase
-      .from('players')
-      .upsert({ 
-        nick, 
-        status: 'banned', 
-        ban_reason: fullReason, 
-        updated_at: now 
-      }, { onConflict: 'nick' });
+    // 1. BANIR NICK (se aplicável)
+    if ((banMode === 'nick' || banMode === 'both') && nick) {
+      const { error } = await supabase
+        .from('players')
+        .upsert({ 
+          nick, 
+          status: 'banned', 
+          ban_reason: fullReason, 
+          updated_at: now 
+        }, { onConflict: 'nick' });
 
-    if (error) throw error;
+      if (error) throw error;
 
-    // Registra no histórico de bans (messages com role=ban_log)
-    await supabase.from('messages').insert([{
-      author_nick: nick,
-      author_role: 'ban_log',
-      author_platform: 'Admin',
-      content: JSON.stringify({
-        reason: reasonText,
-        duration: remainingLabel,
-        expire_at: expireAt ? expireAt.toISOString() : null,
-        banned_at: now
-      }),
-      created_at: now
-    }]).catch(() => {});
+      // Registra no histórico de bans (messages com role=ban_log)
+      try {
+        await supabase.from('messages').insert([{
+          author_nick: nick,
+          author_role: 'ban_log',
+          author_platform: 'Admin',
+          content: JSON.stringify({
+            reason: reasonText,
+            duration: remainingLabel,
+            expire_at: expireAt ? expireAt.toISOString() : null,
+            banned_at: now
+          }),
+          created_at: now
+        }]);
+      } catch (_) {}
+
+      nickBanned = true;
+    }
+
+    // 2. BANIR IP (se aplicável)
+    if (banMode === 'ip' || banMode === 'both') {
+      if (!ip && nick) {
+        // Auto-descobre o IP do jogador (memória ou banco)
+        ip = userWebIps.get(nick.toLowerCase()) 
+          || liveTelemetryCache.get(nick.toLowerCase())?.ip
+          || null;
+
+        if (!ip) {
+          const { data: telemRow } = await supabase
+            .from('messages')
+            .select('author_platform, content')
+            .ilike('author_nick', nick)
+            .eq('author_role', 'telemetry')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (telemRow) {
+            try {
+              const parsed = JSON.parse(telemRow.content);
+              ip = parsed.ip || telemRow.author_platform;
+            } catch {
+              ip = telemRow.author_platform;
+            }
+          }
+        }
+      }
+
+      if (ip) {
+        if (ip.includes(':')) ip = ip.split(':')[0];
+        if (ip !== '127.0.0.1' && ip !== 'localhost') {
+          const ipBanPayload = {
+            ip,
+            reason: reasonText,
+            durationUnit,
+            durationValue,
+            expiresAt: expireAt ? expireAt.toISOString() : null,
+            bannedAt: now,
+            associatedNick: nick || 'Desconhecido'
+          };
+
+          bannedIpsCache.set(ip, { ...ipBanPayload, isPermanent: !expireAt, remaining: remainingLabel });
+
+          try {
+            await supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', ip);
+            await supabase.from('messages').insert([{
+              author_nick: ip,
+              author_role: 'ip_ban',
+              author_platform: nick || 'Admin',
+              content: JSON.stringify(ipBanPayload),
+              created_at: now
+            }]);
+            ipBanned = true;
+          } catch (_) {}
+        }
+      }
+    }
+
+    let msg = '🔨 Banimento aplicado com sucesso!';
+    if (nickBanned && ipBanned) {
+      msg = `🔨 Bloqueio TOTAL aplicado! Nick '${nick}' e IP '${ip}' foram BANIDOS (${remainingLabel}).`;
+    } else if (nickBanned) {
+      msg = `🔨 Nick '${nick}' foi BANIDO (${remainingLabel}).`;
+    } else if (ipBanned) {
+      msg = `🌐 IP '${ip}' foi BLOQUEADO (${remainingLabel}).`;
+    }
 
     res.json({ 
       success: true, 
-      message: `🔨 ${nick} foi BANIDO! Duração: ${remainingLabel}.` 
+      message: msg,
+      nickBanned,
+      ipBanned,
+      nick: nick || null,
+      ip: ip || null
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
