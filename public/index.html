@@ -629,6 +629,102 @@
 
     </section>
 
+    <!-- ── 5. SUBDIVISÃO: CONSOLE DO SERVIDOR (#console-servidor) ─────────── -->
+    <section id="view-console" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-3">
+      
+      <!-- Topo do Console: Status e Botões de Ação Rápida -->
+      <div class="glass-card rounded-2xl p-3 md:p-4 shadow-lg border border-emerald-500/25 bg-black/40 space-y-3">
+        <div class="flex items-center justify-between pb-2.5 border-b border-white/[0.08] flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"></span>
+            <div>
+              <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>Console Remoto do Servidor</span>
+                <span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-mono font-extrabold">RCON LIVE</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Interaja com o servidor e envie mensagens diretas para os jogadores</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="limparConsoleTela()" class="bg-white/[0.08] hover:bg-white/[0.15] text-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1">
+              🧹 Limpar
+            </button>
+            <button onclick="carregarConsoleLogs()" class="bg-emerald-600/80 hover:bg-emerald-500 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+              🔄 Atualizar
+            </button>
+          </div>
+        </div>
+
+        <!-- Atalhos Rápidos de 1 Clique -->
+        <div class="space-y-1">
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Atalhos de Comandos Rápidos</div>
+          <div class="flex gap-1.5 flex-wrap">
+            <button onclick="enviarComandoPredefinido('time set day')" class="bg-black/50 hover:bg-black/80 border border-white/[0.08] hover:border-amber-400/50 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              ☀️ Dia
+            </button>
+            <button onclick="enviarComandoPredefinido('time set night')" class="bg-black/50 hover:bg-black/80 border border-white/[0.08] hover:border-indigo-400/50 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              🌙 Noite
+            </button>
+            <button onclick="enviarComandoPredefinido('weather clear')" class="bg-black/50 hover:bg-black/80 border border-white/[0.08] hover:border-cyan-400/50 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              🌧️ Limpar Chuva
+            </button>
+            <button onclick="enviarComandoPredefinido('list')" class="bg-black/50 hover:bg-black/80 border border-white/[0.08] hover:border-emerald-400/50 text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              👥 Listar Jogadores
+            </button>
+            <button onclick="enviarComandoPredefinido('difficulty normal')" class="bg-black/50 hover:bg-black/80 border border-white/[0.08] text-slate-300 hover:text-white px-2.5 py-1 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              ⚔️ Dificuldade Normal
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Janela do Terminal Hacker / Minecraft Console -->
+      <div class="glass-card rounded-2xl p-3 md:p-4 shadow-lg border border-emerald-500/30 bg-black/70 space-y-3">
+        <div class="flex items-center justify-between text-[11px] text-slate-400 border-b border-white/[0.06] pb-2">
+          <div class="flex items-center gap-1.5 font-mono">
+            <span class="text-emerald-400 font-bold">root@minecraft:~$</span>
+            <span>logs de saída</span>
+          </div>
+          <span id="console-logs-count" class="font-mono text-[10px] text-slate-500">0 linhas</span>
+        </div>
+
+        <div id="console-output" class="h-[280px] sm:h-[340px] overflow-y-auto bg-black/90 border border-white/[0.08] rounded-xl p-3 font-mono text-[11px] sm:text-xs space-y-1.5 shadow-inner select-text">
+          <div class="text-slate-500 italic">Conectando ao console do servidor...</div>
+        </div>
+
+        <!-- Barra Inferior de Envio: Toggle Modo (Comando ou Mensagem) + Input + Botão -->
+        <div class="space-y-2 pt-1 border-t border-white/[0.06]">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex gap-1 bg-black/50 p-1 rounded-lg border border-white/[0.08]">
+              <button id="tab-console-cmd" onclick="selecionarModoConsole('command')"
+                class="px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-emerald-600 text-white shadow-sm flex items-center gap-1">
+                💻 Comando Console
+              </button>
+              <button id="tab-console-msg" onclick="selecionarModoConsole('broadcast')"
+                class="px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white flex items-center gap-1">
+                📢 Mensagem In-Game
+              </button>
+            </div>
+            <span id="console-mode-desc" class="text-[10px] text-slate-400">Executa comandos administrativos no servidor</span>
+          </div>
+
+          <div class="flex gap-2">
+            <div class="relative flex-1">
+              <input id="console-input" type="text"
+                placeholder="Digite um comando (ex: op nick, gamemode creative, give)..."
+                onkeydown="if(event.key === 'Enter') enviarComandoConsole()"
+                class="w-full bg-black/70 border border-white/[0.12] focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs md:text-sm text-white font-mono focus:outline-none placeholder-slate-500 transition shadow-inner" />
+            </div>
+            <button onclick="enviarComandoConsole()" id="btn-console-send"
+              class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-md flex-shrink-0">
+              <span>Enviar</span>
+              <span>↵</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
 
   </main>
 
@@ -852,7 +948,8 @@
         title: 'ADMINISTRAÇÃO',
         icon: '🛡️',
         channels: [
-          { id: 'admin', name: 'gerenciar-whitelist', tag: 'Moderação', desc: 'Aprovações e banimentos' }
+          { id: 'admin', name: 'gerenciar-whitelist', tag: 'Whitelist', desc: 'Aprovações, bans e online' },
+          { id: 'console', name: 'console-servidor', tag: 'Console', desc: 'Terminal e comandos in-game' }
         ]
       }
     };
@@ -889,6 +986,9 @@
           const ipBansList = document.getElementById('admin-ip-bans-list');
           if (ipBansList && !ipBansList.classList.contains('hidden')) {
             carregarAdminIpBans();
+          }
+          if (currentChannel === 'console') {
+            carregarConsoleLogs(true);
           }
         }
       }, 2500);
@@ -956,7 +1056,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['geral', 'chat', 'bans', 'admin'].forEach(c => {
+      ['geral', 'chat', 'bans', 'admin', 'console'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -968,7 +1068,8 @@
         geral: 'geral-status',
         bans:  'mural-banidos',
         chat:  'chat-geral',
-        admin: 'gerenciar-whitelist'
+        admin: 'gerenciar-whitelist',
+        console: 'console-servidor'
       };
 
       if (titles[canalId]) {
@@ -978,6 +1079,7 @@
       if (canalId === 'chat') scrollChatToBottom();
       if (canalId === 'admin' && isUserAdmin) { carregarAdminData(); mudarModuloAdmin(adminModulo || 'whitelist'); }
       if (canalId === 'bans') carregarBans();
+      if (canalId === 'console' && isUserAdmin) { carregarConsoleLogs(); scrollConsoleToBottom(); }
     }
 
     // ── Sessão ───────────────────────────────────────────────────────────────
@@ -1685,6 +1787,139 @@
       if (el2) el2.value = nick;
       const rEl = document.getElementById('ban-reason-input');
       if (rEl) { rEl.focus(); }
+    }
+
+    // ── Console Remoto e Comandos In-Game ─────────────────────────────────────
+    let consoleModo = 'command';
+    let lastConsoleLogsHash = '';
+
+    function selecionarModoConsole(modo) {
+      consoleModo = modo;
+      const btnCmd = document.getElementById('tab-console-cmd');
+      const btnMsg = document.getElementById('tab-console-msg');
+      const input = document.getElementById('console-input');
+      const desc = document.getElementById('console-mode-desc');
+
+      if (modo === 'command') {
+        if (btnCmd) btnCmd.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-emerald-600 text-white shadow-sm flex items-center gap-1';
+        if (btnMsg) btnMsg.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white flex items-center gap-1';
+        if (input) input.placeholder = 'Digite um comando (ex: time set day, op nick, gamemode)...';
+        if (desc) desc.textContent = 'Executa comandos administrativos no servidor';
+      } else {
+        if (btnCmd) btnCmd.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white flex items-center gap-1';
+        if (btnMsg) btnMsg.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-amber-600 text-white shadow-sm flex items-center gap-1';
+        if (input) input.placeholder = 'Digite uma mensagem para aparecer para todos no Minecraft...';
+        if (desc) desc.textContent = 'Envia anúncio destacado no chat de todos os jogadores in-game';
+      }
+      if (input) input.focus();
+    }
+
+    async function carregarConsoleLogs(isAuto = false) {
+      if (!isUserAdmin) return;
+      try {
+        const res = await apiFetch('/api/admin/console/logs');
+        if (!res.ok) return;
+        const logs = await res.json();
+        
+        const hash = JSON.stringify(logs);
+        if (isAuto && hash === lastConsoleLogsHash) return;
+        lastConsoleLogsHash = hash;
+
+        const countBadge = document.getElementById('console-logs-count');
+        if (countBadge) countBadge.textContent = `${logs.length} linhas`;
+
+        const container = document.getElementById('console-output');
+        if (!container) return;
+
+        if (logs.length === 0) {
+          container.innerHTML = '<div class="text-slate-500 italic py-4 text-center">Nenhum log registrado ainda. Digite um comando ou envie uma mensagem acima!</div>';
+          return;
+        }
+
+        container.innerHTML = logs.map(l => {
+          const time = l.time || '–';
+          const content = escapeHtml(l.content || '');
+
+          let lineClass = 'text-slate-300';
+          let prefix = `<span class="text-slate-500">[${time}]</span>`;
+
+          if (l.type === 'command') {
+            lineClass = 'text-emerald-400 font-bold';
+            prefix += ` <span class="text-emerald-500 font-semibold">&gt;</span>`;
+          } else if (l.type === 'broadcast') {
+            lineClass = 'text-amber-300 font-bold bg-amber-950/20 px-1.5 py-0.5 rounded border border-amber-500/20 inline-block w-full';
+            prefix += ` <span class="text-amber-400">📢</span>`;
+          } else if (l.type === 'error') {
+            lineClass = 'text-rose-400 font-semibold';
+            prefix += ` <span class="text-rose-500">❌</span>`;
+          } else if (content.includes('entrou no jogo')) {
+            lineClass = 'text-emerald-300';
+          } else if (content.includes('saiu do jogo')) {
+            lineClass = 'text-slate-400';
+          }
+
+          return `<div class="${lineClass} break-words leading-relaxed">${prefix} ${content}</div>`;
+        }).join('');
+
+        scrollConsoleToBottom();
+      } catch (_) {}
+    }
+
+    function scrollConsoleToBottom() {
+      const container = document.getElementById('console-output');
+      if (container) container.scrollTop = container.scrollHeight;
+    }
+
+    async function enviarComandoConsole() {
+      const input = document.getElementById('console-input');
+      if (!input) return;
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      input.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/admin/console/execute', {
+          method: 'POST',
+          body: JSON.stringify({ action: consoleModo, text })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          mostrarFeedback(data.message || 'Enviado com sucesso!', 'green');
+          await carregarConsoleLogs();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao enviar comando.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao enviar comando.', 'red');
+      } finally {
+        input.disabled = false;
+        input.focus();
+      }
+    }
+
+    function enviarComandoPredefinido(cmd) {
+      selecionarModoConsole('command');
+      const input = document.getElementById('console-input');
+      if (input) {
+        input.value = cmd;
+        enviarComandoConsole();
+      }
+    }
+
+    async function limparConsoleTela() {
+      if (!confirm('Deseja limpar todo o histórico do console?')) return;
+      try {
+        const res = await apiFetch('/api/admin/console/clear', { method: 'POST' });
+        if (res.ok) {
+          lastConsoleLogsHash = '';
+          await carregarConsoleLogs();
+          mostrarFeedback('Console limpo!', 'green');
+        }
+      } catch (_) {
+        mostrarFeedback('Erro ao limpar console.', 'red');
+      }
     }
 
     // ── Inspeção de Jogador ───────────────────────────────────────────────────
