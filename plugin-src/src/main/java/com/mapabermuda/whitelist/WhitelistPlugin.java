@@ -57,19 +57,22 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .build();
         getServer().getPluginManager().registerEvents(this, this);
 
-        // ── Task: checagem de ban a cada 10s ─────────────────────────────────
+        // ── Task: checagem de ban & IP ban a cada 10s ────────────────────────
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
                 if (BYPASS.contains(cleanName.toLowerCase())) continue;
 
                 try {
-                    String body = callApi(API_URL + URLEncoder.encode(cleanName, StandardCharsets.UTF_8));
+                    String playerIp = getPlayerIp(player);
+                    String url = API_URL + URLEncoder.encode(cleanName, StandardCharsets.UTF_8)
+                        + "?ip=" + URLEncoder.encode(playerIp, StandardCharsets.UTF_8);
+                    String body = callApi(url);
                     boolean banned = body.contains("\"banned\":true");
 
                     if (banned) {
                         final String banBody = body;
-                        log.info("[Whitelist] 🔨 '" + cleanName + "' foi BANIDO! Expulsando...");
+                        log.info("[Whitelist] 🔨 '" + cleanName + "' (IP: " + playerIp + ") foi BANIDO! Expulsando...");
                         getServer().getScheduler().runTask(this, () -> {
                             if (player.isOnline()) {
                                 player.kick(buildBanMessage(cleanName, banBody));
@@ -82,7 +85,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
 
-        // ── Task: telemetria AO VIVO a cada 2s (captura no thread principal, envia async) ──
+        // ── Task: telemetria AO VIVO a cada 2s ───────────────────────────────
         getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -92,7 +95,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        log.info("Mapa Bermuda Whitelist & Telemetria AO VIVO v1.7 - ATIVA!");
+        log.info("Mapa Bermuda Whitelist & Ban por IP v1.8 - ATIVA!");
     }
 
     @Override
@@ -109,7 +112,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
         getServer().getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
-            log.info("[Whitelist] 🟢 Conexão detectada: " + cleanName + " (Iniciando telemetria ao vivo)");
+            log.info("[Whitelist] 🟢 Conexao: " + cleanName + " (IP: " + getPlayerIp(player) + ")");
             String payload = buildTelemetryJson(player, cleanName, "login");
             getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
         }, 15L);
@@ -122,12 +125,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         String cleanName = cleanNick(player.getName());
         if (BYPASS.contains(cleanName.toLowerCase())) return;
 
-        log.info("[Whitelist] 🔴 Desconexão detectada: " + cleanName);
+        log.info("[Whitelist] 🔴 Desconexao: " + cleanName);
         String payload = buildTelemetryJson(player, cleanName, "logout");
         getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
-    // ── Evento de Dano / Vida ──
+    // ── Eventos imediatos de jogo ──
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player player) {
@@ -141,7 +144,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // ── Evento de Fome ──
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onFoodChange(FoodLevelChangeEvent event) {
         if (event.getEntity() instanceof Player player) {
@@ -155,7 +157,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // ── Evento de XP ──
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onExpChange(PlayerExpChangeEvent event) {
         Player player = event.getPlayer();
@@ -168,7 +169,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }, 1L);
     }
 
-    // ── Evento de Trocar Item na Mão ──
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onItemHeld(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
@@ -181,7 +181,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }, 1L);
     }
 
-    // ── Constrói JSON completo com inventário e status (Roda na Main Thread) ──
+    // ── Constrói JSON completo (Roda na Main Thread) ──
     private String buildTelemetryJson(Player player, String cleanName, String event) {
         try {
             int xp = player.getTotalExperience();
@@ -203,7 +203,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             String mainHand = formatItem(inv.getItemInMainHand());
             String offHand = formatItem(inv.getItemInOffHand());
 
-            // Coleta itens da mochila
             StringBuilder itemsJson = new StringBuilder("[");
             boolean first = true;
             for (ItemStack is : inv.getStorageContents()) {
@@ -245,7 +244,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 + "\"items\":" + itemsJson.toString()
                 + "}";
         } catch (Exception e) {
-            log.warning("[Whitelist] Erro ao construir telemetria de " + cleanName + ": " + e.getMessage());
+            log.warning("[Whitelist] Erro ao construir telemetria: " + e.getMessage());
             return "{\"secret\":\"" + PLUGIN_SECRET + "\",\"event\":\"" + escJson(event) + "\"}";
         }
     }
@@ -281,7 +280,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 .uri(URI.create(TELEM_URL + encodedNick))
                 .timeout(Duration.ofSeconds(4))
                 .header("Content-Type", "application/json")
-                .header("User-Agent", "MapaBermuda-Plugin/1.7")
+                .header("User-Agent", "MapaBermuda-Plugin/1.8")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
             httpClient.send(req, HttpResponse.BodyHandlers.discarding());
@@ -292,7 +291,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(Duration.ofSeconds(4))
-            .header("User-Agent", "MapaBermuda-Plugin/1.7")
+            .header("User-Agent", "MapaBermuda-Plugin/1.8")
             .GET()
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -333,15 +332,26 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     }
 
     private Component buildBanMessage(String cleanName, String body) {
+        boolean ipBanned = body.contains("\"ipBanned\":true");
         String reason = extractJsonField(body, "reason");
         String remaining = extractJsonField(body, "remaining");
+        String ip = extractJsonField(body, "ip");
         if (reason == null || reason.isBlank()) reason = "Violacao das regras do servidor";
         if (remaining == null || remaining.isBlank()) remaining = "Permanente";
 
-        return Component.text()
-            .append(Component.text("VOCE ESTA BANIDO DO SERVIDOR!\n\n", NamedTextColor.DARK_RED, TextDecoration.BOLD))
+        String title = ipBanned ? "SEU IP ESTA BANIDO DO SERVIDOR!\n\n" : "VOCE ESTA BANIDO DO SERVIDOR!\n\n";
+
+        var builder = Component.text()
+            .append(Component.text(title, NamedTextColor.DARK_RED, TextDecoration.BOLD))
             .append(Component.text("Nick: ", NamedTextColor.GRAY))
-            .append(Component.text(cleanName + "\n", NamedTextColor.WHITE, TextDecoration.BOLD))
+            .append(Component.text(cleanName + "\n", NamedTextColor.WHITE, TextDecoration.BOLD));
+
+        if (ipBanned && ip != null) {
+            builder.append(Component.text("IP Banido: ", NamedTextColor.RED))
+                   .append(Component.text(ip + "\n", NamedTextColor.YELLOW));
+        }
+
+        return builder
             .append(Component.text("Motivo: ", NamedTextColor.RED))
             .append(Component.text(reason + "\n", NamedTextColor.YELLOW))
             .append(Component.text("Tempo Restante: ", NamedTextColor.RED))
@@ -371,16 +381,24 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        log.info("[Whitelist] Verificando '" + cleanName + "' na API...");
+        String clientIp = event.getAddress().getHostAddress();
+        log.info("[Whitelist] Verificando '" + cleanName + "' (IP: " + clientIp + ") na API...");
 
         try {
-            String body = callApi(API_URL + URLEncoder.encode(cleanName, StandardCharsets.UTF_8));
+            String url = API_URL + URLEncoder.encode(cleanName, StandardCharsets.UTF_8)
+                + "?ip=" + URLEncoder.encode(clientIp, StandardCharsets.UTF_8);
+            String body = callApi(url);
 
-            boolean banned  = body.contains("\"banned\":true");
-            boolean allowed = body.contains("\"allowed\":true");
+            boolean banned   = body.contains("\"banned\":true");
+            boolean ipBanned = body.contains("\"ipBanned\":true");
+            boolean allowed  = body.contains("\"allowed\":true");
 
             if (banned) {
-                log.info("[Whitelist] 🔨 '" + cleanName + "' BANIDO! Bloqueando...");
+                if (ipBanned) {
+                    log.info("[Whitelist] 🚫 IP '" + clientIp + "' (" + cleanName + ") BANIDO! Bloqueando...");
+                } else {
+                    log.info("[Whitelist] 🔨 '" + cleanName + "' BANIDO! Bloqueando...");
+                }
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessage(cleanName, body));
             } else if (!allowed) {
                 log.info("[Whitelist] ❌ '" + cleanName + "' NAO aprovado. Expulsando...");
