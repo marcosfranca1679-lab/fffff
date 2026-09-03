@@ -1511,10 +1511,13 @@
              </div>`
           : `<span class="text-slate-500 text-xs mt-0.5 block">Aguardando entrar no servidor</span>`;
 
+        const statusTextColors = { approved: 'text-emerald-400', banned: 'text-rose-400', pending: 'text-amber-400', rejected: 'text-orange-400' };
+        const sc = statusTextColors[p.status] || 'text-slate-300';
+
         document.getElementById('inspect-account').innerHTML = `
           ${infoCard('Nick', p.nick || nick)}
           ${infoCard('Plataforma', p.platform || 'Bedrock')}
-          ${infoCard('Status', p.status || 'Desconhecido', sc)}
+          ${infoCard('Status', (p.status || 'Desconhecido').toUpperCase(), sc)}
           <div class="bg-black/50 rounded-lg p-2">
             <div class="text-[9px] text-slate-400 uppercase tracking-wider flex items-center gap-1">🌐 IP Web (Navegador)</div>
             ${webIpHtml}
