@@ -379,56 +379,31 @@
     </section>
 
     <!-- ── 3.5. SUBDIVISÃO: RANKING TOP 5 HORAS JOGADAS (#horas-jogadas) ────── -->
-    <section id="view-ranking-horas" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-4">
+    <section id="view-ranking-horas" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-3xl w-full mx-auto space-y-3">
       
-      <!-- Topo do Ranking: Banner com Troféu 3D e Status -->
-      <div class="glass-card rounded-2xl p-4 md:p-5 shadow-xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 via-black/50 to-amber-950/20 space-y-3">
-        <div class="flex items-center justify-between pb-3 border-b border-white/[0.08] flex-wrap gap-2">
-          <div class="flex items-center gap-3">
-            <div class="w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-2xl shadow-[0_4px_16px_rgba(245,158,11,0.5)] border-t border-white/60 flex-shrink-0">
-              🏆
-            </div>
-            <div>
-              <div class="text-sm md:text-base font-black text-white flex items-center gap-2 flex-wrap">
-                <span>Hall da Fama — Horas Jogadas</span>
-                <span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Top 5 Servidor</span>
-              </div>
-              <div class="text-[11px] text-slate-300">Os 5 jogadores que mais acumularam tempo de jogo no Minecraft</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="flex items-center gap-1.5 text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-xl font-bold shadow-sm">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              TEMPO REAL
-            </span>
-            <button onclick="carregarRankingHoras()" class="bg-amber-600/80 hover:bg-amber-500 text-white px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
-              🔄 Atualizar
-            </button>
-          </div>
+      <!-- Topo Limpo -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-4 shadow-sm border border-white/[0.08] flex items-center justify-between gap-3">
+        <div>
+          <h2 class="text-xs md:text-sm font-bold text-white flex items-center gap-2">
+            <span>🏆</span> Top 5 — Horas Jogadas
+          </h2>
+          <p class="text-[11px] text-slate-400">Tempo de jogo acumulado no servidor</p>
         </div>
-
-        <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
-          <span>ℹ️</span>
-          <span>Atualizado automaticamente a cada 3 segundos diretamente da telemetria e Supabase.</span>
-        </div>
+        <button onclick="carregarRankingHoras()" class="bg-white/[0.08] hover:bg-white/[0.15] text-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+          <span>Atualizar</span>
+          <span>🔄</span>
+        </button>
       </div>
 
-      <!-- Pódio Visual dos Top 3 -->
-      <div id="ranking-podium-container" class="grid grid-cols-3 gap-2 md:gap-4 items-end pt-2 pb-1">
+      <!-- Pódio Limpo dos 3 Primeiros -->
+      <div id="ranking-podium-container" class="grid grid-cols-3 gap-2 md:gap-3 items-end pt-1">
         <!-- Renderizado dinamicamente via JS -->
       </div>
 
-      <!-- Lista / Placar Completo dos 5 Primeiros -->
-      <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-lg border border-white/[0.08] space-y-3">
-        <div class="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-          <h3 class="text-xs md:text-sm font-extrabold text-white flex items-center gap-2">
-            <span>📜</span> Tabela de Classificação
-          </h3>
-          <span id="ranking-total-badge" class="text-[10px] text-slate-400 font-mono">Carregando dados...</span>
-        </div>
-
-        <div id="ranking-list-container" class="space-y-2">
-          <div class="text-center py-8 text-slate-400 text-xs italic">Carregando ranking de horas jogadas...</div>
+      <!-- Lista dos 5 Primeiros -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-4 shadow-sm border border-white/[0.08]">
+        <div id="ranking-list-container" class="space-y-1.5">
+          <div class="text-center py-6 text-slate-400 text-xs italic">Carregando ranking...</div>
         </div>
       </div>
 
@@ -1248,8 +1223,14 @@
     async function carregarChat() {
       try {
         const res = await apiFetch('/api/chat');
-        const msgs = await res.json();
+        const allMsgs = await res.json();
         const container = document.getElementById('chat-messages');
+
+        // Filtra estritamente apenas mensagens do chat geral (exclui console, telemetria, ranks e logs)
+        const msgs = (allMsgs || []).filter(m => {
+          const r = m.author_role;
+          return r !== 'console_log' && r !== 'playtime_rank' && r !== 'telemetry' && r !== 'death_log' && r !== 'session_log' && r !== 'ban_log' && r !== 'ip_ban';
+        });
 
         const shouldScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 60) || lastChatCount === 0;
 
@@ -2063,7 +2044,7 @@
         return;
       }
 
-      // 1. Pódio dos 3 Primeiros
+      // 1. Pódio dos 3 Primeiros (Visual Limpo e Direto)
       if (podiumEl) {
         const first = top5[0] || null;
         const second = top5[1] || null;
@@ -2075,20 +2056,13 @@
         if (second) {
           podiumHtml += `
             <div class="flex flex-col items-center">
-              <div class="text-lg md:text-2xl drop-shadow mb-1">🥈</div>
-              <div class="relative mb-2">
-                <img src="${second.avatar}" alt="${escapeHtml(second.nick)}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border-2 border-slate-300 shadow-[0_0_12px_rgba(203,213,225,0.4)] bg-black/50 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(second.nick)}'" />
-                ${second.isOnline ? '<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" title="Jogando Agora"></span>' : ''}
+              <div class="text-sm font-bold text-slate-300 mb-1">🥈 #2</div>
+              <div class="mb-2">
+                <img src="${second.avatar}" alt="${escapeHtml(second.nick)}" class="w-12 h-12 md:w-14 md:h-14 rounded-xl border border-slate-400/50 bg-black/50 object-cover shadow-sm" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(second.nick)}'" />
               </div>
-              <div class="glass-card w-full rounded-t-xl p-2 md:p-3 text-center border-t-2 border-slate-300 bg-gradient-to-b from-slate-700/40 to-black/60 min-h-[95px] flex flex-col justify-between">
-                <div>
-                  <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-slate-300/20 text-slate-200 border border-slate-300/30">#2 Prata</span>
-                  <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nick)}</div>
-                </div>
-                <div class="mt-1">
-                  <div class="text-xs md:text-sm font-black text-slate-200 font-mono">${escapeHtml(second.playtimeFormatted)}</div>
-                  <div class="text-[9px] text-slate-400">${second.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
-                </div>
+              <div class="glass-card w-full rounded-xl p-2 md:p-2.5 text-center border border-white/[0.08] bg-black/40">
+                <div class="font-bold text-xs text-white truncate">${escapeHtml(second.nick)}</div>
+                <div class="text-xs font-mono font-bold text-slate-200 mt-0.5">${escapeHtml(second.playtimeFormatted)}</div>
               </div>
             </div>
           `;
@@ -2096,26 +2070,17 @@
           podiumHtml += `<div class="hidden sm:block"></div>`;
         }
 
-        // 1º Lugar (Ouro / Campeão com Coroa 3D)
+        // 1º Lugar (Ouro)
         if (first) {
           podiumHtml += `
             <div class="flex flex-col items-center">
-              <div class="text-2xl md:text-3xl drop-shadow animate-bounce mb-1">👑</div>
-              <div class="relative mb-2">
-                <img src="${first.avatar}" alt="${escapeHtml(first.nick)}" class="w-16 h-16 md:w-20 md:h-20 rounded-2xl border-3 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.6)] bg-black/60 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(first.nick)}'" />
-                ${first.isOnline ? '<span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" title="Jogando Agora"></span>' : ''}
+              <div class="text-base font-bold text-amber-300 mb-1">👑 #1</div>
+              <div class="mb-2">
+                <img src="${first.avatar}" alt="${escapeHtml(first.nick)}" class="w-14 h-14 md:w-16 md:h-16 rounded-2xl border-2 border-amber-400 bg-black/50 object-cover shadow-md" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(first.nick)}'" />
               </div>
-              <div class="glass-card w-full rounded-t-2xl p-2.5 md:p-4 text-center border-t-3 border-amber-400 bg-gradient-to-b from-amber-500/30 via-amber-950/40 to-black/80 min-h-[120px] flex flex-col justify-between shadow-lg shadow-amber-500/10">
-                <div>
-                  <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-mono shadow-sm">🥇 1º LUGAR</span>
-                  <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1 drop-shadow">${escapeHtml(first.nick)}</div>
-                </div>
-                <div class="mt-1">
-                  <div class="text-sm md:text-base font-black text-amber-200 font-mono drop-shadow">${escapeHtml(first.playtimeFormatted)}</div>
-                  <div class="text-[10px] ${first.isOnline ? 'text-emerald-400 font-bold flex items-center justify-center gap-1' : 'text-slate-400'}">
-                    ${first.isOnline ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Jogando Agora' : 'Offline'}
-                  </div>
-                </div>
+              <div class="glass-card w-full rounded-xl p-2.5 md:p-3 text-center border border-amber-500/30 bg-amber-950/20">
+                <div class="font-extrabold text-xs md:text-sm text-amber-300 truncate">${escapeHtml(first.nick)}</div>
+                <div class="text-sm font-mono font-black text-amber-200 mt-0.5">${escapeHtml(first.playtimeFormatted)}</div>
               </div>
             </div>
           `;
@@ -2125,20 +2090,13 @@
         if (third) {
           podiumHtml += `
             <div class="flex flex-col items-center">
-              <div class="text-lg md:text-2xl drop-shadow mb-1">🥉</div>
-              <div class="relative mb-2">
-                <img src="${third.avatar}" alt="${escapeHtml(third.nick)}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border-2 border-amber-700 shadow-[0_0_12px_rgba(180,83,9,0.4)] bg-black/50 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(third.nick)}'" />
-                ${third.isOnline ? '<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" title="Jogando Agora"></span>' : ''}
+              <div class="text-sm font-bold text-amber-600 mb-1">🥉 #3</div>
+              <div class="mb-2">
+                <img src="${third.avatar}" alt="${escapeHtml(third.nick)}" class="w-12 h-12 md:w-14 md:h-14 rounded-xl border border-amber-700/50 bg-black/50 object-cover shadow-sm" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(third.nick)}'" />
               </div>
-              <div class="glass-card w-full rounded-t-xl p-2 md:p-3 text-center border-t-2 border-amber-700 bg-gradient-to-b from-amber-900/30 to-black/60 min-h-[85px] flex flex-col justify-between">
-                <div>
-                  <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-800/30 text-amber-300 border border-amber-700/40">#3 Bronze</span>
-                  <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nick)}</div>
-                </div>
-                <div class="mt-1">
-                  <div class="text-xs md:text-sm font-black text-amber-300 font-mono">${escapeHtml(third.playtimeFormatted)}</div>
-                  <div class="text-[9px] text-slate-400">${third.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
-                </div>
+              <div class="glass-card w-full rounded-xl p-2 md:p-2.5 text-center border border-white/[0.08] bg-black/40">
+                <div class="font-bold text-xs text-white truncate">${escapeHtml(third.nick)}</div>
+                <div class="text-xs font-mono font-bold text-slate-300 mt-0.5">${escapeHtml(third.playtimeFormatted)}</div>
               </div>
             </div>
           `;
@@ -2149,63 +2107,30 @@
         podiumEl.innerHTML = podiumHtml;
       }
 
-      // 2. Tabela dos Top 5 (com barras de tempo relativo)
+      // 2. Lista Limpa dos Top 5 (Estilo Direto e Sem Enfeites)
       if (listEl) {
-        const maxSec = (top5[0] && top5[0].playtimeSeconds > 0) ? top5[0].playtimeSeconds : 1;
-
         listEl.innerHTML = top5.map(p => {
           const safeNick = escapeHtml(p.nick);
-          const percent = Math.max(12, Math.round((p.playtimeSeconds / maxSec) * 100));
 
           let rankBadge = '';
-          let rowBorder = 'border-white/[0.08]';
-          let rowBg = 'bg-white/[0.03]';
-
-          if (p.rank === 1) {
-            rankBadge = '<span class="w-6 h-6 rounded-lg bg-amber-400 text-slate-950 font-black flex items-center justify-center text-xs shadow-sm">1</span>';
-            rowBorder = 'border-amber-500/40';
-            rowBg = 'bg-gradient-to-r from-amber-950/20 to-transparent';
-          } else if (p.rank === 2) {
-            rankBadge = '<span class="w-6 h-6 rounded-lg bg-slate-300 text-slate-950 font-black flex items-center justify-center text-xs shadow-sm">2</span>';
-            rowBorder = 'border-slate-400/30';
-          } else if (p.rank === 3) {
-            rankBadge = '<span class="w-6 h-6 rounded-lg bg-amber-700 text-amber-100 font-black flex items-center justify-center text-xs shadow-sm">3</span>';
-            rowBorder = 'border-amber-700/30';
-          } else {
-            rankBadge = `<span class="w-6 h-6 rounded-lg bg-white/[0.08] text-slate-400 font-black flex items-center justify-center text-xs">${p.rank}</span>`;
-          }
+          if (p.rank === 1) rankBadge = '<span class="text-xs font-bold text-amber-400">#1</span>';
+          else if (p.rank === 2) rankBadge = '<span class="text-xs font-bold text-slate-300">#2</span>';
+          else if (p.rank === 3) rankBadge = '<span class="text-xs font-bold text-amber-600">#3</span>';
+          else rankBadge = `<span class="text-xs font-bold text-slate-500">#${p.rank}</span>`;
 
           return `
-            <div class="p-3 rounded-xl border ${rowBorder} ${rowBg} flex flex-col gap-2 transition hover:bg-white/[0.06]">
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-2.5 min-w-0">
-                  <div class="flex-shrink-0">${rankBadge}</div>
-                  <div class="relative flex-shrink-0">
-                    <img src="${p.avatar}" alt="${safeNick}" class="w-9 h-9 rounded-xl border border-white/20 bg-black/40 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(p.nick)}'" />
-                    ${p.isOnline ? '<span class="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse"></span>' : ''}
-                  </div>
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-1.5">
-                      <span class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</span>
-                      ${p.isOnline ? '<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> AO VIVO</span>' : ''}
-                    </div>
-                    <div class="text-[10px] text-slate-400 flex items-center gap-2">
-                      <span>Nível: <strong class="text-amber-300 font-mono">${p.level || 0}</strong></span>
-                      <span>•</span>
-                      <span>Mortes: <strong class="text-rose-300 font-mono">${p.totalDeaths || 0}</strong></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="text-right flex-shrink-0">
-                  <div class="text-xs md:text-sm font-black text-amber-300 font-mono">${escapeHtml(p.playtimeFormatted)}</div>
-                  <div class="text-[9px] text-slate-400 font-medium">tempo jogado</div>
+            <div class="p-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-3 hover:bg-white/[0.05] transition">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-6 text-center font-mono flex-shrink-0">${rankBadge}</div>
+                <img src="${p.avatar}" alt="${safeNick}" class="w-8 h-8 rounded-lg border border-white/10 bg-black/40 object-cover flex-shrink-0" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(p.nick)}'" />
+                <div class="min-w-0">
+                  <div class="font-bold text-xs text-white truncate">${safeNick}</div>
+                  <div class="text-[10px] text-slate-400">Mortes: ${p.totalDeaths || 0}</div>
                 </div>
               </div>
 
-              <!-- Barra de Progresso Relativa -->
-              <div class="w-full bg-black/40 h-1.5 rounded-full overflow-hidden border border-white/[0.06]">
-                <div class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+              <div class="text-right flex-shrink-0">
+                <div class="text-xs font-bold font-mono text-amber-300">${escapeHtml(p.playtimeFormatted)}</div>
               </div>
             </div>
           `;
