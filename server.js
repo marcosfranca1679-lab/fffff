@@ -804,12 +804,14 @@ app.post('/api/admin/ip-ban', requireAdmin, async (req, res) => {
 
     // Se passou um nick, bane o nick também
     if (nick) {
-      await supabase.from('players').upsert({
-        nick,
-        status: 'banned',
-        ban_reason: `${reasonText} [IP BAN]${expiresAt ? ` [EXPIRA:${expiresAt}]` : ''}`,
-        updated_at: now
-      }, { onConflict: 'nick' }).catch(() => {});
+      try {
+        await supabase.from('players').upsert({
+          nick,
+          status: 'banned',
+          ban_reason: `${reasonText} [IP BAN]${expiresAt ? ` [EXPIRA:${expiresAt}]` : ''}`,
+          updated_at: now
+        }, { onConflict: 'nick' });
+      } catch (_) {}
     }
 
     res.json({ success: true, message: `🚫 IP ${ip} foi BANIDO! Duração: ${remainingLabel}.` });
