@@ -7,7 +7,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.event.player.PlayerExpChangeEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
@@ -22,8 +26,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -35,8 +37,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     // 200 ticks = 10s (checagem de ban)
     private static final long CHECK_INTERVAL_TICKS = 200L;
-    // 600 ticks = 30s (telemetria periódica)
-    private static final long TELEM_INTERVAL_TICKS = 600L;
+    // 40 ticks = 2s (telemetria AO VIVO contínua)
+    private static final long TELEM_INTERVAL_TICKS = 40L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -51,7 +53,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         this.log = getLogger();
         this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(6))
+            .connectTimeout(Duration.ofSeconds(4))
             .build();
         getServer().getPluginManager().registerEvents(this, this);
 
@@ -80,18 +82,17 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
 
-        // ── Task: telemetria a cada 30s (captura na thread principal, envia async) ──
+        // ── Task: telemetria AO VIVO a cada 2s (captura no thread principal, envia async) ──
         getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
                 if (BYPASS.contains(cleanName.toLowerCase())) continue;
-                // Captura sincronamente na thread principal do servidor
-                String payload = buildTelemetryJson(player, cleanName, "update");
+                String payload = buildTelemetryJson(player, cleanName, "live");
                 getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        log.info("Mapa Bermuda Whitelist & Telemetria v1.6 - ATIVA!");
+        log.info("Mapa Bermuda Whitelist & Telemetria AO VIVO v1.7 - ATIVA!");
     }
 
     @Override
@@ -99,7 +100,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         log.info("[Whitelist] Plugin desativado.");
     }
 
-    // ── Login: atrasa 1 tick para garantir que o jogador já carregou dados ──
+    // ── Login ──
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
@@ -108,20 +109,76 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
         getServer().getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
+            log.info("[Whitelist] 🟢 Conexão detectada: " + cleanName + " (Iniciando telemetria ao vivo)");
             String payload = buildTelemetryJson(player, cleanName, "login");
             getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
-        }, 20L); // 1 segundo após entrar
+        }, 15L);
     }
 
-    // ── Logout: captura sincronamente antes do player desconectar ──
+    // ── Logout ──
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         String cleanName = cleanNick(player.getName());
         if (BYPASS.contains(cleanName.toLowerCase())) return;
 
+        log.info("[Whitelist] 🔴 Desconexão detectada: " + cleanName);
         String payload = buildTelemetryJson(player, cleanName, "logout");
         getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+    }
+
+    // ── Evento de Dano / Vida ──
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            String cleanName = cleanNick(player.getName());
+            if (BYPASS.contains(cleanName.toLowerCase())) return;
+            getServer().getScheduler().runTaskLater(this, () -> {
+                if (!player.isOnline()) return;
+                String payload = buildTelemetryJson(player, cleanName, "damage");
+                getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+            }, 1L);
+        }
+    }
+
+    // ── Evento de Fome ──
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onFoodChange(FoodLevelChangeEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            String cleanName = cleanNick(player.getName());
+            if (BYPASS.contains(cleanName.toLowerCase())) return;
+            getServer().getScheduler().runTaskLater(this, () -> {
+                if (!player.isOnline()) return;
+                String payload = buildTelemetryJson(player, cleanName, "food");
+                getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+            }, 1L);
+        }
+    }
+
+    // ── Evento de XP ──
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onExpChange(PlayerExpChangeEvent event) {
+        Player player = event.getPlayer();
+        String cleanName = cleanNick(player.getName());
+        if (BYPASS.contains(cleanName.toLowerCase())) return;
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (!player.isOnline()) return;
+            String payload = buildTelemetryJson(player, cleanName, "exp");
+            getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+        }, 1L);
+    }
+
+    // ── Evento de Trocar Item na Mão ──
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onItemHeld(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        String cleanName = cleanNick(player.getName());
+        if (BYPASS.contains(cleanName.toLowerCase())) return;
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (!player.isOnline()) return;
+            String payload = buildTelemetryJson(player, cleanName, "item_held");
+            getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+        }, 1L);
     }
 
     // ── Constrói JSON completo com inventário e status (Roda na Main Thread) ──
@@ -222,27 +279,20 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             String encodedNick = URLEncoder.encode(nick, StandardCharsets.UTF_8);
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(TELEM_URL + encodedNick))
-                .timeout(Duration.ofSeconds(6))
+                .timeout(Duration.ofSeconds(4))
                 .header("Content-Type", "application/json")
-                .header("User-Agent", "MapaBermuda-Plugin/1.6")
+                .header("User-Agent", "MapaBermuda-Plugin/1.7")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
-            HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-            if (res.statusCode() == 200) {
-                log.info("[Whitelist] 📡 Telemetria sincronizada: " + nick);
-            } else {
-                log.warning("[Whitelist] ⚠️ Telemetria falhou (" + res.statusCode() + ") para: " + nick);
-            }
-        } catch (Exception e) {
-            log.fine("[Whitelist] Erro HTTP telemetria " + nick + ": " + e.getMessage());
-        }
+            httpClient.send(req, HttpResponse.BodyHandlers.discarding());
+        } catch (Exception ignored) {}
     }
 
     private String callApi(String url) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
-            .timeout(Duration.ofSeconds(5))
-            .header("User-Agent", "MapaBermuda-Plugin/1.6")
+            .timeout(Duration.ofSeconds(4))
+            .header("User-Agent", "MapaBermuda-Plugin/1.7")
             .GET()
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
