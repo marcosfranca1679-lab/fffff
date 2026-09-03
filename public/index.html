@@ -428,7 +428,7 @@
                 <span class="text-rose-400 text-base">🔨</span>
                 <span class="text-xs font-bold text-white">Central de Banimentos</span>
               </div>
-              <!-- Toggle Nick / IP -->
+              <!-- Toggle Nick / IP / Ambos -->
               <div class="flex gap-1 bg-black/50 p-1 rounded-lg border border-white/[0.08]">
                 <button id="tab-ban-type-nick" onclick="selecionarTipoBan('nick')"
                   class="px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-rose-600 text-white shadow-sm">
@@ -437,6 +437,10 @@
                 <button id="tab-ban-type-ip" onclick="selecionarTipoBan('ip')"
                   class="px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white">
                   🌐 IP
+                </button>
+                <button id="tab-ban-type-both" onclick="selecionarTipoBan('both')"
+                  class="px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white">
+                  🔒 Ambos
                 </button>
               </div>
             </div>
@@ -460,6 +464,17 @@
                   <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nick Associado (Opcional)</label>
                   <input id="ban-ip-nick-input" type="text" placeholder="Jogador dono deste IP (opcional)..."
                     class="w-full mt-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500" />
+                </div>
+              </div>
+
+              <!-- Campos para Banir AMBOS (Nick + IP automático) -->
+              <div id="group-ban-both" class="hidden space-y-2">
+                <div class="bg-rose-950/30 border border-rose-500/25 rounded-xl p-2.5">
+                  <div class="text-[10px] font-bold text-rose-300 uppercase tracking-wider mb-1.5">🔒 Banimento Total (Nick + IP)</div>
+                  <div class="text-[10px] text-slate-400 mb-2">O IP será detectado automaticamente pelos registros do jogador. Se não encontrado, apenas o nick será banido.</div>
+                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nick do Jogador</label>
+                  <input id="ban-both-nick-input" type="text" placeholder="Nick exato do jogador..."
+                    class="w-full mt-1 bg-black/60 border border-rose-500/40 px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-400" />
                 </div>
               </div>
 
@@ -736,7 +751,8 @@
 
         <!-- Ações rápidas -->
         <div class="flex gap-2 flex-wrap pt-1">
-          <button id="inspect-ban-btn" onclick="" class="flex-1 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-sm">🔨 Banir este Jogador</button>
+          <button id="inspect-ban-btn" onclick="" class="flex-1 bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-sm">🔨 Banir Nick</button>
+          <button id="inspect-ban-both-btn" onclick="" class="flex-1 bg-gradient-to-r from-purple-700 to-rose-700 hover:from-purple-600 hover:to-rose-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-sm">🔒 Banir Nick+IP</button>
           <button id="inspect-approve-btn" onclick="" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white py-2 rounded-xl text-xs font-bold transition shadow-sm">✅ Aprovar</button>
           <button onclick="fecharInspecionar()" class="bg-white/[0.08] hover:bg-white/[0.16] text-slate-300 px-4 py-2 rounded-xl text-xs font-bold transition">Fechar</button>
         </div>
@@ -1157,23 +1173,38 @@
     function selecionarTipoBan(tipo) {
       tipoBanAtual = tipo;
       const isIp = tipo === 'ip';
-      document.getElementById('tab-ban-type-nick').className = isIp 
-        ? 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white'
-        : 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-rose-600 text-white shadow-sm';
-      document.getElementById('tab-ban-type-ip').className = isIp
-        ? 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-cyan-600 text-white shadow-sm'
-        : 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white';
-      
-      document.getElementById('group-ban-nick').classList.toggle('hidden', isIp);
+      const isBoth = tipo === 'both';
+      const isNick = tipo === 'nick';
+
+      const tabNick = document.getElementById('tab-ban-type-nick');
+      const tabIp = document.getElementById('tab-ban-type-ip');
+      const tabBoth = document.getElementById('tab-ban-type-both');
+
+      const activeNick = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-rose-600 text-white shadow-sm';
+      const activeIp = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-cyan-600 text-white shadow-sm';
+      const activeBoth = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-purple-600 text-white shadow-sm';
+      const inactive = 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white';
+
+      if (tabNick) tabNick.className = isNick ? activeNick : inactive;
+      if (tabIp) tabIp.className = isIp ? activeIp : inactive;
+      if (tabBoth) tabBoth.className = isBoth ? activeBoth : inactive;
+
+      document.getElementById('group-ban-nick').classList.toggle('hidden', !isNick);
       document.getElementById('group-ban-ip').classList.toggle('hidden', !isIp);
+      const bothEl = document.getElementById('group-ban-both');
+      if (bothEl) bothEl.classList.toggle('hidden', !isBoth);
 
       const btnTxt = document.getElementById('btn-executar-ban-txt');
       const btn = document.getElementById('btn-executar-ban');
-      if (btnTxt) btnTxt.textContent = isIp ? 'Banir Endereço IP' : 'Banir Jogador';
+      if (btnTxt) {
+        btnTxt.textContent = isIp ? 'Banir Endereço IP' : (isBoth ? '🔒 Banir Nick + IP Juntos' : 'Banir Jogador');
+      }
       if (btn) {
-        btn.className = isIp 
+        btn.className = isIp
           ? 'w-full bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5'
-          : 'w-full bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5';
+          : isBoth
+            ? 'w-full bg-gradient-to-r from-purple-600 to-rose-700 hover:from-purple-500 hover:to-rose-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5'
+            : 'w-full bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5';
       }
     }
 
@@ -1261,6 +1292,41 @@
       const durationValue = document.getElementById('ban-duration-value').value.trim();
       const durationUnit = document.getElementById('ban-duration-unit').value;
 
+      // ── Banir AMBOS (Nick + IP) ──────────────────────────────────────────
+      if (tipoBanAtual === 'both') {
+        const nick = (document.getElementById('ban-both-nick-input')?.value || '').trim();
+        if (!nick) { mostrarFeedback('Digite o nick do jogador!', 'red'); return; }
+
+        if (!confirm(`🔒 BANIR Nick "${nick}" + IP automaticamente?\n\nMotivo: ${reason}\nDuração: ${durationUnit === 'permanent' ? 'Permanente' : durationValue + ' ' + durationUnit}\n\nO sistema tentará banir o IP detectado automaticamente.`)) return;
+
+        try {
+          const body = { nick, banMode: 'both', reason, durationUnit };
+          if (durationUnit !== 'permanent' && durationValue) body.durationValue = parseInt(durationValue, 10);
+
+          const res = await apiFetch(`/api/admin/ban/${encodeURIComponent(nick)}`, {
+            method: 'POST',
+            body: JSON.stringify(body)
+          });
+          const data = await res.json();
+          mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
+
+          if (res.ok) {
+            document.getElementById('ban-both-nick-input').value = '';
+            document.getElementById('ban-reason-input').value = '';
+            document.getElementById('ban-duration-value').value = '';
+            document.getElementById('ban-duration-unit').value = 'permanent';
+            await carregarAdminData();
+            await carregarAdminBans();
+            await carregarAdminIpBans();
+            await carregarBans();
+          }
+        } catch {
+          mostrarFeedback('Erro ao aplicar banimento total.', 'red');
+        }
+        return;
+      }
+
+      // ── Banir por IP ─────────────────────────────────────────────────────
       if (tipoBanAtual === 'ip') {
         const ip = (document.getElementById('ban-ip-input').value || '').trim();
         const nick = (document.getElementById('ban-ip-nick-input').value || '').trim();
@@ -1294,7 +1360,7 @@
         return;
       }
 
-      // Ban por Nick
+      // ── Banir por Nick ───────────────────────────────────────────────────
       const nick = (document.getElementById('ban-nick-input').value || '').trim();
       if (!nick) { mostrarFeedback('Digite o nick do jogador!', 'red'); return; }
 
@@ -1440,12 +1506,17 @@
     }
 
     // Preenche o formulário de banimento e troca para a aba de banimentos
-    function preencherBanForm(nick) {
+    function preencherBanForm(nick, modo = 'both') {
+      mudarModuloAdmin('banimentos');
+      selecionarTipoBan(modo);
       const el = document.getElementById('ban-nick-input');
       if (el) el.value = nick;
-      mudarModuloAdmin('banimentos');
-      const banEl = document.getElementById('ban-nick-input');
-      if (banEl) { banEl.focus(); banEl.select(); }
+      const elBoth = document.getElementById('ban-both-nick-input');
+      if (elBoth) elBoth.value = nick;
+      const el2 = document.getElementById('ban-ip-nick-input');
+      if (el2) el2.value = nick;
+      const rEl = document.getElementById('ban-reason-input');
+      if (rEl) { rEl.focus(); }
     }
 
     // ── Inspeção de Jogador ───────────────────────────────────────────────────
@@ -1662,7 +1733,7 @@
           document.getElementById('inspect-inventory-section').classList.add('hidden');
         }
 
-        // 5. Histórico de Bans (Apenas no primeiro carregamento)
+        // 5. Histórico de Bans (apenas no primeiro carregamento)
         if (!isBackgroundUpdate) {
           const bans = d.banHistory || [];
           document.getElementById('inspect-total-bans').textContent = `${bans.length} ${bans.length === 1 ? 'ban' : 'bans'}`;
@@ -1681,7 +1752,7 @@
               </div>
             `).join('');
 
-          // 5.1 Histórico de Mortes (Apenas no primeiro carregamento)
+          // 5.1 Histórico de Mortes (apenas no primeiro carregamento)
           const deaths = d.deathHistory || [];
           const deathsEl = document.getElementById('inspect-deaths');
           const deathsTotalEl = document.getElementById('inspect-total-deaths');
@@ -1706,7 +1777,7 @@
               `).join('');
           }
 
-          // 6. Mensagens do Chat (Apenas no primeiro carregamento)
+          // 6. Mensagens do Chat (apenas no primeiro carregamento)
           const msgs = d.chatMessages || [];
           document.getElementById('inspect-chat').innerHTML = msgs.length === 0
             ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma mensagem no chat encontrada.</div>'
@@ -1719,7 +1790,9 @@
         }
 
         // Botões de ação rápida
-        document.getElementById('inspect-ban-btn').onclick = () => { fecharInspecionar(); preencherBanForm(nick); };
+        document.getElementById('inspect-ban-btn').onclick = () => { fecharInspecionar(); preencherBanForm(nick, 'nick'); };
+        const banBothBtn = document.getElementById('inspect-ban-both-btn');
+        if (banBothBtn) banBothBtn.onclick = () => { fecharInspecionar(); preencherBanForm(nick, 'both'); };
         document.getElementById('inspect-approve-btn').onclick = async () => {
           await acaoAdmin('approve', nick);
           fecharInspecionar();
