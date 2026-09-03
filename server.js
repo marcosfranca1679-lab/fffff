@@ -1611,6 +1611,181 @@ app.post('/api/plugin/console-logs', async (req, res) => {
   res.json({ success: true });
 });
 
+// ─── ROTA PÚBLICA DE RANKING (TOP 5 HORAS JOGADAS) ───────────────────────────
+function formatPlaytimeFromSeconds(totalSec) {
+  if (!totalSec || totalSec <= 0) return '0m';
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+
+  let parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || parts.length === 0) parts.push(`${m}m`);
+  return parts.join(' ');
+}
+
+function parseFormattedPlaytimeToSeconds(str) {
+  if (!str || typeof str !== 'string') return 0;
+  let sec = 0;
+  const dMatch = str.match(/(\d+)\s*d/i);
+  const hMatch = str.match(/(\d+)\s*h/i);
+  const mMatch = str.match(/(\d+)\s*m/i);
+  const sMatch = str.match(/(\d+)\s*s/i);
+  if (dMatch) sec += parseInt(dMatch[1], 10) * 86400;
+  if (hMatch) sec += parseInt(hMatch[1], 10) * 3600;
+  if (mMatch) sec += parseInt(mMatch[1], 10) * 60;
+  if (sMatch) sec += parseInt(sMatch[1], 10);
+  return sec;
+}
+
+app.get('/api/ranking/playtime', async (req, res) => {
+  try {
+    // 1. Busca todos os registros de telemetria salvos no Supabase
+    const { data: dbTelemetry } = await supabase
+      .from('messages')
+      .select('author_nick, content, created_at')
+      .eq('author_role', 'telemetry')
+      .order('created_at', { ascending: false });
+
+    // 2. Busca todos os jogadores aprovados no banco
+    const { data: approvedPlayers } = await supabase
+      .from('players')
+      .select('nick, status, updated_at')
+      .eq('status', 'approved');
+
+    // 3. Mapa acumulador de nick -> dados de playtime
+    const playersMap = new Map();
+
+    // Inicializa jogadores aprovados para garantir presença no placar
+    for (const ap of (approvedPlayers || [])) {
+      const key = ap.nick.toLowerCase();
+      playersMap.set(key, {
+        nick: ap.nick,
+        playtimeSeconds: 0,
+        playtimeFormatted: '0m',
+        totalDeaths: 0,
+        level: 0,
+        isOnline: false,
+        lastReported: ap.updated_at || new Date().toISOString()
+      });
+    }
+
+    // Carrega do banco de telemetria
+    for (const row of (dbTelemetry || [])) {
+      const nick = (row.author_nick || '').trim();
+      if (!nick) continue;
+      const key = nick.toLowerCase();
+
+      let parsed = {};
+      try { parsed = JSON.parse(row.content); } catch (_) { parsed = {}; }
+
+      let sec = Number(parsed.playtimeSeconds) || 0;
+      if (!sec && parsed.playtimeFormatted) {
+        sec = parseFormattedPlaytimeToSeconds(parsed.playtimeFormatted);
+      }
+
+      const existing = playersMap.get(key);
+      if (existing) {
+        if (sec > existing.playtimeSeconds) {
+          existing.playtimeSeconds = sec;
+          existing.playtimeFormatted = parsed.playtimeFormatted || formatPlaytimeFromSeconds(sec);
+        }
+        if (parsed.totalDeaths !== undefined) existing.totalDeaths = Math.max(existing.totalDeaths, Number(parsed.totalDeaths) || 0);
+        if (parsed.level !== undefined) existing.level = Math.max(existing.level, Number(parsed.level) || 0);
+      } else {
+        playersMap.set(key, {
+          nick: parsed.nick || nick,
+          playtimeSeconds: sec,
+          playtimeFormatted: parsed.playtimeFormatted || formatPlaytimeFromSeconds(sec),
+          totalDeaths: Number(parsed.totalDeaths) || 0,
+          level: Number(parsed.level) || 0,
+          isOnline: false,
+          lastReported: row.created_at
+        });
+      }
+    }
+
+    // 4. Mescla com os dados em tempo real da memória (liveTelemetryCache)
+    const now = Date.now();
+    for (const [key, live] of liveTelemetryCache.entries()) {
+      if (!live || !live.nick) continue;
+      let sec = Number(live.playtimeSeconds) || 0;
+      if (!sec && live.playtimeFormatted) {
+        sec = parseFormattedPlaytimeToSeconds(live.playtimeFormatted);
+      }
+
+      const existing = playersMap.get(key);
+      if (existing) {
+        if (sec >= existing.playtimeSeconds) {
+          existing.playtimeSeconds = sec;
+          existing.playtimeFormatted = live.playtimeFormatted || formatPlaytimeFromSeconds(sec);
+        }
+        if (live.totalDeaths !== undefined) existing.totalDeaths = Number(live.totalDeaths) || 0;
+        if (live.level !== undefined) existing.level = Number(live.level) || 0;
+      } else {
+        playersMap.set(key, {
+          nick: live.nick,
+          playtimeSeconds: sec,
+          playtimeFormatted: live.playtimeFormatted || formatPlaytimeFromSeconds(sec),
+          totalDeaths: Number(live.totalDeaths) || 0,
+          level: Number(live.level) || 0,
+          isOnline: false,
+          lastReported: live.reported_at || new Date().toISOString()
+        });
+      }
+    }
+
+    // Checa quem está online nos últimos 25s
+    for (const [key, p] of playersMap.entries()) {
+      const live = liveTelemetryCache.get(key);
+      if (live && live.reported_at) {
+        const diff = (now - new Date(live.reported_at).getTime()) / 1000;
+        p.isOnline = diff <= 25 && live.event !== 'logout';
+      } else {
+        p.isOnline = false;
+      }
+    }
+
+    // 5. Ordena do maior para o menor por playtimeSeconds
+    const sorted = Array.from(playersMap.values()).sort((a, b) => b.playtimeSeconds - a.playtimeSeconds);
+
+    // 6. Pega estritamente os 5 PRIMEIROS
+    const top5 = sorted.slice(0, 5).map((p, idx) => ({
+      rank: idx + 1,
+      nick: p.nick,
+      playtimeSeconds: p.playtimeSeconds,
+      playtimeFormatted: p.playtimeFormatted || formatPlaytimeFromSeconds(p.playtimeSeconds),
+      totalDeaths: p.totalDeaths,
+      level: p.level,
+      isOnline: !!p.isOnline,
+      avatar: `https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/64`
+    }));
+
+    // 7. Persiste o snapshot mais recente do ranking na tabela messages com author_role = 'playtime_rank'
+    if (top5.length > 0) {
+      safeDb(
+        supabase.from('messages').insert([{
+          author_nick: 'Sistema',
+          author_role: 'playtime_rank',
+          author_platform: 'web',
+          content: JSON.stringify(top5),
+          created_at: new Date().toISOString()
+        }])
+      );
+    }
+
+    res.json({
+      success: true,
+      top5,
+      totalPlayersTracked: sorted.length,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao carregar ranking: ' + err.message });
+  }
+});
+
 // Fallback SPA
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Rota não encontrada' });
