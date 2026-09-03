@@ -304,7 +304,7 @@ async function limparMensagens30Dias() {
       .from('messages')
       .delete()
       .lt('created_at', limite)
-      .not('author_role', 'in', '("telemetry","ban_log")');
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log")');
   } catch (err) {
     // Silencioso
   }
@@ -319,7 +319,7 @@ app.get('/api/chat', async (req, res) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .not('author_role', 'in', '("telemetry","ban_log")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log")')
       .order('created_at', { ascending: false })
       .limit(60);
 
@@ -889,6 +889,25 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     payload.nick = nick;
     payload.reported_at = new Date().toISOString();
 
+    // Evento de morte (PlayerDeathEvent)
+    if (payload.event === 'death') {
+      const now = new Date().toISOString();
+      await supabase.from('messages').insert([{
+        author_nick: nick,
+        author_role: 'death_log',
+        author_platform: payload.world || 'world',
+        content: JSON.stringify({
+          message: payload.deathMessage || `${nick} morreu`,
+          world: payload.world || 'world',
+          location: payload.location || `${payload.x}, ${payload.y}, ${payload.z}`,
+          killer: payload.killer || null,
+          at: now
+        }),
+        created_at: now
+      }]).catch(() => {});
+      return res.json({ success: true, deathLogged: true });
+    }
+
     // 1. Atualiza INSTANTANEAMENTE no cache de memória (tempo real ao vivo, 0ms)
     liveTelemetryCache.set(nick.toLowerCase(), payload);
 
@@ -954,9 +973,33 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       .from('messages')
       .select('content, created_at')
       .ilike('author_nick', nick)
-      .not('author_role', 'in', '("telemetry","ban_log")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log")')
       .order('created_at', { ascending: false })
       .limit(20);
+
+    // 3.1 Histórico de mortes (death_log)
+    const { data: deathLogs } = await supabase
+      .from('messages')
+      .select('content, created_at, author_platform')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'death_log')
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    const deathHistory = (deathLogs || []).map(d => {
+      try {
+        const parsed = JSON.parse(d.content);
+        return {
+          message: parsed.message || `${nick} morreu`,
+          world: parsed.world || d.author_platform || 'world',
+          location: parsed.location || '0, 0, 0',
+          killer: parsed.killer || null,
+          at: parsed.at || d.created_at
+        };
+      } catch {
+        return { message: d.content, world: d.author_platform, at: d.created_at };
+      }
+    });
 
     // 4. Telemetria: verifica primeiro o cache AO VIVO em memória
     let gameData = liveTelemetryCache.get(key) || null;
@@ -1033,6 +1076,9 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       player: player || { nick, status: 'unknown' },
       currentBan,
       banHistory,
+      deathHistory,
+      totalDeaths: (gameData && gameData.totalDeaths !== undefined) ? gameData.totalDeaths : deathHistory.length,
+      playtimeFormatted: (gameData && gameData.playtimeFormatted) ? gameData.playtimeFormatted : '0m',
       chatMessages: (chatMsgs || []).map(m => ({ content: m.content, at: m.created_at })),
       gameData,
       isLive,
