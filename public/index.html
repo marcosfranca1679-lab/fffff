@@ -551,6 +551,27 @@
             </div>
           </div>
 
+          <!-- Limpar Logs de Mortes e Conexões (Manual + Auto 3 dias) -->
+          <div class="bg-black/40 rounded-xl p-3 border border-emerald-500/20 flex items-start gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">🗄️</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-bold text-white mb-0.5">Histórico de Mortes & Conexões (Entrada/Saída)</div>
+              <div class="text-[10px] text-slate-400 mb-2">
+                Para não ocupar espaço no Supabase, registros com mais de <span class="text-emerald-300 font-bold">3 dias</span> são excluídos automaticamente. Você também pode forçar a limpeza agora:
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="limparLogsAdmin('3days')"
+                  class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                  🧹 Apagar Logs antigos (> 3 dias)
+                </button>
+                <button onclick="limparLogsAdmin('all')"
+                  class="bg-rose-700 hover:bg-rose-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                  🗑️ Zerar Todos os Logs
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Limpeza automática 30d -->
           <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06] flex items-start gap-3">
             <div class="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-lg flex-shrink-0">📅</div>
@@ -1081,6 +1102,24 @@
         await carregarChat();
       } catch (err) {
         mostrarFeedback('Erro ao limpar chat.', 'red');
+      }
+    }
+
+    async function limparLogsAdmin(modo = '3days') {
+      const msg = modo === '3days'
+        ? '⚠️ Deseja apagar todos os registros de mortes e conexões com mais de 3 dias do Supabase?'
+        : '🚨 ATENÇÃO: Deseja apagar TODOS os registros de mortes e conexões do Supabase?';
+      if (!confirm(msg)) return;
+      try {
+        const res = await apiFetch('/api/admin/clean-logs', {
+          method: 'POST',
+          body: JSON.stringify({ mode: modo })
+        });
+        const data = await res.json();
+        mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
+        if (currentInspectingNick) inspecionarJogador(currentInspectingNick, true);
+      } catch (err) {
+        mostrarFeedback('Erro ao limpar logs.', 'red');
       }
     }
 
@@ -1898,7 +1937,7 @@
     }
 
     async function acaoAdmin(tipo, nick) {
-      if (tipo === 'remove' && !confirm(`Remover ${nick} permanentemente?`)) return;
+      if (tipo === 'remove' && !confirm(`⚠️ EXCLUIR ${nick} E LIMPAR TUDO?\n\nEsta ação excluirá o jogador e TODOS os registros dele (mortes, conexões, telemetria, bans e chat) do Supabase para liberar espaço.`)) return;
 
       let res;
       if (tipo === 'remove') {
