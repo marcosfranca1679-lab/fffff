@@ -719,6 +719,15 @@
           <div id="inspect-bans" class="space-y-1.5"></div>
         </div>
 
+        <!-- Histórico de Mortes -->
+        <div class="bg-black/40 rounded-xl p-3 border border-red-500/15 space-y-2">
+          <div class="text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center justify-between">
+            <span class="flex items-center gap-1.5">💀 Histórico de Mortes</span>
+            <span id="inspect-total-deaths" class="bg-red-500/20 text-red-300 px-2 py-0.5 rounded-full text-[9px] font-bold">0 mortes</span>
+          </div>
+          <div id="inspect-deaths" class="space-y-1.5 max-h-36 overflow-y-auto"></div>
+        </div>
+
         <!-- Últimas mensagens do chat -->
         <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06] space-y-2">
           <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">💬 Últimas Mensagens no Chat</div>
@@ -1550,6 +1559,9 @@
           ${infoCard('Nick', p.nick || nick)}
           ${infoCard('Plataforma', p.platform || 'Bedrock')}
           ${infoCard('Status', (p.status || 'Desconhecido').toUpperCase(), sc)}
+          ${infoCard('⏱️ Horas Jogadas', (gd && gd.playtimeFormatted) ? gd.playtimeFormatted : (d.playtimeFormatted || '0m'), 'text-amber-300 font-bold')}
+          ${infoCard('💀 Total de Mortes', (gd && gd.totalDeaths !== undefined) ? gd.totalDeaths : (d.totalDeaths ?? 0), 'text-rose-400 font-bold')}
+          ${infoCard('🏹 Monstros Abatidos', (gd && gd.mobKills !== undefined) ? gd.mobKills : '–', 'text-emerald-400')}
           <div class="bg-black/50 rounded-lg p-2">
             <div class="text-[9px] text-slate-400 uppercase tracking-wider flex items-center gap-1">🌐 IP Web (Navegador)</div>
             ${webIpHtml}
@@ -1668,6 +1680,31 @@
                 </div>
               </div>
             `).join('');
+
+          // 5.1 Histórico de Mortes (Apenas no primeiro carregamento)
+          const deaths = d.deathHistory || [];
+          const deathsEl = document.getElementById('inspect-deaths');
+          const deathsTotalEl = document.getElementById('inspect-total-deaths');
+          if (deathsTotalEl) {
+            const totalDeathsCount = (gd && gd.totalDeaths !== undefined) ? gd.totalDeaths : deaths.length;
+            deathsTotalEl.textContent = `${totalDeathsCount} ${totalDeathsCount === 1 ? 'morte' : 'mortes'}`;
+          }
+          if (deathsEl) {
+            deathsEl.innerHTML = deaths.length === 0
+              ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma morte registrada ainda. O jogador é imortal! 🛡️</div>'
+              : deaths.map(m => `
+                <div class="bg-red-950/40 border border-red-500/20 rounded-xl px-3 py-2 space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-bold text-red-300">💀 ${escapeHtml(m.message || 'Morte em combate')}</span>
+                    ${m.killer ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">Assassino: ${escapeHtml(m.killer)}</span>` : ''}
+                  </div>
+                  <div class="text-[9px] text-slate-400 flex items-center justify-between">
+                    <span class="font-mono text-cyan-300">📍 ${escapeHtml(m.world || 'world')} [${escapeHtml(m.location || '0, 0, 0')}]</span>
+                    <span>${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</span>
+                  </div>
+                </div>
+              `).join('');
+          }
 
           // 6. Mensagens do Chat (Apenas no primeiro carregamento)
           const msgs = d.chatMessages || [];
