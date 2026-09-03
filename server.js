@@ -406,8 +406,11 @@ app.post('/api/chat', requireAuth, async (req, res) => {
 // Limpeza manual do chat pelo Administrador
 app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
   try {
-    // Apaga apenas as mensagens de chat reais (preserva histórico de bans e telemetria)
-    await supabase.from('messages').delete().not('author_role', 'in', '("telemetry","ban_log")');
+    // Apaga ESTRITAMENTE as mensagens de chat reais (preserva telemetria, bans, ips banidos, mortes e conexões)
+    await supabase
+      .from('messages')
+      .delete()
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log")');
 
     // Insere mensagem de sistema informando que foi limpo
     await supabase.from('messages').insert([{
