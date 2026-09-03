@@ -673,7 +673,6 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
 });
 
 // ─── TELEMETRIA DO PLUGIN (login, logout, XP, inventário) ─────────────────
-// O plugin envia dados periodicamente; armazenamos em messages com role=telemetry
 app.post('/api/telemetry/:nick', async (req, res) => {
   try {
     const nick = req.params.nick.trim();
@@ -685,6 +684,9 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     payload.nick = nick;
     payload.reported_at = new Date().toISOString();
 
+    // Remove telemetrias anteriores deste nick para não acumular
+    await supabase.from('messages').delete().ilike('author_nick', nick).eq('author_role', 'telemetry');
+
     await supabase.from('messages').insert([{
       author_nick: nick,
       author_role: 'telemetry',
@@ -695,7 +697,7 @@ app.post('/api/telemetry/:nick', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    res.json({ success: false });
+    res.json({ success: false, error: err.message });
   }
 });
 
@@ -714,20 +716,19 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
     // 2. Histórico de bans (ban_log)
     const { data: banLogs } = await supabase
       .from('messages')
-      .select('content, created_at')
-      .eq('author_nick', nick)
+      .select('content, created_at, author_platform')
+      .ilike('author_nick', nick)
       .eq('author_role', 'ban_log')
-      .order('created_at', { ascending: false })
-      .limit(20);
+      .order('created_at', { ascending: false });
 
     // 3. Mensagens do chat do jogador
     const { data: chatMsgs } = await supabase
       .from('messages')
       .select('content, created_at')
       .ilike('author_nick', nick)
-      .eq('author_role', 'player')
+      .not('author_role', 'in', '("telemetry","ban_log")')
       .order('created_at', { ascending: false })
-      .limit(15);
+      .limit(20);
 
     // 4. Telemetria do plugin (mais recente)
     const { data: telemetry } = await supabase
@@ -740,9 +741,31 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
 
     // Parsear ban logs
     const banHistory = (banLogs || []).map(b => {
-      try { return { ...JSON.parse(b.content), logged_at: b.created_at }; }
-      catch { return { reason: b.content, logged_at: b.created_at }; }
+      try { 
+        const d = JSON.parse(b.content);
+        return { 
+          reason: d.reason || 'Violação das regras',
+          duration: d.duration || b.author_platform || 'Permanente',
+          banned_at: d.banned_at || b.created_at,
+          expire_at: d.expire_at,
+          logged_at: b.created_at 
+        };
+      } catch { 
+        return { reason: b.content, duration: b.author_platform || 'Permanente', logged_at: b.created_at }; 
+      }
     });
+
+    // Se o jogador está banido atualmente mas não tem registro no histórico
+    if (player && player.status === 'banned') {
+      const currentBanInfo = parseBanInfo(player.ban_reason);
+      if (banHistory.length === 0) {
+        banHistory.push({
+          reason: currentBanInfo.reason,
+          duration: currentBanInfo.remaining || 'Permanente',
+          logged_at: player.updated_at || player.requested_at
+        });
+      }
+    }
 
     // Pegar dado mais recente de telemetria
     let gameData = null;
@@ -750,11 +773,18 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       try { gameData = JSON.parse(telemetry[0].content); } catch {}
     }
 
-    // Histórico de sessões (login/logout da telemetria)
+    // Histórico de sessões
     const sessions = (telemetry || []).map(t => {
       try {
         const d = JSON.parse(t.content);
-        return { event: d.event, at: t.created_at, ip: t.author_platform, xp: d.xp, health: d.health };
+        return { 
+          event: d.event || 'update', 
+          at: d.reported_at || t.created_at, 
+          ip: d.ip || t.author_platform, 
+          xp: d.xp, 
+          health: d.health,
+          level: d.level
+        };
       } catch { return { at: t.created_at }; }
     });
 
