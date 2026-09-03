@@ -304,7 +304,7 @@ async function limparMensagens30Dias() {
       .from('messages')
       .delete()
       .lt('created_at', limite)
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log")');
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log")');
   } catch (err) {
     // Silencioso
   }
@@ -319,7 +319,7 @@ app.get('/api/chat', async (req, res) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log")')
       .order('created_at', { ascending: false })
       .limit(60);
 
@@ -725,12 +725,29 @@ app.post('/api/admin/ban/:nick?', requireAdmin, async (req, res) => {
 app.post('/api/admin/unban/:nick', requireAdmin, async (req, res) => {
   try {
     const nick = req.params.nick.trim();
+    const now = new Date().toISOString();
     const { error } = await supabase
       .from('players')
-      .update({ status: 'pending', ban_reason: null, updated_at: new Date().toISOString() })
+      .update({ status: 'pending', ban_reason: null, updated_at: now })
       .ilike('nick', nick);
 
     if (error) throw error;
+
+    // Registra permanentemente o desbanimento no histórico do jogador
+    try {
+      await supabase.from('messages').insert([{
+        author_nick: nick,
+        author_role: 'ban_log',
+        author_platform: 'Admin',
+        content: JSON.stringify({
+          action: 'unban',
+          reason: 'Desbanido pelo Administrador',
+          unbanned_at: now
+        }),
+        created_at: now
+      }]);
+    } catch (_) {}
+
     res.json({ success: true, message: `✅ ${nick} foi desbanido!` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -993,6 +1010,27 @@ app.post('/api/telemetry/:nick', async (req, res) => {
       return res.json({ success: true, deathLogged: true });
     }
 
+    // Evento de login ou logout no Minecraft (Histórico Permanente de Conexões)
+    if (payload.event === 'login' || payload.event === 'logout') {
+      const now = new Date().toISOString();
+      try {
+        await supabase.from('messages').insert([{
+          author_nick: nick,
+          author_role: 'session_log',
+          author_platform: payload.event,
+          content: JSON.stringify({
+            event: payload.event,
+            ip: payload.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '–',
+            world: payload.world || 'world',
+            location: payload.location || (payload.x !== undefined ? `${payload.x}, ${payload.y}, ${payload.z}` : '0, 0, 0'),
+            gamemode: payload.gamemode || 'SURVIVAL',
+            at: now
+          }),
+          created_at: now
+        }]);
+      } catch (_) {}
+    }
+
     // 1. Atualiza INSTANTANEAMENTE no cache de memória (tempo real ao vivo, 0ms)
     liveTelemetryCache.set(nick.toLowerCase(), payload);
 
@@ -1045,7 +1083,7 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       .ilike('nick', nick)
       .maybeSingle();
 
-    // 2. Histórico de bans (ban_log)
+    // 2. Histórico de bans (ban_log) - Permanente, nunca é apagado
     const { data: banLogs } = await supabase
       .from('messages')
       .select('content, created_at, author_platform')
@@ -1058,7 +1096,7 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       .from('messages')
       .select('content, created_at')
       .ilike('author_nick', nick)
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log")')
       .order('created_at', { ascending: false })
       .limit(20);
 
@@ -1083,6 +1121,37 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
         };
       } catch {
         return { message: d.content, world: d.author_platform, at: d.created_at };
+      }
+    });
+
+    // 3.2 Histórico de entrada e saída (session_log) - Permanente
+    const { data: sessionLogs } = await supabase
+      .from('messages')
+      .select('content, created_at, author_platform')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'session_log')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    const sessionHistory = (sessionLogs || []).map(s => {
+      try {
+        const parsed = JSON.parse(s.content);
+        return {
+          event: parsed.event || s.author_platform || 'login',
+          ip: parsed.ip || '–',
+          world: parsed.world || 'world',
+          location: parsed.location || '0, 0, 0',
+          gamemode: parsed.gamemode || 'SURVIVAL',
+          at: parsed.at || s.created_at
+        };
+      } catch {
+        return {
+          event: s.author_platform || 'login',
+          ip: '–',
+          world: 'world',
+          location: '0, 0, 0',
+          at: s.created_at
+        };
       }
     });
 
@@ -1117,19 +1186,21 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       }
     }
 
-    // Parsear ban logs
+    // Parsear histórico de bans (preserva todos os bans e desbanimentos para sempre)
     const banHistory = (banLogs || []).map(b => {
       try { 
         const d = JSON.parse(b.content);
         return { 
-          reason: d.reason || 'Violação das regras',
-          duration: d.duration || b.author_platform || 'Permanente',
+          action: d.action || 'ban',
+          reason: d.reason || (d.action === 'unban' ? 'Desbanido pelo Administrador' : 'Violação das regras'),
+          duration: d.duration || b.author_platform || (d.action === 'unban' ? '–' : 'Permanente'),
           banned_at: d.banned_at || b.created_at,
+          unbanned_at: d.unbanned_at,
           expire_at: d.expire_at,
           logged_at: b.created_at 
         };
       } catch { 
-        return { reason: b.content, duration: b.author_platform || 'Permanente', logged_at: b.created_at }; 
+        return { action: 'ban', reason: b.content, duration: b.author_platform || 'Permanente', logged_at: b.created_at }; 
       }
     });
 
@@ -1138,6 +1209,7 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       const currentBanInfo = parseBanInfo(player.ban_reason);
       if (banHistory.length === 0) {
         banHistory.push({
+          action: 'ban',
           reason: currentBanInfo.reason,
           duration: currentBanInfo.remaining || 'Permanente',
           logged_at: player.updated_at || player.requested_at
@@ -1161,6 +1233,7 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       player: player || { nick, status: 'unknown' },
       currentBan,
       banHistory,
+      sessionHistory,
       deathHistory,
       totalDeaths: (gameData && gameData.totalDeaths !== undefined) ? gameData.totalDeaths : deathHistory.length,
       playtimeFormatted: (gameData && gameData.playtimeFormatted) ? gameData.playtimeFormatted : '0m',
