@@ -421,18 +421,46 @@
 
         <!-- ── MÓDULO BANIMENTOS ────────────────────────────────────── -->
         <div id="admin-mod-content-banimentos" class="hidden p-3 md:p-4 space-y-3">
-          <!-- Formulário de banimento -->
+          <!-- Formulário de banimento com abas de Nick e IP -->
           <div class="bg-black/40 rounded-xl p-3 md:p-4 border border-rose-500/20 space-y-3">
-            <div class="flex items-center gap-2 pb-1 border-b border-white/[0.06]">
-              <span class="text-rose-400 text-base">🔨</span>
-              <span class="text-xs font-bold text-white">Banir Jogador</span>
+            <div class="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+              <div class="flex items-center gap-2">
+                <span class="text-rose-400 text-base">🔨</span>
+                <span class="text-xs font-bold text-white">Central de Banimentos</span>
+              </div>
+              <!-- Toggle Nick / IP -->
+              <div class="flex gap-1 bg-black/50 p-1 rounded-lg border border-white/[0.08]">
+                <button id="tab-ban-type-nick" onclick="selecionarTipoBan('nick')"
+                  class="px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-rose-600 text-white shadow-sm">
+                  👤 Nick
+                </button>
+                <button id="tab-ban-type-ip" onclick="selecionarTipoBan('ip')"
+                  class="px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white">
+                  🌐 IP
+                </button>
+              </div>
             </div>
 
             <div class="space-y-2">
-              <div>
+              <!-- Campo de Nick -->
+              <div id="group-ban-nick">
                 <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nick do Jogador</label>
                 <input id="ban-nick-input" type="text" placeholder="Nick exato do jogador..."
                   class="w-full mt-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500" />
+              </div>
+
+              <!-- Campo de IP (para ban de IP) -->
+              <div id="group-ban-ip" class="hidden space-y-2">
+                <div>
+                  <label class="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Endereço IP a Banir</label>
+                  <input id="ban-ip-input" type="text" placeholder="Ex: 189.45.12.33..."
+                    class="w-full mt-1 bg-black/60 border border-cyan-500/40 px-3 py-1.5 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-cyan-400" />
+                </div>
+                <div>
+                  <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nick Associado (Opcional)</label>
+                  <input id="ban-ip-nick-input" type="text" placeholder="Jogador dono deste IP (opcional)..."
+                    class="w-full mt-1 bg-black/60 border border-white/[0.1] px-3 py-1.5 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500" />
+                </div>
               </div>
 
               <div>
@@ -457,21 +485,36 @@
                 <div class="text-[10px] text-slate-500 mt-1">Deixe o campo de número vazio para ban permanente.</div>
               </div>
 
-              <button onclick="executarBanimento()"
-                class="w-full bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md">
-                🔨 Aplicar Banimento
+              <button id="btn-executar-ban" onclick="executarBanimento()"
+                class="w-full bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5">
+                <span>🔨</span> <span id="btn-executar-ban-txt">Banir Jogador</span>
               </button>
             </div>
           </div>
 
-          <!-- Lista de banidos ativos -->
+          <!-- Lista de banidos (Abas: Nicks e IPs) -->
           <div>
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <span>Lista de Banidos</span>
-              <span id="admin-bans-count" class="bg-rose-500/20 text-rose-400 px-2 py-0.5 rounded-full text-[9px] font-bold">0</span>
+            <div class="flex items-center gap-2 border-b border-white/[0.08] pb-1.5 mb-2">
+              <button id="subtab-bans-nicks" onclick="mudarSubAbaBans('nicks')"
+                class="text-xs font-bold text-rose-400 border-b-2 border-rose-500 pb-1 flex items-center gap-1.5 transition">
+                <span>👤 Nicks Banidos</span>
+                <span id="admin-bans-count" class="bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded-full text-[9px] font-mono">0</span>
+              </button>
+              <button id="subtab-bans-ips" onclick="mudarSubAbaBans('ips')"
+                class="text-xs font-bold text-slate-400 hover:text-white pb-1 flex items-center gap-1.5 transition">
+                <span>🌐 IPs Banidos</span>
+                <span id="admin-ip-bans-count" class="bg-cyan-500/20 text-cyan-300 px-1.5 py-0.2 rounded-full text-[9px] font-mono">0</span>
+              </button>
             </div>
+
+            <!-- Container da lista de Nicks -->
             <div id="admin-bans-list" class="space-y-2">
               <div class="text-center text-slate-400 text-xs py-4">Carregando...</div>
+            </div>
+
+            <!-- Container da lista de IPs -->
+            <div id="admin-ip-bans-list" class="space-y-2 hidden">
+              <div class="text-center text-slate-400 text-xs py-4">Carregando IPs banidos...</div>
             </div>
           </div>
         </div>
@@ -1046,7 +1089,10 @@
         }
       });
 
-      if (modulo === 'banimentos') carregarAdminBans();
+      if (modulo === 'banimentos') {
+        carregarAdminBans();
+        carregarAdminIpBans();
+      }
       if (modulo === 'manutencao') atualizarStatsManu();
     }
 
@@ -1096,12 +1142,151 @@
       if (stPend) stPend.textContent = p;
     }
 
+    let tipoBanAtual = 'nick';
+    let subAbaBansAtual = 'nicks';
+
+    function selecionarTipoBan(tipo) {
+      tipoBanAtual = tipo;
+      const isIp = tipo === 'ip';
+      document.getElementById('tab-ban-type-nick').className = isIp 
+        ? 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white'
+        : 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-rose-600 text-white shadow-sm';
+      document.getElementById('tab-ban-type-ip').className = isIp
+        ? 'px-2.5 py-1 rounded-md text-[10px] font-bold transition bg-cyan-600 text-white shadow-sm'
+        : 'px-2.5 py-1 rounded-md text-[10px] font-bold transition text-slate-400 hover:text-white';
+      
+      document.getElementById('group-ban-nick').classList.toggle('hidden', isIp);
+      document.getElementById('group-ban-ip').classList.toggle('hidden', !isIp);
+
+      const btnTxt = document.getElementById('btn-executar-ban-txt');
+      const btn = document.getElementById('btn-executar-ban');
+      if (btnTxt) btnTxt.textContent = isIp ? 'Banir Endereço IP' : 'Banir Jogador';
+      if (btn) {
+        btn.className = isIp 
+          ? 'w-full bg-gradient-to-r from-cyan-600 to-blue-700 hover:from-cyan-500 hover:to-blue-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5'
+          : 'w-full bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white py-2 rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-1.5';
+      }
+    }
+
+    function mudarSubAbaBans(aba) {
+      subAbaBansAtual = aba;
+      const isIps = aba === 'ips';
+      const btnNicks = document.getElementById('subtab-bans-nicks');
+      const btnIps = document.getElementById('subtab-bans-ips');
+      if (btnNicks) {
+        btnNicks.className = isIps 
+          ? 'text-xs font-bold text-slate-400 hover:text-white pb-1 flex items-center gap-1.5 transition'
+          : 'text-xs font-bold text-rose-400 border-b-2 border-rose-500 pb-1 flex items-center gap-1.5 transition';
+      }
+      if (btnIps) {
+        btnIps.className = isIps
+          ? 'text-xs font-bold text-cyan-400 border-b-2 border-cyan-500 pb-1 flex items-center gap-1.5 transition'
+          : 'text-xs font-bold text-slate-400 hover:text-white pb-1 flex items-center gap-1.5 transition';
+      }
+      document.getElementById('admin-bans-list').classList.toggle('hidden', isIps);
+      document.getElementById('admin-ip-bans-list').classList.toggle('hidden', !isIps);
+      if (isIps) carregarAdminIpBans();
+    }
+
+    async function carregarAdminIpBans() {
+      const container = document.getElementById('admin-ip-bans-list');
+      const countEl = document.getElementById('admin-ip-bans-count');
+      try {
+        const res = await apiFetch('/api/admin/ip-bans');
+        const list = await res.json();
+        if (countEl) countEl.textContent = list.length;
+        if (!list || list.length === 0) {
+          container.innerHTML = '<div class="text-center text-slate-400 text-xs py-6">Nenhum IP banido no momento. 🌐</div>';
+          return;
+        }
+        container.innerHTML = list.map(b => `
+          <div class="bg-black/50 rounded-xl p-3 border border-cyan-500/25 flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <div class="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center text-sm flex-shrink-0">🌐</div>
+              <div class="min-w-0">
+                <div class="font-mono font-bold text-xs text-cyan-300 truncate">${escapeHtml(b.ip)}</div>
+                <div class="text-[10px] text-slate-400 truncate">Motivo: <span class="text-slate-200">${escapeHtml(b.reason)}</span></div>
+                <div class="text-[9px] text-slate-400 flex items-center gap-2 mt-0.5">
+                  <span>Nick: <b class="text-white">${escapeHtml(b.associatedNick || '–')}</b></span>
+                  <span class="${b.isPermanent ? 'text-rose-400' : 'text-amber-300'} font-bold">⏰ ${b.isPermanent ? 'Permanente' : b.remaining}</span>
+                </div>
+              </div>
+            </div>
+            <button onclick="desbanirIpRapido('${escapeHtml(b.ip)}')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex-shrink-0">
+              🔓 Desbanir IP
+            </button>
+          </div>
+        `).join('');
+      } catch {
+        container.innerHTML = '<div class="text-center text-slate-400 text-xs py-4">Erro ao carregar IPs banidos.</div>';
+      }
+    }
+
+    async function desbanirIpRapido(ip) {
+      if (!confirm(`🔓 Desbanir o IP ${ip}?`)) return;
+      try {
+        const res = await apiFetch(`/api/admin/ip-unban/${encodeURIComponent(ip)}`, { method: 'POST' });
+        const d = await res.json();
+        mostrarFeedback(d.message || 'IP desbanido!', res.ok ? 'green' : 'red');
+        await carregarAdminIpBans();
+        if (currentInspectingNick) inspecionarJogador(currentInspectingNick, true);
+      } catch {
+        mostrarFeedback('Erro ao desbanir IP.', 'red');
+      }
+    }
+
+    function banirIpRapido(ip, nick = '') {
+      fecharInspecionar();
+      mudarModuloAdmin('banimentos');
+      selecionarTipoBan('ip');
+      const ipInput = document.getElementById('ban-ip-input');
+      const nickInput = document.getElementById('ban-ip-nick-input');
+      if (ipInput) ipInput.value = ip;
+      if (nickInput) nickInput.value = nick;
+      const rInput = document.getElementById('ban-reason-input');
+      if (rInput) { rInput.focus(); }
+    }
+
     async function executarBanimento() {
-      const nick = (document.getElementById('ban-nick-input').value || '').trim();
       const reason = (document.getElementById('ban-reason-input').value || '').trim() || 'Violação das regras do servidor';
       const durationValue = document.getElementById('ban-duration-value').value.trim();
       const durationUnit = document.getElementById('ban-duration-unit').value;
 
+      if (tipoBanAtual === 'ip') {
+        const ip = (document.getElementById('ban-ip-input').value || '').trim();
+        const nick = (document.getElementById('ban-ip-nick-input').value || '').trim();
+        if (!ip) { mostrarFeedback('Digite o IP a banir!', 'red'); return; }
+
+        if (!confirm(`🚫 BANIR IP ${ip}?\n\nMotivo: ${reason}\nDuração: ${durationUnit === 'permanent' ? 'Permanente' : durationValue + ' ' + durationUnit}`)) return;
+
+        try {
+          const body = { ip, nick, reason, durationUnit };
+          if (durationUnit !== 'permanent' && durationValue) body.durationValue = parseInt(durationValue, 10);
+
+          const res = await apiFetch('/api/admin/ip-ban', {
+            method: 'POST',
+            body: JSON.stringify(body)
+          });
+          const data = await res.json();
+          mostrarFeedback(data.message || data.error, res.ok ? 'green' : 'red');
+
+          if (res.ok) {
+            document.getElementById('ban-ip-input').value = '';
+            document.getElementById('ban-ip-nick-input').value = '';
+            document.getElementById('ban-reason-input').value = '';
+            document.getElementById('ban-duration-value').value = '';
+            document.getElementById('ban-duration-unit').value = 'permanent';
+            await carregarAdminIpBans();
+            await carregarAdminData();
+          }
+        } catch {
+          mostrarFeedback('Erro ao banir IP.', 'red');
+        }
+        return;
+      }
+
+      // Ban por Nick
+      const nick = (document.getElementById('ban-nick-input').value || '').trim();
       if (!nick) { mostrarFeedback('Digite o nick do jogador!', 'red'); return; }
 
       if (!confirm(`🔨 BANIR ${nick}?\n\nMotivo: ${reason}\nDuração: ${durationUnit === 'permanent' ? 'Permanente' : durationValue + ' ' + durationUnit}`)) return;
@@ -1305,13 +1490,39 @@
 
         // 1. Informações da Conta & Conexão
         const ip = (gd && gd.ip) || (d.sessions && d.sessions[0] && d.sessions[0].ip) || 'Aguardando login';
-        const ultimoAcesso = (gd && gd.reported_at) ? new Date(gd.reported_at).toLocaleTimeString('pt-BR') : (p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '–');
-        
+        const webIp = d.webIp || null;
+        const gameIp = d.gameIp || (gd && gd.ip && gd.ip !== '127.0.0.1' ? gd.ip : null);
+
+        const webIpHtml = webIp 
+          ? `<div class="flex items-center justify-between gap-1 mt-0.5">
+               <span class="font-mono text-cyan-300 truncate text-[11px]">${escapeHtml(webIp)}</span>
+               ${d.isWebIpBanned 
+                 ? `<button onclick="desbanirIpRapido('${escapeHtml(webIp)}')" class="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded text-[8px] font-bold">🚫 Banido (Soltar)</button>` 
+                 : `<button onclick="banirIpRapido('${escapeHtml(webIp)}', '${escapeHtml(nick)}')" class="bg-rose-600 hover:bg-rose-500 text-white px-1.5 py-0.5 rounded text-[8px] font-bold transition">🔨 Banir IP</button>`}
+             </div>`
+          : `<span class="text-slate-500 text-xs mt-0.5 block">Aguardando login no site</span>`;
+
+        const gameIpHtml = gameIp 
+          ? `<div class="flex items-center justify-between gap-1 mt-0.5">
+               <span class="font-mono text-emerald-300 truncate text-[11px]">${escapeHtml(gameIp)}</span>
+               ${d.isGameIpBanned 
+                 ? `<button onclick="desbanirIpRapido('${escapeHtml(gameIp)}')" class="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded text-[8px] font-bold">🚫 Banido (Soltar)</button>` 
+                 : `<button onclick="banirIpRapido('${escapeHtml(gameIp)}', '${escapeHtml(nick)}')" class="bg-rose-600 hover:bg-rose-500 text-white px-1.5 py-0.5 rounded text-[8px] font-bold transition">🔨 Banir IP</button>`}
+             </div>`
+          : `<span class="text-slate-500 text-xs mt-0.5 block">Aguardando entrar no servidor</span>`;
+
         document.getElementById('inspect-account').innerHTML = `
           ${infoCard('Nick', p.nick || nick)}
-          ${infoCard('IP Registrado', ip, ip !== 'Aguardando login' ? 'text-cyan-300 font-mono' : 'text-slate-500')}
           ${infoCard('Plataforma', p.platform || 'Bedrock')}
-          ${infoCard('Cadastro', p.requested_at ? new Date(p.requested_at).toLocaleDateString('pt-BR') : '–')}
+          ${infoCard('Status', p.status || 'Desconhecido', sc)}
+          <div class="bg-black/50 rounded-lg p-2">
+            <div class="text-[9px] text-slate-400 uppercase tracking-wider flex items-center gap-1">🌐 IP Web (Navegador)</div>
+            ${webIpHtml}
+          </div>
+          <div class="bg-black/50 rounded-lg p-2">
+            <div class="text-[9px] text-slate-400 uppercase tracking-wider flex items-center gap-1">🎮 IP Jogo (Minecraft)</div>
+            ${gameIpHtml}
+          </div>
           ${infoCard(isLive ? 'Último Sinal' : 'Última Sessão', ultimoAcesso, isLive ? 'text-emerald-400 font-bold' : 'text-slate-300')}
           ${d.currentBan ? infoCard('Ban Restante', d.currentBan.remaining, 'text-rose-400') : ''}
           ${d.currentBan ? infoCard('Motivo do Ban', d.currentBan.reason, 'text-amber-300') : ''}
