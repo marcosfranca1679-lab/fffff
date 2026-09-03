@@ -99,7 +99,17 @@
       box-shadow: 0 3px 0 #9f1239, 0 0 20px rgba(225, 29, 72, 0.75);
     }
 
-    /* 5. Dark */
+    /* 5. Ouro / Ranking */
+    .btn-3d-gold {
+      background: linear-gradient(135deg, #facc15 0%, #eab308 50%, #ca8a04 100%);
+      box-shadow: 0 3px 0 #854d0e, 0 8px 16px rgba(234, 179, 8, 0.45);
+    }
+    .btn-3d-gold.active {
+      filter: brightness(1.18);
+      box-shadow: 0 3px 0 #854d0e, 0 0 22px rgba(245, 158, 11, 0.85);
+    }
+
+    /* 6. Dark */
     .btn-3d-dark {
       background: linear-gradient(135deg, #475569 0%, #334155 50%, #1e293b 100%);
       box-shadow: 0 2px 0 #0f172a, 0 5px 10px rgba(0, 0, 0, 0.4);
@@ -148,6 +158,15 @@
         </svg>
       </button>
       <span class="text-[9px] md:text-[10px] font-bold text-emerald-300 drop-shadow mt-0.5">Status</span>
+    </div>
+
+    <!-- 2.5. Ranks / Classificação -->
+    <div class="relative group flex flex-col items-center">
+      <span id="dot-cat-ranks" class="hidden active-pill-dot"></span>
+      <button onclick="alternarSubmenu('ranks')" id="icon-cat-ranks" class="btn-3d btn-3d-gold w-10 h-10 md:w-11 md:h-11" title="Ranking e Horas Jogadas">
+        <span class="text-lg md:text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">🏆</span>
+      </button>
+      <span class="text-[9px] md:text-[10px] font-bold text-amber-300 drop-shadow mt-0.5">Ranks</span>
     </div>
 
     <!-- 3. Chat -->
@@ -357,6 +376,62 @@
           <!-- Renderizado dinamicamente -->
         </div>
       </div>
+    </section>
+
+    <!-- ── 3.5. SUBDIVISÃO: RANKING TOP 5 HORAS JOGADAS (#horas-jogadas) ────── -->
+    <section id="view-ranking-horas" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-4">
+      
+      <!-- Topo do Ranking: Banner com Troféu 3D e Status -->
+      <div class="glass-card rounded-2xl p-4 md:p-5 shadow-xl border border-amber-500/30 bg-gradient-to-r from-amber-950/30 via-black/50 to-amber-950/20 space-y-3">
+        <div class="flex items-center justify-between pb-3 border-b border-white/[0.08] flex-wrap gap-2">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 md:w-12 md:h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-2xl shadow-[0_4px_16px_rgba(245,158,11,0.5)] border-t border-white/60 flex-shrink-0">
+              🏆
+            </div>
+            <div>
+              <div class="text-sm md:text-base font-black text-white flex items-center gap-2 flex-wrap">
+                <span>Hall da Fama — Horas Jogadas</span>
+                <span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Top 5 Servidor</span>
+              </div>
+              <div class="text-[11px] text-slate-300">Os 5 jogadores que mais acumularam tempo de jogo no Minecraft</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="flex items-center gap-1.5 text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-xl font-bold shadow-sm">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              TEMPO REAL
+            </span>
+            <button onclick="carregarRankingHoras()" class="bg-amber-600/80 hover:bg-amber-500 text-white px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+              🔄 Atualizar
+            </button>
+          </div>
+        </div>
+
+        <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+          <span>ℹ️</span>
+          <span>Atualizado automaticamente a cada 3 segundos diretamente da telemetria e Supabase.</span>
+        </div>
+      </div>
+
+      <!-- Pódio Visual dos Top 3 -->
+      <div id="ranking-podium-container" class="grid grid-cols-3 gap-2 md:gap-4 items-end pt-2 pb-1">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+
+      <!-- Lista / Placar Completo dos 5 Primeiros -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-lg border border-white/[0.08] space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+          <h3 class="text-xs md:text-sm font-extrabold text-white flex items-center gap-2">
+            <span>📜</span> Tabela de Classificação
+          </h3>
+          <span id="ranking-total-badge" class="text-[10px] text-slate-400 font-mono">Carregando dados...</span>
+        </div>
+
+        <div id="ranking-list-container" class="space-y-2">
+          <div class="text-center py-8 text-slate-400 text-xs italic">Carregando ranking de horas jogadas...</div>
+        </div>
+      </div>
+
     </section>
 
     <!-- ── 4. SUBDIVISÃO: PAINEL ADMINISTRATIVO (#gerenciar-whitelist) ─────── -->
@@ -937,6 +1012,13 @@
           { id: 'bans',  name: 'mural-banidos', tag: 'Bans', desc: 'Mural de jogadores banidos' }
         ]
       },
+      ranks: {
+        title: 'CLASSIFICAÇÃO',
+        icon: '🏆',
+        channels: [
+          { id: 'ranking-horas', name: 'horas-jogadas', tag: 'Top 5', desc: 'Top 5 jogadores com mais tempo jogado' }
+        ]
+      },
       comunidade: {
         title: 'COMUNIDADE',
         icon: '💬',
@@ -970,12 +1052,18 @@
     window.addEventListener('DOMContentLoaded', async () => {
       await verificarSessao();
       carregarBans();
+      carregarRankingHorasSilencioso();
       iniciarAutoRefresh();
     });
 
     function iniciarAutoRefresh() {
       setInterval(() => carregarChat(), 2500);
       setInterval(() => carregarBans(), 3000);
+      setInterval(() => {
+        if (currentChannel === 'ranking-horas') {
+          carregarRankingHoras(true);
+        }
+      }, 3000);
       setInterval(() => {
         if (isUserAdmin) {
           carregarAdminData();
@@ -1009,7 +1097,7 @@
       const data = categorySubdivisions[categoria];
       if (!data) return;
 
-      ['info', 'comunidade', 'admin'].forEach(cat => {
+      ['info', 'ranks', 'comunidade', 'admin'].forEach(cat => {
         const btn = document.getElementById(`icon-cat-${cat}`);
         const dot = document.getElementById(`dot-cat-${cat}`);
         const isCat = cat === categoria;
@@ -1024,9 +1112,9 @@
       container.innerHTML = data.channels.map(ch => {
         const isCurrent = ch.id === currentChannel;
         return `
-          <button onclick="selecionarCanal('${ch.id}', '${categoria}')" class="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition ${isCurrent ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'text-slate-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]'} text-left">
+          <button onclick="selecionarCanal('${ch.id}', '${categoria}')" class="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition ${isCurrent ? 'bg-gradient-to-r from-amber-600 to-yellow-600 text-white shadow-md' : 'text-slate-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]'} text-left">
             <div class="flex items-center gap-2">
-              <span class="${isCurrent ? 'text-white' : 'text-emerald-400'} text-sm font-extrabold">#</span>
+              <span class="${isCurrent ? 'text-white' : 'text-amber-400'} text-sm font-extrabold">#</span>
               <span>${ch.name}</span>
             </div>
             <span class="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded ${isCurrent ? 'bg-white/20 text-white' : 'bg-white/[0.08] text-slate-300'}">${ch.tag}</span>
@@ -1056,7 +1144,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['geral', 'chat', 'bans', 'admin', 'console'].forEach(c => {
+      ['geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -1069,7 +1157,8 @@
         bans:  'mural-banidos',
         chat:  'chat-geral',
         admin: 'gerenciar-whitelist',
-        console: 'console-servidor'
+        console: 'console-servidor',
+        'ranking-horas': 'horas-jogadas'
       };
 
       if (titles[canalId]) {
@@ -1080,6 +1169,7 @@
       if (canalId === 'admin' && isUserAdmin) { carregarAdminData(); mudarModuloAdmin(adminModulo || 'whitelist'); }
       if (canalId === 'bans') carregarBans();
       if (canalId === 'console' && isUserAdmin) { carregarConsoleLogs(); scrollConsoleToBottom(); }
+      if (canalId === 'ranking-horas') carregarRankingHoras();
     }
 
     // ── Sessão ───────────────────────────────────────────────────────────────
@@ -1919,6 +2009,207 @@
         }
       } catch (_) {
         mostrarFeedback('Erro ao limpar console.', 'red');
+      }
+    }
+
+    // ── RANKING DE HORAS JOGADAS (TOP 5) ──────────────────────────────────────
+    let lastRankingHash = '';
+    let rankingCache = null;
+
+    async function carregarRankingHorasSilencioso() {
+      try {
+        const res = await fetch('/api/ranking/playtime');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.top5) {
+          rankingCache = data;
+        }
+      } catch (_) {}
+    }
+
+    async function carregarRankingHoras(isAuto = false) {
+      try {
+        const res = await fetch('/api/ranking/playtime');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success) return;
+
+        const hash = JSON.stringify(data.top5);
+        if (isAuto && hash === lastRankingHash) return;
+        lastRankingHash = hash;
+        rankingCache = data;
+
+        renderRanking(data.top5 || [], data.totalPlayersTracked || 0);
+      } catch (err) {
+        if (!isAuto) {
+          const list = document.getElementById('ranking-list-container');
+          if (list) list.innerHTML = '<div class="text-center py-6 text-rose-400 text-xs">Erro ao carregar ranking. Tente novamente em instantes.</div>';
+        }
+      }
+    }
+
+    function renderRanking(top5, totalPlayers) {
+      const podiumEl = document.getElementById('ranking-podium-container');
+      const listEl = document.getElementById('ranking-list-container');
+      const badgeEl = document.getElementById('ranking-total-badge');
+
+      if (badgeEl) {
+        badgeEl.textContent = `${totalPlayers} jogadores monitorados`;
+      }
+
+      if (!top5 || top5.length === 0) {
+        if (podiumEl) podiumEl.innerHTML = '';
+        if (listEl) listEl.innerHTML = '<div class="text-center py-10 text-slate-400 text-xs italic">Nenhum jogador registrado no ranking ainda. Comece a jogar para aparecer aqui!</div>';
+        return;
+      }
+
+      // 1. Pódio dos 3 Primeiros
+      if (podiumEl) {
+        const first = top5[0] || null;
+        const second = top5[1] || null;
+        const third = top5[2] || null;
+
+        let podiumHtml = '';
+
+        // 2º Lugar (Prata)
+        if (second) {
+          podiumHtml += `
+            <div class="flex flex-col items-center">
+              <div class="text-lg md:text-2xl drop-shadow mb-1">🥈</div>
+              <div class="relative mb-2">
+                <img src="${second.avatar}" alt="${escapeHtml(second.nick)}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border-2 border-slate-300 shadow-[0_0_12px_rgba(203,213,225,0.4)] bg-black/50 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(second.nick)}'" />
+                ${second.isOnline ? '<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" title="Jogando Agora"></span>' : ''}
+              </div>
+              <div class="glass-card w-full rounded-t-xl p-2 md:p-3 text-center border-t-2 border-slate-300 bg-gradient-to-b from-slate-700/40 to-black/60 min-h-[95px] flex flex-col justify-between">
+                <div>
+                  <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-slate-300/20 text-slate-200 border border-slate-300/30">#2 Prata</span>
+                  <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nick)}</div>
+                </div>
+                <div class="mt-1">
+                  <div class="text-xs md:text-sm font-black text-slate-200 font-mono">${escapeHtml(second.playtimeFormatted)}</div>
+                  <div class="text-[9px] text-slate-400">${second.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          podiumHtml += `<div class="hidden sm:block"></div>`;
+        }
+
+        // 1º Lugar (Ouro / Campeão com Coroa 3D)
+        if (first) {
+          podiumHtml += `
+            <div class="flex flex-col items-center">
+              <div class="text-2xl md:text-3xl drop-shadow animate-bounce mb-1">👑</div>
+              <div class="relative mb-2">
+                <img src="${first.avatar}" alt="${escapeHtml(first.nick)}" class="w-16 h-16 md:w-20 md:h-20 rounded-2xl border-3 border-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.6)] bg-black/60 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(first.nick)}'" />
+                ${first.isOnline ? '<span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" title="Jogando Agora"></span>' : ''}
+              </div>
+              <div class="glass-card w-full rounded-t-2xl p-2.5 md:p-4 text-center border-t-3 border-amber-400 bg-gradient-to-b from-amber-500/30 via-amber-950/40 to-black/80 min-h-[120px] flex flex-col justify-between shadow-lg shadow-amber-500/10">
+                <div>
+                  <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 font-mono shadow-sm">🥇 1º LUGAR</span>
+                  <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1 drop-shadow">${escapeHtml(first.nick)}</div>
+                </div>
+                <div class="mt-1">
+                  <div class="text-sm md:text-base font-black text-amber-200 font-mono drop-shadow">${escapeHtml(first.playtimeFormatted)}</div>
+                  <div class="text-[10px] ${first.isOnline ? 'text-emerald-400 font-bold flex items-center justify-center gap-1' : 'text-slate-400'}">
+                    ${first.isOnline ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Jogando Agora' : 'Offline'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        // 3º Lugar (Bronze)
+        if (third) {
+          podiumHtml += `
+            <div class="flex flex-col items-center">
+              <div class="text-lg md:text-2xl drop-shadow mb-1">🥉</div>
+              <div class="relative mb-2">
+                <img src="${third.avatar}" alt="${escapeHtml(third.nick)}" class="w-12 h-12 md:w-16 md:h-16 rounded-xl border-2 border-amber-700 shadow-[0_0_12px_rgba(180,83,9,0.4)] bg-black/50 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(third.nick)}'" />
+                ${third.isOnline ? '<span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" title="Jogando Agora"></span>' : ''}
+              </div>
+              <div class="glass-card w-full rounded-t-xl p-2 md:p-3 text-center border-t-2 border-amber-700 bg-gradient-to-b from-amber-900/30 to-black/60 min-h-[85px] flex flex-col justify-between">
+                <div>
+                  <span class="text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-amber-800/30 text-amber-300 border border-amber-700/40">#3 Bronze</span>
+                  <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nick)}</div>
+                </div>
+                <div class="mt-1">
+                  <div class="text-xs md:text-sm font-black text-amber-300 font-mono">${escapeHtml(third.playtimeFormatted)}</div>
+                  <div class="text-[9px] text-slate-400">${third.isOnline ? '🟢 Online' : '⚪ Offline'}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          podiumHtml += `<div class="hidden sm:block"></div>`;
+        }
+
+        podiumEl.innerHTML = podiumHtml;
+      }
+
+      // 2. Tabela dos Top 5 (com barras de tempo relativo)
+      if (listEl) {
+        const maxSec = (top5[0] && top5[0].playtimeSeconds > 0) ? top5[0].playtimeSeconds : 1;
+
+        listEl.innerHTML = top5.map(p => {
+          const safeNick = escapeHtml(p.nick);
+          const percent = Math.max(12, Math.round((p.playtimeSeconds / maxSec) * 100));
+
+          let rankBadge = '';
+          let rowBorder = 'border-white/[0.08]';
+          let rowBg = 'bg-white/[0.03]';
+
+          if (p.rank === 1) {
+            rankBadge = '<span class="w-6 h-6 rounded-lg bg-amber-400 text-slate-950 font-black flex items-center justify-center text-xs shadow-sm">1</span>';
+            rowBorder = 'border-amber-500/40';
+            rowBg = 'bg-gradient-to-r from-amber-950/20 to-transparent';
+          } else if (p.rank === 2) {
+            rankBadge = '<span class="w-6 h-6 rounded-lg bg-slate-300 text-slate-950 font-black flex items-center justify-center text-xs shadow-sm">2</span>';
+            rowBorder = 'border-slate-400/30';
+          } else if (p.rank === 3) {
+            rankBadge = '<span class="w-6 h-6 rounded-lg bg-amber-700 text-amber-100 font-black flex items-center justify-center text-xs shadow-sm">3</span>';
+            rowBorder = 'border-amber-700/30';
+          } else {
+            rankBadge = `<span class="w-6 h-6 rounded-lg bg-white/[0.08] text-slate-400 font-black flex items-center justify-center text-xs">${p.rank}</span>`;
+          }
+
+          return `
+            <div class="p-3 rounded-xl border ${rowBorder} ${rowBg} flex flex-col gap-2 transition hover:bg-white/[0.06]">
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="flex-shrink-0">${rankBadge}</div>
+                  <div class="relative flex-shrink-0">
+                    <img src="${p.avatar}" alt="${safeNick}" class="w-9 h-9 rounded-xl border border-white/20 bg-black/40 object-cover" onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(p.nick)}'" />
+                    ${p.isOnline ? '<span class="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse"></span>' : ''}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</span>
+                      ${p.isOnline ? '<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> AO VIVO</span>' : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-400 flex items-center gap-2">
+                      <span>Nível: <strong class="text-amber-300 font-mono">${p.level || 0}</strong></span>
+                      <span>•</span>
+                      <span>Mortes: <strong class="text-rose-300 font-mono">${p.totalDeaths || 0}</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="text-right flex-shrink-0">
+                  <div class="text-xs md:text-sm font-black text-amber-300 font-mono">${escapeHtml(p.playtimeFormatted)}</div>
+                  <div class="text-[9px] text-slate-400 font-medium">tempo jogado</div>
+                </div>
+              </div>
+
+              <!-- Barra de Progresso Relativa -->
+              <div class="w-full bg-black/40 h-1.5 rounded-full overflow-hidden border border-white/[0.06]">
+                <div class="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all duration-500" style="width: ${percent}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
       }
     }
 
