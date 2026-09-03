@@ -1513,6 +1513,7 @@
 
         const statusTextColors = { approved: 'text-emerald-400', banned: 'text-rose-400', pending: 'text-amber-400', rejected: 'text-orange-400' };
         const sc = statusTextColors[p.status] || 'text-slate-300';
+        const ultimoAcesso = (gd && gd.reported_at) ? new Date(gd.reported_at).toLocaleTimeString('pt-BR') : (p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '–');
 
         document.getElementById('inspect-account').innerHTML = `
           ${infoCard('Nick', p.nick || nick)}
