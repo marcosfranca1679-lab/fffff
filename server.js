@@ -381,7 +381,10 @@ app.get('/api/bans', async (req, res) => {
       const ban = parseBanInfo(b.ban_reason);
       if (ban.expired) {
         // Desbane automaticamente no banco
-        supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', b.nick).catch(() => {});
+        await supabase
+          .from('players')
+          .update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() })
+          .ilike('nick', b.nick);
       } else {
         validBans.push({
           nick: b.nick,
@@ -417,6 +420,25 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
     if (error) throw error;
 
     const players = data || [];
+    for (const p of players) {
+      if (p.status === 'banned') {
+        const ban = parseBanInfo(p.ban_reason);
+        if (ban.expired) {
+          // Desbane automaticamente no banco e ajusta o objeto em memória
+          p.status = 'approved';
+          p.ban_reason = null;
+          await supabase
+            .from('players')
+            .update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() })
+            .ilike('nick', p.nick);
+        } else {
+          p.banRemaining = ban.remaining;
+          p.isPermanent = ban.isPermanent;
+          p.cleanBanReason = ban.reason;
+        }
+      }
+    }
+
     res.json({
       pending:  players.filter(p => p.status === 'pending'),
       approved: players.filter(p => p.status === 'approved'),
@@ -430,15 +452,35 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
 
 app.get('/api/admin/stats', requireAdmin, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('players').select('status');
+    const { data, error } = await supabase.from('players').select('nick, status, ban_reason');
     if (error) throw error;
 
     const list = data || [];
+    let pending = 0, approved = 0, rejected = 0, banned = 0;
+
+    for (const p of list) {
+      if (p.status === 'banned') {
+        const ban = parseBanInfo(p.ban_reason);
+        if (ban.expired) {
+          approved++;
+          supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', p.nick).catch(() => {});
+        } else {
+          banned++;
+        }
+      } else if (p.status === 'approved') {
+        approved++;
+      } else if (p.status === 'pending') {
+        pending++;
+      } else if (p.status === 'rejected') {
+        rejected++;
+      }
+    }
+
     res.json({
-      pending:  list.filter(p => p.status === 'pending').length,
-      approved: list.filter(p => p.status === 'approved').length,
-      rejected: list.filter(p => p.status === 'rejected').length,
-      banned:   list.filter(p => p.status === 'banned').length,
+      pending,
+      approved,
+      rejected,
+      banned,
       total: list.length
     });
   } catch (err) {
