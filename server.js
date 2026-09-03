@@ -1476,6 +1476,8 @@ app.get('/api/check/:nick', async (req, res) => {
   } catch (err) {
     res.json({ allowed: false, banned: false, nick: req.params.nick });
   }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  ROTAS DO CONSOLE REMOTO & MENSAGENS IN-GAME
 // ════════════════════════════════════════════════════════════════════════════
