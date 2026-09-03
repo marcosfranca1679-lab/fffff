@@ -406,11 +406,11 @@ app.post('/api/chat', requireAuth, async (req, res) => {
 // Limpeza manual do chat pelo Administrador
 app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
   try {
-    // Apaga ESTRITAMENTE as mensagens de chat reais (preserva telemetria, bans, ips banidos, mortes e conexões)
+    // Apaga ESTRITAMENTE as mensagens de chat reais (preserva telemetria, bans, ips banidos, mortes, conexões e logs de console)
     await supabase
       .from('messages')
       .delete()
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log")');
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log")');
 
     // Insere mensagem de sistema informando que foi limpo
     await supabase.from('messages').insert([{
@@ -1102,6 +1102,34 @@ app.get('/api/admin/ip-bans', requireAdmin, async (req, res) => {
   }
 });
 
+// ─── CONSOLE REMOTO & COMANDOS DO MINECRAFT ──────────────────────────────
+const pendingConsoleCommands = [];
+const liveConsoleLogs = [];
+
+function registrarConsoleLog(type, content, sender = 'Sistema') {
+  const logEntry = {
+    id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+    type, // 'command' | 'broadcast' | 'info' | 'error'
+    content,
+    sender,
+    time: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
+    created_at: new Date().toISOString()
+  };
+  liveConsoleLogs.push(logEntry);
+  if (liveConsoleLogs.length > 200) liveConsoleLogs.shift();
+
+  // Persiste no Supabase assincronamente sem travar a requisição
+  supabase.from('messages').insert([{
+    author_nick: sender,
+    author_role: 'console_log',
+    author_platform: type,
+    content: JSON.stringify(logEntry),
+    created_at: logEntry.created_at
+  }]).catch(() => {});
+
+  return logEntry;
+}
+
 // ─── TELEMETRIA DO PLUGIN AO VIVO (login, logout, XP, inventário) ──────────
 const liveTelemetryCache = new Map();
 const lastDbSyncMap = new Map();
@@ -1135,7 +1163,8 @@ app.post('/api/telemetry/:nick', async (req, res) => {
           created_at: now
         }]);
       } catch (_) {}
-      return res.json({ success: true, deathLogged: true });
+      registrarConsoleLog('error', `💀 ${payload.deathMessage || `${nick} morreu`}`, 'Minecraft');
+      return res.json({ success: true, deathLogged: true, commands: pendingConsoleCommands.splice(0) });
     }
 
     // Evento de login ou logout no Minecraft (Histórico Permanente de Conexões)
@@ -1157,6 +1186,12 @@ app.post('/api/telemetry/:nick', async (req, res) => {
           created_at: now
         }]);
       } catch (_) {}
+
+      if (payload.event === 'login') {
+        registrarConsoleLog('info', `🟢 ${nick} entrou no jogo (IP: ${payload.ip || '–'}, Mundo: ${payload.world || 'world'})`, 'Minecraft');
+      } else {
+        registrarConsoleLog('info', `🔴 ${nick} saiu do jogo`, 'Minecraft');
+      }
     }
 
     // 1. Atualiza INSTANTANEAMENTE no cache de memória (tempo real ao vivo, 0ms)
@@ -1192,7 +1227,7 @@ app.post('/api/telemetry/:nick', async (req, res) => {
         }).catch(() => {});
     }
 
-    res.json({ success: true, live: true });
+    res.json({ success: true, live: true, commands: pendingConsoleCommands.splice(0) });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
@@ -1441,6 +1476,128 @@ app.get('/api/check/:nick', async (req, res) => {
   } catch (err) {
     res.json({ allowed: false, banned: false, nick: req.params.nick });
   }
+// ════════════════════════════════════════════════════════════════════════════
+//  ROTAS DO CONSOLE REMOTO & MENSAGENS IN-GAME
+// ════════════════════════════════════════════════════════════════════════════
+
+// 1. Admin executa comando ou envia mensagem in-game
+app.post('/api/admin/console/execute', requireAdmin, async (req, res) => {
+  try {
+    const { action, text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Texto ou comando não pode estar vazio.' });
+    }
+
+    const cleanText = text.trim();
+    const adminNick = 'Admin';
+
+    if (action === 'broadcast' || action === 'message') {
+      // Mensagem direta para dentro do jogo (Broadcast In-Game)
+      const cmdItem = {
+        id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+        type: 'broadcast',
+        sender: adminNick,
+        message: cleanText,
+        created_at: new Date().toISOString()
+      };
+      pendingConsoleCommands.push(cmdItem);
+      const log = registrarConsoleLog('broadcast', `📢 [ANÚNCIO] ${adminNick}: "${cleanText}"`, adminNick);
+
+      return res.json({ success: true, message: '📢 Mensagem enviada para dentro do jogo!', log });
+    } else {
+      // Comando do console normal
+      let cmd = cleanText;
+      if (cmd.startsWith('/')) cmd = cmd.substring(1);
+
+      const cmdItem = {
+        id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+        type: 'command',
+        sender: adminNick,
+        command: cmd,
+        created_at: new Date().toISOString()
+      };
+      pendingConsoleCommands.push(cmdItem);
+      const log = registrarConsoleLog('command', `> /${cmd}`, adminNick);
+
+      return res.json({ success: true, message: `💻 Comando '/${cmd}' enviado ao servidor!`, log });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Admin busca logs recentes do console
+app.get('/api/admin/console/logs', requireAdmin, async (req, res) => {
+  try {
+    if (liveConsoleLogs.length > 0) {
+      return res.json(liveConsoleLogs);
+    }
+
+    // Se a memória estava vazia, busca os últimos do Supabase
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('author_role', 'console_log')
+      .order('created_at', { ascending: false })
+      .limit(60);
+
+    const logs = (data || []).reverse().map(row => {
+      try { return JSON.parse(row.content); } catch {
+        return {
+          id: row.id,
+          type: row.author_platform || 'info',
+          content: row.content,
+          sender: row.author_nick,
+          time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour12: false }),
+          created_at: row.created_at
+        };
+      }
+    });
+
+    res.json(logs);
+  } catch (err) {
+    res.json(liveConsoleLogs);
+  }
+});
+
+// 3. Admin limpa logs do console
+app.post('/api/admin/console/clear', requireAdmin, async (req, res) => {
+  try {
+    liveConsoleLogs.length = 0;
+    await supabase.from('messages').delete().eq('author_role', 'console_log').catch(() => {});
+    registrarConsoleLog('info', '🧹 O console foi limpo pelo Administrador.', 'Sistema');
+    res.json({ success: true, message: 'Console limpo com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Plugin consulta comandos pendentes
+app.get('/api/plugin/commands', async (req, res) => {
+  const secret = req.headers['x-plugin-secret'] || req.query.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  const commandsToRun = pendingConsoleCommands.splice(0);
+  res.json({ success: true, commands: commandsToRun });
+});
+
+// 5. Plugin envia logs gerados no servidor de volta para o console
+app.post('/api/plugin/console-logs', async (req, res) => {
+  const secret = req.headers['x-plugin-secret'] || req.body.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  const logs = req.body.logs || [];
+  for (const item of logs) {
+    if (typeof item === 'string') {
+      registrarConsoleLog('info', item, 'Minecraft');
+    } else if (item && item.content) {
+      registrarConsoleLog(item.type || 'info', item.content, item.sender || 'Minecraft');
+    }
+  }
+
+  res.json({ success: true });
 });
 
 // Fallback SPA
