@@ -283,7 +283,11 @@ app.post('/api/auth/login', async (req, res) => {
 async function limparMensagens30Dias() {
   try {
     const limite = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    await supabase.from('messages').delete().lt('created_at', limite);
+    await supabase
+      .from('messages')
+      .delete()
+      .lt('created_at', limite)
+      .not('author_role', 'in', '("telemetry","ban_log")');
   } catch (err) {
     // Silencioso
   }
@@ -298,6 +302,7 @@ app.get('/api/chat', async (req, res) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
+      .not('author_role', 'in', '("telemetry","ban_log")')
       .order('created_at', { ascending: false })
       .limit(60);
 
@@ -345,8 +350,8 @@ app.post('/api/chat', requireAuth, async (req, res) => {
 // Limpeza manual do chat pelo Administrador
 app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
   try {
-    // Apaga todas as mensagens existentes
-    await supabase.from('messages').delete().neq('content', '___DUMMY_NEQ___');
+    // Apaga apenas as mensagens de chat reais (preserva histórico de bans e telemetria)
+    await supabase.from('messages').delete().not('author_role', 'in', '("telemetry","ban_log")');
 
     // Insere mensagem de sistema informando que foi limpo
     await supabase.from('messages').insert([{
@@ -569,13 +574,14 @@ app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
 
     let fullReason = reasonText;
     let remainingLabel = 'Permanente';
+    let expireAt = null;
 
     if (durationUnit !== 'permanent' && durationValue > 0) {
       const ms = durationUnit === 'minutes' ? durationValue * 60 * 1000
                : durationUnit === 'hours' ? durationValue * 3600 * 1000
                : durationValue * 24 * 3600 * 1000;
-      const expireDate = new Date(Date.now() + ms);
-      fullReason = `${reasonText} [EXPIRA:${expireDate.toISOString()}]`;
+      expireAt = new Date(Date.now() + ms);
+      fullReason = `${reasonText} [EXPIRA:${expireAt.toISOString()}]`;
       remainingLabel = `${durationValue} ${durationUnit}`;
     }
 
@@ -591,6 +597,21 @@ app.post('/api/admin/ban/:nick', requireAdmin, async (req, res) => {
       }, { onConflict: 'nick' });
 
     if (error) throw error;
+
+    // Registra no histórico de bans (messages com role=ban_log)
+    await supabase.from('messages').insert([{
+      author_nick: nick,
+      author_role: 'ban_log',
+      author_platform: 'Admin',
+      content: JSON.stringify({
+        reason: reasonText,
+        duration: remainingLabel,
+        expire_at: expireAt ? expireAt.toISOString() : null,
+        banned_at: now
+      }),
+      created_at: now
+    }]).catch(() => {});
+
     res.json({ 
       success: true, 
       message: `🔨 ${nick} foi BANIDO! Duração: ${remainingLabel}.` 
@@ -646,6 +667,112 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
 
     if (error) throw error;
     res.json({ success: true, message: `✅ ${nick} adicionado e aprovado!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── TELEMETRIA DO PLUGIN (login, logout, XP, inventário) ─────────────────
+// O plugin envia dados periodicamente; armazenamos em messages com role=telemetry
+app.post('/api/telemetry/:nick', async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const secret = req.headers['x-plugin-secret'] || req.body.secret || '';
+    const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+    if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+    const payload = req.body || {};
+    payload.nick = nick;
+    payload.reported_at = new Date().toISOString();
+
+    await supabase.from('messages').insert([{
+      author_nick: nick,
+      author_role: 'telemetry',
+      author_platform: payload.ip || 'plugin',
+      content: JSON.stringify(payload),
+      created_at: new Date().toISOString()
+    }]);
+
+    res.json({ success: true });
+  } catch (err) {
+    res.json({ success: false });
+  }
+});
+
+// ─── INSPECIONAR JOGADOR (Admin) ──────────────────────────────────────────
+app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+
+    // 1. Dados do jogador
+    const { data: player } = await supabase
+      .from('players')
+      .select('*')
+      .ilike('nick', nick)
+      .maybeSingle();
+
+    // 2. Histórico de bans (ban_log)
+    const { data: banLogs } = await supabase
+      .from('messages')
+      .select('content, created_at')
+      .eq('author_nick', nick)
+      .eq('author_role', 'ban_log')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    // 3. Mensagens do chat do jogador
+    const { data: chatMsgs } = await supabase
+      .from('messages')
+      .select('content, created_at')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'player')
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    // 4. Telemetria do plugin (mais recente)
+    const { data: telemetry } = await supabase
+      .from('messages')
+      .select('content, created_at, author_platform')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'telemetry')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    // Parsear ban logs
+    const banHistory = (banLogs || []).map(b => {
+      try { return { ...JSON.parse(b.content), logged_at: b.created_at }; }
+      catch { return { reason: b.content, logged_at: b.created_at }; }
+    });
+
+    // Pegar dado mais recente de telemetria
+    let gameData = null;
+    if (telemetry && telemetry.length > 0) {
+      try { gameData = JSON.parse(telemetry[0].content); } catch {}
+    }
+
+    // Histórico de sessões (login/logout da telemetria)
+    const sessions = (telemetry || []).map(t => {
+      try {
+        const d = JSON.parse(t.content);
+        return { event: d.event, at: t.created_at, ip: t.author_platform, xp: d.xp, health: d.health };
+      } catch { return { at: t.created_at }; }
+    });
+
+    // Ban atual
+    let currentBan = null;
+    if (player && player.status === 'banned') {
+      currentBan = parseBanInfo(player.ban_reason);
+    }
+
+    res.json({
+      player: player || { nick, status: 'unknown' },
+      currentBan,
+      banHistory,
+      chatMessages: (chatMsgs || []).map(m => ({ content: m.content, at: m.created_at })),
+      gameData,
+      sessions,
+      totalBans: banHistory.length
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
