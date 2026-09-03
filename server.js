@@ -892,19 +892,21 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     // Evento de morte (PlayerDeathEvent)
     if (payload.event === 'death') {
       const now = new Date().toISOString();
-      await supabase.from('messages').insert([{
-        author_nick: nick,
-        author_role: 'death_log',
-        author_platform: payload.world || 'world',
-        content: JSON.stringify({
-          message: payload.deathMessage || `${nick} morreu`,
-          world: payload.world || 'world',
-          location: payload.location || `${payload.x}, ${payload.y}, ${payload.z}`,
-          killer: payload.killer || null,
-          at: now
-        }),
-        created_at: now
-      }]).catch(() => {});
+      try {
+        await supabase.from('messages').insert([{
+          author_nick: nick,
+          author_role: 'death_log',
+          author_platform: payload.world || 'world',
+          content: JSON.stringify({
+            message: payload.deathMessage || `${nick} morreu`,
+            world: payload.world || 'world',
+            location: payload.location || `${payload.x}, ${payload.y}, ${payload.z}`,
+            killer: payload.killer || null,
+            at: now
+          }),
+          created_at: now
+        }]);
+      } catch (_) {}
       return res.json({ success: true, deathLogged: true });
     }
 
