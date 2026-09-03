@@ -310,11 +310,26 @@ async function limparMensagens30Dias() {
   }
 }
 
-// Listar mensagens (executa a limpeza de 30 dias periodicamente)
+// Função para apagar automaticamente logs de mortes e conexões com mais de 3 dias
+async function limparLogsMortesESessoes3Dias() {
+  try {
+    const limite3Dias = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    await supabase
+      .from('messages')
+      .delete()
+      .lt('created_at', limite3Dias)
+      .in('author_role', ['death_log', 'session_log']);
+  } catch (err) {
+    // Silencioso
+  }
+}
+
+// Listar mensagens (executa a limpeza periódica de mensagens e logs)
 app.get('/api/chat', async (req, res) => {
   try {
-    // Limpeza de 30 dias a cada chamada
+    // Limpezas periódicas automáticas
     limparMensagens30Dias().catch(() => {});
+    limparLogsMortesESessoes3Dias().catch(() => {});
 
     const { data, error } = await supabase
       .from('messages')
@@ -327,6 +342,30 @@ app.get('/api/chat', async (req, res) => {
     res.json((data || []).reverse());
   } catch (err) {
     res.json([]);
+  }
+});
+
+// Limpeza Manual de Logs (Admin) - Mortes e Conexões
+app.post('/api/admin/clean-logs', requireAdmin, async (req, res) => {
+  try {
+    const mode = req.body.mode || 'all'; // '3days' ou 'all'
+    let query = supabase.from('messages').delete().in('author_role', ['death_log', 'session_log']);
+
+    if (mode === '3days') {
+      const limite = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.lt('created_at', limite);
+    }
+
+    const { error } = await query;
+    if (error) throw error;
+
+    const msg = mode === '3days'
+      ? '🧹 Logs de mortes e conexões com mais de 3 dias foram apagados com sucesso!'
+      : '🧹 Todos os logs de mortes e conexões foram zerados do Supabase com sucesso!';
+
+    res.json({ success: true, message: msg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -754,17 +793,40 @@ app.post('/api/admin/unban/:nick', requireAdmin, async (req, res) => {
   }
 });
 
-// Remover
+// Remover Jogador e Limpar 100% dos dados dele no Supabase (não ocupa espaço)
 app.delete('/api/admin/remove/:nick', requireAdmin, async (req, res) => {
   try {
     const nick = req.params.nick.trim();
+    const key = nick.toLowerCase();
+
+    // 1. Remove da tabela players
     const { error } = await supabase
       .from('players')
       .delete()
       .ilike('nick', nick);
 
     if (error) throw error;
-    res.json({ success: true, message: `🗑️ ${nick} removido.` });
+
+    // 2. Remove TODOS os registros e logs dele na tabela messages (telemetria, mortes, conexões, bans, chat)
+    await supabase
+      .from('messages')
+      .delete()
+      .ilike('author_nick', nick)
+      .catch(() => {});
+
+    // 3. Remove conta cadastrada na tabela auth_users se houver
+    await supabase
+      .from('auth_users')
+      .delete()
+      .ilike('nick', nick)
+      .catch(() => {});
+
+    // 4. Limpa caches de memória do servidor
+    liveTelemetryCache.delete(key);
+    userWebIps.delete(key);
+    lastDbSyncMap.delete(key);
+
+    res.json({ success: true, message: `🗑️ ${nick} e todos os seus registros foram excluídos permanentemente do Supabase!` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
