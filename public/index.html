@@ -1052,6 +1052,9 @@
       const r = (adminData.rejected || []).length;
       const b = (adminData.banned || []).length;
 
+      const badge = document.getElementById('admin-bans-count');
+      if (badge) badge.textContent = b;
+
       document.getElementById('admin-stats-grid').innerHTML = `
         <div onclick="mudarModuloAdmin('whitelist');mudarAbaAdmin('pending')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-amber-500/50 transition">
           <div class="text-base md:text-xl font-black text-amber-400 drop-shadow">${p}</div>
