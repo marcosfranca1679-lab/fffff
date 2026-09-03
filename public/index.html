@@ -367,24 +367,59 @@
 
       <!-- Módulos do Admin: 3 abas principais -->
       <div class="glass-card rounded-2xl shadow-lg overflow-hidden">
-        <!-- Navegação de módulos -->
-        <div class="flex border-b border-white/[0.08] bg-black/30">
+        <!-- Navegação de módulos: 4 abas principais -->
+        <div class="flex border-b border-white/[0.08] bg-black/30 overflow-x-auto">
+          <button onclick="mudarModuloAdmin('online')" id="admin-mod-online"
+            class="flex-1 min-w-[90px] px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Jogando Agora</span>
+            <span id="badge-online-count" class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded-full text-[9px] font-mono">0</span>
+          </button>
           <button onclick="mudarModuloAdmin('whitelist')" id="admin-mod-whitelist"
-            class="flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
+            class="flex-1 min-w-[90px] px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white">
             📋 Whitelist
           </button>
           <button onclick="mudarModuloAdmin('banimentos')" id="admin-mod-banimentos"
-            class="flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
+            class="flex-1 min-w-[90px] px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white">
             🔨 Banimentos
           </button>
           <button onclick="mudarModuloAdmin('manutencao')" id="admin-mod-manutencao"
-            class="flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5">
+            class="flex-1 min-w-[90px] px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white">
             🧹 Manutenção
           </button>
         </div>
 
+        <!-- ── MÓDULO JOGANDO AGORA (AO VIVO) ─────────────────────── -->
+        <div id="admin-mod-content-online" class="p-3 md:p-4 space-y-3">
+          <div class="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-emerald-500/20 flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"></span>
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Jogadores no Servidor de Minecraft</span>
+                  <span id="admin-online-indicator" class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 rounded font-mono font-extrabold">AO VIVO</span>
+                </div>
+                <div class="text-[10px] text-slate-400">Atualizado em tempo real direto da telemetria do plugin</div>
+              </div>
+            </div>
+            <button onclick="carregarAdminData()" class="bg-emerald-600/80 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+              🔄 Atualizar Agora
+            </button>
+          </div>
+
+          <!-- Container de jogadores online -->
+          <div id="admin-online-container" class="space-y-2.5">
+            <!-- Renderizado dinamicamente -->
+          </div>
+          <div id="admin-online-empty" class="hidden glass-card p-6 rounded-2xl text-center border border-white/[0.08] space-y-2">
+            <div class="text-3xl">🎮</div>
+            <div class="text-xs font-bold text-slate-200">Nenhum jogador online no servidor no momento.</div>
+            <div class="text-[10px] text-slate-400">Assim que alguém entrar no Minecraft, os dados de vida, fome, coordenadas e inventário aparecerão aqui automaticamente!</div>
+          </div>
+        </div>
+
         <!-- ── MÓDULO WHITELIST ─────────────────────────────────────── -->
-        <div id="admin-mod-content-whitelist" class="p-3 md:p-4 space-y-3">
+        <div id="admin-mod-content-whitelist" class="hidden p-3 md:p-4 space-y-3">
           <!-- Sub-abas da whitelist -->
           <div class="flex gap-1.5 flex-wrap">
             <button onclick="mudarAbaAdmin('pending')"  id="admin-tab-pending"
@@ -799,7 +834,7 @@
     let currentCategory = 'info';
     let currentChannel = 'geral';
     let adminTab = 'pending';
-    let adminData = { pending: [], approved: [], rejected: [], banned: [] };
+    let adminData = { pending: [], approved: [], rejected: [], banned: [], online: [], totalOnline: 0 };
     let lastChatCount = 0;
     let isSubmenuOpen = false;
 
@@ -828,6 +863,7 @@
       }
     };
 
+    // ── Helper de Autenticação / Fetch ───────────────────────────────────────
     async function apiFetch(url, options = {}) {
       options.headers = options.headers || {};
       const token = localStorage.getItem('mb_token');
@@ -861,7 +897,7 @@
             carregarAdminIpBans();
           }
         }
-      }, 3000);
+      }, 2500);
       setInterval(() => atualizarMeuStatusSilencioso(), 5000);
     }
 
@@ -1156,24 +1192,27 @@
     }
 
     // ── Painel Admin Modular ──────────────────────────────────────────────────
-    let adminModulo = 'whitelist';
+    let adminModulo = 'online';
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['whitelist', 'banimentos', 'manutencao'];
+      const mods = ['online', 'whitelist', 'banimentos', 'manutencao'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
         if (!btn || !content) return;
         if (m === modulo) {
-          btn.className = 'flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20';
+          btn.className = 'flex-1 min-w-[90px] px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20';
           content.classList.remove('hidden');
         } else {
-          btn.className = 'flex-1 px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.04]';
+          btn.className = 'flex-1 min-w-[90px] px-2 py-2.5 text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.04]';
           content.classList.add('hidden');
         }
       });
 
+      if (modulo === 'online') {
+        renderAdminOnlinePlayers();
+      }
       if (modulo === 'banimentos') {
         carregarAdminBans();
         carregarAdminIpBans();
@@ -1460,6 +1499,7 @@
         adminData = await res.json();
         renderAdminStats();
         renderAdminTabela();
+        renderAdminOnlinePlayers();
         atualizarStatsManu();
       } catch (_) {}
     }
@@ -1469,11 +1509,22 @@
       const a = (adminData.approved || []).length;
       const r = (adminData.rejected || []).length;
       const b = (adminData.banned || []).length;
+      const onl = (adminData.online || []).length;
 
       const badge = document.getElementById('admin-bans-count');
       if (badge) badge.textContent = b;
 
+      const badgeOnline = document.getElementById('badge-online-count');
+      if (badgeOnline) badgeOnline.textContent = onl;
+
       document.getElementById('admin-stats-grid').innerHTML = `
+        <div onclick="mudarModuloAdmin('online')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-emerald-500/50 transition border border-emerald-500/40 bg-emerald-950/20 col-span-2 sm:col-span-1">
+          <div class="text-base md:text-xl font-black text-emerald-400 drop-shadow flex items-center justify-center gap-1.5">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>${onl}</span>
+          </div>
+          <div class="text-[10px] text-emerald-300 font-bold">🟢 Jogando Agora</div>
+        </div>
         <div onclick="mudarModuloAdmin('whitelist');mudarAbaAdmin('pending')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-amber-500/50 transition">
           <div class="text-base md:text-xl font-black text-amber-400 drop-shadow">${p}</div>
           <div class="text-[10px] text-amber-300 font-bold">⏳ Pendentes</div>
@@ -1486,11 +1537,100 @@
           <div class="text-base md:text-xl font-black text-orange-400 drop-shadow">${r}</div>
           <div class="text-[10px] text-orange-300 font-bold">❌ Rejeitados</div>
         </div>
-        <div onclick="mudarModuloAdmin('banimentos')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-rose-500/50 transition">
+        <div onclick="mudarModuloAdmin('banimentos')" class="glass-card p-2 rounded-xl text-center cursor-pointer hover:border-rose-500/50 transition col-span-2 sm:col-span-1">
           <div class="text-base md:text-xl font-black text-rose-400 drop-shadow">${b}</div>
           <div class="text-[10px] text-rose-300 font-bold">🔨 Banidos</div>
         </div>
       `;
+    }
+
+    // Renderiza a lista de jogadores jogando ao vivo no servidor
+    function renderAdminOnlinePlayers() {
+      const container = document.getElementById('admin-online-container');
+      const empty = document.getElementById('admin-online-empty');
+      const badgeCount = document.getElementById('badge-online-count');
+      if (!container) return;
+
+      const onlineList = adminData.online || [];
+      if (badgeCount) badgeCount.textContent = onlineList.length;
+
+      if (onlineList.length === 0) {
+        container.innerHTML = '';
+        if (empty) empty.classList.remove('hidden');
+        return;
+      }
+      if (empty) empty.classList.add('hidden');
+
+      container.innerHTML = onlineList.map(o => {
+        const safeNick = escapeHtml(o.nick);
+        const cleanNick = o.nick.startsWith('.') || o.nick.startsWith('*') ? o.nick.substring(1) : o.nick;
+        const hp = Math.max(0, Math.min(20, Math.round(o.health || 20)));
+        const fd = Math.max(0, Math.min(20, Math.round(o.food || 20)));
+        const xpLvl = o.level || 0;
+        const loc = o.location || (o.x !== undefined ? `${o.x}, ${o.y}, ${o.z}` : '0, 0, 0');
+        const world = o.world || 'world';
+        const playtime = o.playtimeFormatted || '0m';
+        const itemHand = o.hand ? escapeHtml(o.hand) : 'Mão vazia';
+        const ip = o.ip || '–';
+
+        return `
+          <div class="glass-card p-3.5 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 via-black/40 to-black/50 shadow-md space-y-2.5">
+            <div class="flex items-center gap-3">
+              <img src="https://mc-heads.net/avatar/${encodeURIComponent(cleanNick)}/48" 
+                class="w-10 h-10 rounded-xl bg-black/40 border border-emerald-500/40 object-contain flex-shrink-0 shadow-inner" 
+                onerror="this.src='https://mc-heads.net/avatar/steve/48'" />
+              
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-extrabold text-sm text-white">${safeNick}</span>
+                  <span class="bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> JOGANDO AGORA
+                  </span>
+                  <span class="text-[9px] font-mono text-slate-400">sinal há ${o.secondsAgo || 0}s</span>
+                </div>
+                <div class="text-[10px] text-slate-300 flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span class="text-cyan-300 font-mono">📍 ${escapeHtml(world)} [${escapeHtml(loc)}]</span>
+                  <span class="text-slate-400">• IP: <b class="font-mono text-emerald-200">${escapeHtml(ip)}</b></span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 flex-shrink-0">
+                <button onclick="inspecionarJogador('${safeNick}')" class="bg-indigo-600/90 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1">
+                  🔍 Ver Ao Vivo
+                </button>
+                <button onclick="preencherBanForm('${safeNick}')" class="bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold transition shadow-sm" title="Banir">
+                  🔨
+                </button>
+              </div>
+            </div>
+
+            <!-- Mini Grid de Estatísticas In-Game Ao Vivo -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs pt-1 border-t border-white/[0.06]">
+              <div class="bg-black/50 rounded-lg px-2.5 py-1.5 flex items-center justify-between border border-red-500/20">
+                <span class="text-[10px] text-red-300 font-bold">❤️ Vida</span>
+                <span class="font-mono font-black text-red-400">${hp}/20</span>
+              </div>
+              <div class="bg-black/50 rounded-lg px-2.5 py-1.5 flex items-center justify-between border border-amber-500/20">
+                <span class="text-[10px] text-amber-300 font-bold">🍗 Fome</span>
+                <span class="font-mono font-black text-amber-400">${fd}/20</span>
+              </div>
+              <div class="bg-black/50 rounded-lg px-2.5 py-1.5 flex items-center justify-between border border-emerald-500/20">
+                <span class="text-[10px] text-emerald-300 font-bold">⭐ XP</span>
+                <span class="font-mono font-black text-emerald-400">Nível ${xpLvl}</span>
+              </div>
+              <div class="bg-black/50 rounded-lg px-2.5 py-1.5 flex items-center justify-between border border-cyan-500/20">
+                <span class="text-[10px] text-cyan-300 font-bold">⏱️ Tempo</span>
+                <span class="font-mono font-black text-cyan-300">${escapeHtml(playtime)}</span>
+              </div>
+            </div>
+
+            <div class="text-[10px] text-slate-400 bg-black/40 px-2.5 py-1 rounded-lg border border-white/[0.04] flex items-center gap-1.5 truncate">
+              <span class="text-amber-400">⚔️ Mão:</span>
+              <span class="text-slate-200 truncate font-semibold">${itemHand}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function mudarAbaAdmin(aba) {
@@ -1547,7 +1687,10 @@
             <div class="flex items-center gap-2">
               <div class="w-8 h-8 rounded-xl bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-sm flex-shrink-0 font-bold">🧑‍💻</div>
               <div class="min-w-0 flex-1">
-                <div class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</div>
+                <div class="flex items-center gap-2">
+                  <span class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</span>
+                  ${p.isOnline ? '<span class="bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-1 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> JOGANDO AGORA</span>' : ''}
+                </div>
                 <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
                   <span class="bg-black/50 px-1.5 py-0.5 rounded text-emerald-300 font-semibold">${escapeHtml(p.platform || 'Bedrock')}</span>
                   <span class="font-mono text-[9px] text-slate-400">${formatarData(p.requested_at)}</span>
