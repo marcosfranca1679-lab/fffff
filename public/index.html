@@ -1262,38 +1262,57 @@
       </div>`;
     }
 
-    async function inspecionarJogador(nick) {
+    let liveInspectTimer = null;
+    let currentInspectingNick = null;
+
+    async function inspecionarJogador(nick, isBackgroundUpdate = false) {
       const modal = document.getElementById('inspect-modal');
       modal.classList.remove('hidden');
-      document.getElementById('inspect-loading').classList.remove('hidden');
-      document.getElementById('inspect-content').classList.add('hidden');
-      
-      const cleanNick = nick.startsWith('.') || nick.startsWith('*') ? nick.substring(1) : nick;
-      document.getElementById('inspect-avatar').src = `https://mc-heads.net/avatar/${encodeURIComponent(cleanNick)}/64`;
-      document.getElementById('inspect-title').textContent = nick;
+
+      if (!isBackgroundUpdate) {
+        currentInspectingNick = nick;
+        document.getElementById('inspect-loading').classList.remove('hidden');
+        document.getElementById('inspect-content').classList.add('hidden');
+        
+        // Inicia atualização contínua AO VIVO a cada 2 segundos
+        if (liveInspectTimer) clearInterval(liveInspectTimer);
+        liveInspectTimer = setInterval(() => {
+          if (currentInspectingNick) inspecionarJogador(currentInspectingNick, true);
+        }, 2000);
+
+        const cleanNick = nick.startsWith('.') || nick.startsWith('*') ? nick.substring(1) : nick;
+        document.getElementById('inspect-avatar').src = `https://mc-heads.net/avatar/${encodeURIComponent(cleanNick)}/64`;
+        document.getElementById('inspect-title').textContent = nick;
+      }
 
       try {
         const res = await apiFetch(`/api/admin/player/${encodeURIComponent(nick)}`);
         const d = await res.json();
         const p = d.player || {};
         const gd = d.gameData;
+        const isLive = !!d.isLive;
 
-        // Subtítulo do header
+        // Subtítulo do header com badge AO VIVO
         const statusColors = { approved: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', banned: 'bg-rose-500/20 text-rose-300 border-rose-500/30', pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30', rejected: 'bg-orange-500/20 text-orange-300 border-orange-500/30' };
         const statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusColors[p.status] || 'bg-white/10 text-slate-300'}">${(p.status || 'Pendente').toUpperCase()}</span>`;
         const platformBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300 border border-white/10">${escapeHtml(p.platform || 'Bedrock')}</span>`;
-        document.getElementById('inspect-subtitle').innerHTML = `${statusBadge} ${platformBadge}`;
+        
+        const liveBadge = isLive 
+          ? `<span class="flex items-center gap-1 text-[10px] font-extrabold text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 rounded-full shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 🔴 AO VIVO (2s)</span>`
+          : `<span class="text-[10px] font-bold text-slate-400 bg-white/10 border border-white/10 px-2 py-0.5 rounded-full">⚪ Offline</span>`;
+
+        document.getElementById('inspect-subtitle').innerHTML = `${liveBadge} ${statusBadge} ${platformBadge}`;
 
         // 1. Informações da Conta & Conexão
         const ip = (gd && gd.ip) || (d.sessions && d.sessions[0] && d.sessions[0].ip) || 'Aguardando login';
-        const ultimoAcesso = (gd && gd.reported_at) ? new Date(gd.reported_at).toLocaleString('pt-BR') : (p.updated_at ? new Date(p.updated_at).toLocaleString('pt-BR') : '–');
+        const ultimoAcesso = (gd && gd.reported_at) ? new Date(gd.reported_at).toLocaleTimeString('pt-BR') : (p.updated_at ? new Date(p.updated_at).toLocaleDateString('pt-BR') : '–');
         
         document.getElementById('inspect-account').innerHTML = `
           ${infoCard('Nick', p.nick || nick)}
           ${infoCard('IP Registrado', ip, ip !== 'Aguardando login' ? 'text-cyan-300 font-mono' : 'text-slate-500')}
           ${infoCard('Plataforma', p.platform || 'Bedrock')}
-          ${infoCard('Cadastro', p.requested_at ? new Date(p.requested_at).toLocaleString('pt-BR') : '–')}
-          ${infoCard('Último Acesso', ultimoAcesso, 'text-emerald-300')}
+          ${infoCard('Cadastro', p.requested_at ? new Date(p.requested_at).toLocaleDateString('pt-BR') : '–')}
+          ${infoCard(isLive ? 'Último Sinal' : 'Última Sessão', ultimoAcesso, isLive ? 'text-emerald-400 font-bold' : 'text-slate-300')}
           ${d.currentBan ? infoCard('Ban Restante', d.currentBan.remaining, 'text-rose-400') : ''}
           ${d.currentBan ? infoCard('Motivo do Ban', d.currentBan.reason, 'text-amber-300') : ''}
           ${infoCard('Total de Bans', d.totalBans, d.totalBans > 0 ? 'text-rose-400 font-bold' : 'text-emerald-400')}
@@ -1305,11 +1324,10 @@
           document.getElementById('inspect-game-section').classList.remove('hidden');
 
           // Online / Offline badge
-          const isOnline = gd.event === 'login' || gd.event === 'update';
           const badgeEl = document.getElementById('inspect-online-badge');
-          if (isOnline) {
-            badgeEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-            badgeEl.textContent = '🟢 Online Agora';
+          if (isLive) {
+            badgeEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1';
+            badgeEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Online no Jogo`;
           } else {
             badgeEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-500/20 text-slate-300 border border-white/10';
             badgeEl.textContent = '⚪ Desconectado';
@@ -1326,21 +1344,21 @@
               <div class="text-[9px] text-rose-400 font-bold uppercase tracking-wider flex items-center gap-1">❤️ Vida (HP)</div>
               <div class="text-sm font-extrabold text-white mt-1">${healthVal} / 20</div>
               <div class="w-full bg-white/10 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                <div class="bg-rose-500 h-full rounded-full" style="width: ${Math.min(100, (healthVal / 20) * 100)}%"></div>
+                <div class="bg-rose-500 h-full rounded-full transition-all duration-500" style="width: ${Math.min(100, (healthVal / 20) * 100)}%"></div>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2.5 border border-amber-500/20">
               <div class="text-[9px] text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1">🍗 Fome</div>
               <div class="text-sm font-extrabold text-white mt-1">${foodVal} / 20</div>
               <div class="w-full bg-white/10 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                <div class="bg-amber-500 h-full rounded-full" style="width: ${Math.min(100, (foodVal / 20) * 100)}%"></div>
+                <div class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: ${Math.min(100, (foodVal / 20) * 100)}%"></div>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2.5 border border-emerald-500/20">
               <div class="text-[9px] text-emerald-400 font-bold uppercase tracking-wider flex items-center gap-1">🟢 Nível de XP</div>
               <div class="text-sm font-extrabold text-emerald-300 mt-1">Nível ${levelVal} <span class="text-[10px] text-slate-400 font-normal">(${xpVal} XP)</span></div>
               <div class="w-full bg-white/10 h-1.5 rounded-full mt-1.5 overflow-hidden">
-                <div class="bg-emerald-500 h-full rounded-full" style="width: ${Math.min(100, (levelVal % 10) * 10 || 100)}%"></div>
+                <div class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: ${Math.min(100, (levelVal % 10) * 10 || 100)}%"></div>
               </div>
             </div>
             <div class="bg-black/50 rounded-xl p-2.5 border border-cyan-500/20">
@@ -1422,14 +1440,23 @@
           fecharInspecionar();
         };
 
-        document.getElementById('inspect-loading').classList.add('hidden');
-        document.getElementById('inspect-content').classList.remove('hidden');
+        if (!isBackgroundUpdate) {
+          document.getElementById('inspect-loading').classList.add('hidden');
+          document.getElementById('inspect-content').classList.remove('hidden');
+        }
       } catch (err) {
-        document.getElementById('inspect-loading').textContent = '❌ Erro ao carregar dados do jogador: ' + err.message;
+        if (!isBackgroundUpdate) {
+          document.getElementById('inspect-loading').textContent = '❌ Erro ao carregar dados do jogador: ' + err.message;
+        }
       }
     }
 
     function fecharInspecionar() {
+      if (liveInspectTimer) {
+        clearInterval(liveInspectTimer);
+        liveInspectTimer = null;
+      }
+      currentInspectingNick = null;
       document.getElementById('inspect-modal').classList.add('hidden');
     }
 
