@@ -10,6 +10,8 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.net.InetSocketAddress;
@@ -20,7 +22,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.Collection;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
@@ -30,10 +33,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String TELEM_URL = "https://fffff-autoforge.vercel.app/api/telemetry/";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // Intervalo de verificação dos jogadores online (em ticks). 200 ticks = 10 segundos.
-    private static final long CHECK_INTERVAL_TICKS  = 200L;
-    // Intervalo de envio de telemetria periódica (em ticks). 1200 ticks = 60 segundos.
-    private static final long TELEM_INTERVAL_TICKS  = 1200L;
+    // 200 ticks = 10s (checagem de ban)
+    private static final long CHECK_INTERVAL_TICKS = 200L;
+    // 600 ticks = 30s (telemetria periódica)
+    private static final long TELEM_INTERVAL_TICKS = 600L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -52,7 +55,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .build();
         getServer().getPluginManager().registerEvents(this, this);
 
-        // ── Task: verifica jogadores online a cada 10s ──────────────────────
+        // ── Task: checagem de ban a cada 10s ─────────────────────────────────
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -64,7 +67,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
                     if (banned) {
                         final String banBody = body;
-                        log.info("[Whitelist] 🔨 '" + cleanName + "' banido online! Expulsando...");
+                        log.info("[Whitelist] 🔨 '" + cleanName + "' foi BANIDO! Expulsando...");
                         getServer().getScheduler().runTask(this, () -> {
                             if (player.isOnline()) {
                                 player.kick(buildBanMessage(cleanName, banBody));
@@ -72,21 +75,23 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                         });
                     }
                 } catch (Exception e) {
-                    log.fine("[Whitelist] Erro verificando '" + cleanName + "': " + e.getMessage());
+                    log.fine("[Whitelist] Erro checando ban de '" + cleanName + "': " + e.getMessage());
                 }
             }
         }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
 
-        // ── Task: telemetria periódica a cada 60s ───────────────────────────
-        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+        // ── Task: telemetria a cada 30s (captura na thread principal, envia async) ──
+        getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
                 if (BYPASS.contains(cleanName.toLowerCase())) continue;
-                enviarTelemetria(player, cleanName, "update");
+                // Captura sincronamente na thread principal do servidor
+                String payload = buildTelemetryJson(player, cleanName, "update");
+                getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        log.info("Mapa Bermuda Whitelist & Ban v1.5 - ATIVA! Conectada em: " + API_URL);
+        log.info("Mapa Bermuda Whitelist & Telemetria v1.6 - ATIVA!");
     }
 
     @Override
@@ -94,73 +99,122 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         log.info("[Whitelist] Plugin desativado.");
     }
 
+    // ── Login: atrasa 1 tick para garantir que o jogador já carregou dados ──
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         String cleanName = cleanNick(player.getName());
         if (BYPASS.contains(cleanName.toLowerCase())) return;
-        getServer().getScheduler().runTaskAsynchronously(this, () -> enviarTelemetria(player, cleanName, "login"));
+
+        getServer().getScheduler().runTaskLater(this, () -> {
+            if (!player.isOnline()) return;
+            String payload = buildTelemetryJson(player, cleanName, "login");
+            getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+        }, 20L); // 1 segundo após entrar
     }
 
+    // ── Logout: captura sincronamente antes do player desconectar ──
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         String cleanName = cleanNick(player.getName());
         if (BYPASS.contains(cleanName.toLowerCase())) return;
-        // Captura dados antes de sair (sincronamente para garantir acesso)
-        int xp = player.getTotalExperience();
-        int level = player.getLevel();
-        double health = player.getHealth();
-        int food = player.getFoodLevel();
-        String world = player.getWorld().getName();
-        String loc = (int)player.getLocation().getX() + "," + (int)player.getLocation().getY() + "," + (int)player.getLocation().getZ();
-        String gamemode = player.getGameMode().name();
-        String ip = getPlayerIp(player);
 
-        getServer().getScheduler().runTaskAsynchronously(this, () -> {
-            try {
-                String payload = "{\"secret\":\"" + PLUGIN_SECRET + "\","
-                    + "\"event\":\"logout\","
-                    + "\"xp\":" + xp + ","
-                    + "\"level\":" + level + ","
-                    + "\"health\":" + String.format("%.1f", health) + ","
-                    + "\"food\":" + food + ","
-                    + "\"world\":\"" + escJson(world) + "\","
-                    + "\"location\":\"" + escJson(loc) + "\","
-                    + "\"gamemode\":\"" + escJson(gamemode) + "\","
-                    + "\"ip\":\"" + escJson(ip) + "\"}";
-
-                postTelemetria(cleanName, payload);
-            } catch (Exception ignored) {}
-        });
+        String payload = buildTelemetryJson(player, cleanName, "logout");
+        getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
-    private void enviarTelemetria(Player player, String cleanName, String event) {
+    // ── Constrói JSON completo com inventário e status (Roda na Main Thread) ──
+    private String buildTelemetryJson(Player player, String cleanName, String event) {
         try {
             int xp = player.getTotalExperience();
             int level = player.getLevel();
-            double health = player.getHealth();
+            int health = (int) Math.round(player.getHealth());
             int food = player.getFoodLevel();
-            String world = player.getWorld().getName();
-            String loc = (int)player.getLocation().getX() + "," + (int)player.getLocation().getY() + "," + (int)player.getLocation().getZ();
+            String world = player.getWorld() != null ? player.getWorld().getName() : "world";
+            int x = (int) player.getLocation().getX();
+            int y = (int) player.getLocation().getY();
+            int z = (int) player.getLocation().getZ();
             String gamemode = player.getGameMode().name();
             String ip = getPlayerIp(player);
-            int invSlots = countInventoryItems(player);
 
-            String payload = "{\"secret\":\"" + PLUGIN_SECRET + "\","
+            PlayerInventory inv = player.getInventory();
+            String helmet = formatItem(inv.getHelmet());
+            String chestplate = formatItem(inv.getChestplate());
+            String leggings = formatItem(inv.getLeggings());
+            String boots = formatItem(inv.getBoots());
+            String mainHand = formatItem(inv.getItemInMainHand());
+            String offHand = formatItem(inv.getItemInOffHand());
+
+            // Coleta itens da mochila
+            StringBuilder itemsJson = new StringBuilder("[");
+            boolean first = true;
+            for (ItemStack is : inv.getStorageContents()) {
+                if (is != null && !is.getType().isAir()) {
+                    String itemStr = formatItemObj(is);
+                    if (itemStr != null) {
+                        if (!first) itemsJson.append(",");
+                        itemsJson.append(itemStr);
+                        first = false;
+                    }
+                }
+            }
+            itemsJson.append("]");
+
+            return "{"
+                + "\"secret\":\"" + PLUGIN_SECRET + "\","
                 + "\"event\":\"" + escJson(event) + "\","
                 + "\"xp\":" + xp + ","
                 + "\"level\":" + level + ","
-                + "\"health\":" + String.format("%.1f", health) + ","
+                + "\"health\":" + health + ","
                 + "\"food\":" + food + ","
                 + "\"world\":\"" + escJson(world) + "\","
-                + "\"location\":\"" + escJson(loc) + "\","
+                + "\"x\":" + x + ","
+                + "\"y\":" + y + ","
+                + "\"z\":" + z + ","
+                + "\"location\":\"" + x + ", " + y + ", " + z + "\","
                 + "\"gamemode\":\"" + escJson(gamemode) + "\","
                 + "\"ip\":\"" + escJson(ip) + "\","
-                + "\"inventory_slots\":" + invSlots + "}";
+                + "\"armor\":{"
+                +   "\"helmet\":" + (helmet == null ? "null" : "\"" + escJson(helmet) + "\"") + ","
+                +   "\"chestplate\":" + (chestplate == null ? "null" : "\"" + escJson(chestplate) + "\"") + ","
+                +   "\"leggings\":" + (leggings == null ? "null" : "\"" + escJson(leggings) + "\"") + ","
+                +   "\"boots\":" + (boots == null ? "null" : "\"" + escJson(boots) + "\"")
+                + "},"
+                + "\"hand\":{"
+                +   "\"main\":" + (mainHand == null ? "null" : "\"" + escJson(mainHand) + "\"") + ","
+                +   "\"off\":" + (offHand == null ? "null" : "\"" + escJson(offHand) + "\"")
+                + "},"
+                + "\"items\":" + itemsJson.toString()
+                + "}";
+        } catch (Exception e) {
+            log.warning("[Whitelist] Erro ao construir telemetria de " + cleanName + ": " + e.getMessage());
+            return "{\"secret\":\"" + PLUGIN_SECRET + "\",\"event\":\"" + escJson(event) + "\"}";
+        }
+    }
 
-            postTelemetria(cleanName, payload);
-        } catch (Exception ignored) {}
+    private String formatItem(ItemStack item) {
+        if (item == null || item.getType().isAir()) return null;
+        String name = prettyName(item.getType().name());
+        return item.getAmount() > 1 ? name + " x" + item.getAmount() : name;
+    }
+
+    private String formatItemObj(ItemStack item) {
+        if (item == null || item.getType().isAir()) return null;
+        String name = prettyName(item.getType().name());
+        int amount = item.getAmount();
+        return "{\"name\":\"" + escJson(name) + "\",\"amount\":" + amount + ",\"type\":\"" + escJson(item.getType().name()) + "\"}";
+    }
+
+    private String prettyName(String type) {
+        String[] parts = type.toLowerCase().split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (!p.isEmpty()) {
+                sb.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1)).append(" ");
+            }
+        }
+        return sb.toString().trim();
     }
 
     private void postTelemetria(String nick, String json) {
@@ -168,20 +222,27 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             String encodedNick = URLEncoder.encode(nick, StandardCharsets.UTF_8);
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(TELEM_URL + encodedNick))
-                .timeout(Duration.ofSeconds(5))
+                .timeout(Duration.ofSeconds(6))
                 .header("Content-Type", "application/json")
-                .header("User-Agent", "MapaBermuda-Plugin/1.5")
+                .header("User-Agent", "MapaBermuda-Plugin/1.6")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
-            httpClient.send(req, HttpResponse.BodyHandlers.ofString());
-        } catch (Exception ignored) {}
+            HttpResponse<String> res = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() == 200) {
+                log.info("[Whitelist] 📡 Telemetria sincronizada: " + nick);
+            } else {
+                log.warning("[Whitelist] ⚠️ Telemetria falhou (" + res.statusCode() + ") para: " + nick);
+            }
+        } catch (Exception e) {
+            log.fine("[Whitelist] Erro HTTP telemetria " + nick + ": " + e.getMessage());
+        }
     }
 
     private String callApi(String url) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(Duration.ofSeconds(5))
-            .header("User-Agent", "MapaBermuda-Plugin/1.5")
+            .header("User-Agent", "MapaBermuda-Plugin/1.6")
             .GET()
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -191,27 +252,21 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private String getPlayerIp(Player player) {
         try {
             InetSocketAddress addr = player.getAddress();
-            return addr != null ? addr.getAddress().getHostAddress() : "unknown";
-        } catch (Exception e) { return "unknown"; }
-    }
-
-    private int countInventoryItems(Player player) {
-        try {
-            int count = 0;
-            for (var item : player.getInventory().getContents()) {
-                if (item != null && !item.getType().isAir()) count++;
-            }
-            return count;
-        } catch (Exception e) { return 0; }
+            return addr != null ? addr.getAddress().getHostAddress() : "127.0.0.1";
+        } catch (Exception e) { return "127.0.0.1"; }
     }
 
     private String cleanNick(String name) {
-        return name.startsWith(".") ? name.substring(1) : name;
+        if (name == null) return "";
+        if (name.startsWith(".") || name.startsWith("*") || name.startsWith("_")) {
+            return name.substring(1);
+        }
+        return name;
     }
 
     private String escJson(String s) {
         if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ").replace("\r", " ");
     }
 
     private String extractJsonField(String json, String field) {
