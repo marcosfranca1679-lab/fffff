@@ -471,6 +471,53 @@ app.get('/api/bans', async (req, res) => {
 //  ROTAS DO ADMIN
 // ════════════════════════════════════════════════════════════════════════════
 
+// Helper para listar jogadores jogando em tempo real (Ao Vivo)
+async function getOnlinePlayersList() {
+  const now = Date.now();
+  const onlineMap = new Map();
+
+  // 1. Consulta registros de telemetria recentes no Supabase (últimos 30 segundos)
+  try {
+    const limite30s = new Date(now - 30 * 1000).toISOString();
+    const { data: telemRows } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('author_role', 'telemetry')
+      .gte('created_at', limite30s);
+
+    for (const row of (telemRows || [])) {
+      try {
+        const payload = JSON.parse(row.content);
+        const repTime = new Date(payload.reported_at || row.created_at).getTime();
+        if (now - repTime < 25000 && payload.event !== 'logout') {
+          onlineMap.set(row.author_nick.toLowerCase(), {
+            ...payload,
+            nick: row.author_nick,
+            secondsAgo: Math.max(0, Math.round((now - repTime) / 1000))
+          });
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  // 2. Mescla com o cache em memória (tempo real ao vivo com 0ms)
+  for (const [key, payload] of liveTelemetryCache.entries()) {
+    if (!payload) continue;
+    const repTime = payload.reported_at ? new Date(payload.reported_at).getTime() : 0;
+    if (now - repTime < 25000 && payload.event !== 'logout') {
+      onlineMap.set(key, {
+        ...payload,
+        nick: payload.nick || key,
+        secondsAgo: Math.max(0, Math.round((now - repTime) / 1000))
+      });
+    } else if (payload.event === 'logout' || now - repTime >= 25000) {
+      onlineMap.delete(key);
+    }
+  }
+
+  return Array.from(onlineMap.values());
+}
+
 app.get('/api/admin/players', requireAdmin, async (req, res) => {
   try {
     const search = (req.query.search || '').trim();
@@ -483,8 +530,12 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
+    const onlineList = await getOnlinePlayersList();
+    const onlineNickSet = new Set(onlineList.map(o => (o.nick || '').toLowerCase()));
+
     const players = data || [];
     for (const p of players) {
+      p.isOnline = onlineNickSet.has((p.nick || '').toLowerCase());
       if (p.status === 'banned') {
         const ban = parseBanInfo(p.ban_reason);
         if (ban.expired) {
@@ -507,8 +558,20 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
       pending:  players.filter(p => p.status === 'pending'),
       approved: players.filter(p => p.status === 'approved'),
       rejected: players.filter(p => p.status === 'rejected'),
-      banned:   players.filter(p => p.status === 'banned')
+      banned:   players.filter(p => p.status === 'banned'),
+      online:   onlineList,
+      totalOnline: onlineList.length
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint exclusivo para jogadores online ao vivo
+app.get('/api/admin/online-players', requireAdmin, async (req, res) => {
+  try {
+    const list = await getOnlinePlayersList();
+    res.json(list);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
