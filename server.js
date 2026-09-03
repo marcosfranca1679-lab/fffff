@@ -43,8 +43,22 @@ function verifyAuthToken(token) {
   }
 }
 
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers['x-real-ip'] || req.socket?.remoteAddress || '127.0.0.1';
+}
+
+const userWebIps = new Map();
+const bannedIpsCache = new Map();
+
 // Middleware de Autenticação via Header Bearer
 app.use((req, res, next) => {
+  const clientIp = getClientIp(req);
+  req.clientIp = clientIp;
+
   let token = null;
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -59,6 +73,9 @@ app.use((req, res, next) => {
     if (payload) {
       req.user = payload.user;
       req.isAdmin = payload.isAdmin || false;
+      if (req.user && req.user.nick) {
+        userWebIps.set(req.user.nick.toLowerCase(), clientIp);
+      }
     }
   }
   next();
@@ -672,6 +689,189 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
   }
 });
 
+// Rota para o usuário consultar seu IP público da web
+app.get('/api/my-ip', (req, res) => {
+  res.json({ ip: getClientIp(req) });
+});
+
+// ─── SISTEMA DE BANIMENTO POR IP ──────────────────────────────────────────
+async function checkIpBan(ip) {
+  if (!ip) return null;
+  const cleanIp = ip.includes(':') ? ip.split(':')[0] : ip;
+  if (cleanIp === '127.0.0.1' || cleanIp === 'localhost') return null;
+
+  // 1. Cache em memória
+  const cached = bannedIpsCache.get(cleanIp);
+  if (cached) {
+    if (cached.expiresAt && Date.now() >= new Date(cached.expiresAt).getTime()) {
+      bannedIpsCache.delete(cleanIp);
+      supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', cleanIp).catch(() => {});
+      return null;
+    }
+    return cached;
+  }
+
+  // 2. Banco de dados Supabase
+  try {
+    const { data } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('author_role', 'ip_ban')
+      .eq('author_nick', cleanIp)
+      .maybeSingle();
+
+    if (!data) return null;
+
+    let parsed = {};
+    try { parsed = JSON.parse(data.content); } catch { parsed = { reason: data.content }; }
+
+    if (parsed.expiresAt && Date.now() >= new Date(parsed.expiresAt).getTime()) {
+      supabase.from('messages').delete().eq('id', data.id).catch(() => {});
+      return null;
+    }
+
+    const info = {
+      ip: cleanIp,
+      reason: parsed.reason || 'IP Bloqueado pelo Administrador',
+      isPermanent: !parsed.expiresAt,
+      expiresAt: parsed.expiresAt,
+      remaining: calculateRemaining(parsed.expiresAt),
+      associatedNick: data.author_platform
+    };
+    bannedIpsCache.set(cleanIp, info);
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+function calculateRemaining(expiresAt) {
+  if (!expiresAt) return 'Permanente';
+  const diffMs = new Date(expiresAt).getTime() - Date.now();
+  if (diffMs <= 0) return 'Expirado';
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  if (diffDays > 0) return `${diffDays}d ${diffHours % 24}h`;
+  if (diffHours > 0) return `${diffHours}h ${diffMins % 60}m`;
+  return `${Math.max(1, diffMins)}m`;
+}
+
+// Banir IP
+app.post('/api/admin/ip-ban', requireAdmin, async (req, res) => {
+  try {
+    let ip = (req.body.ip || '').trim();
+    if (ip.includes(':')) ip = ip.split(':')[0];
+    if (!ip) return res.status(400).json({ error: 'IP obrigatório' });
+
+    const nick = (req.body.nick || '').trim();
+    const reasonText = (req.body.reason || 'Violação das regras (Ban de IP)').trim();
+    const durationUnit = req.body.durationUnit || 'permanent';
+    const durationValue = parseInt(req.body.durationValue, 10) || 0;
+
+    let expiresAt = null;
+    let remainingLabel = 'Permanente';
+    if (durationUnit !== 'permanent' && durationValue > 0) {
+      const ms = durationUnit === 'minutes' ? durationValue * 60 * 1000
+               : durationUnit === 'hours' ? durationValue * 3600 * 1000
+               : durationValue * 24 * 3600 * 1000;
+      expiresAt = new Date(Date.now() + ms).toISOString();
+      remainingLabel = `${durationValue} ${durationUnit}`;
+    }
+
+    const now = new Date().toISOString();
+    const info = {
+      ip,
+      reason: reasonText,
+      durationUnit,
+      durationValue,
+      expiresAt,
+      bannedAt: now,
+      associatedNick: nick || 'Nenhum'
+    };
+
+    bannedIpsCache.set(ip, { ...info, isPermanent: !expiresAt, remaining: remainingLabel });
+
+    // Salva no Supabase (remove se já existia e insere)
+    await supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', ip);
+    await supabase.from('messages').insert([{
+      author_nick: ip,
+      author_role: 'ip_ban',
+      author_platform: nick || 'Nenhum',
+      content: JSON.stringify(info),
+      created_at: now
+    }]);
+
+    // Se passou um nick, bane o nick também
+    if (nick) {
+      await supabase.from('players').upsert({
+        nick,
+        status: 'banned',
+        ban_reason: `${reasonText} [IP BAN]${expiresAt ? ` [EXPIRA:${expiresAt}]` : ''}`,
+        updated_at: now
+      }, { onConflict: 'nick' }).catch(() => {});
+    }
+
+    res.json({ success: true, message: `🚫 IP ${ip} foi BANIDO! Duração: ${remainingLabel}.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Desbanir IP
+app.post('/api/admin/ip-unban/:ip', requireAdmin, async (req, res) => {
+  try {
+    let ip = req.params.ip.trim();
+    if (ip.includes(':')) ip = ip.split(':')[0];
+
+    bannedIpsCache.delete(ip);
+    await supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', ip);
+
+    res.json({ success: true, message: `✅ IP ${ip} foi desbanido!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Listar IPs Banidos
+app.get('/api/admin/ip-bans', requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('author_role', 'ip_ban')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const list = [];
+    const now = Date.now();
+
+    for (const row of (data || [])) {
+      let parsed = {};
+      try { parsed = JSON.parse(row.content); } catch { parsed = { reason: row.content }; }
+
+      if (parsed.expiresAt && now >= new Date(parsed.expiresAt).getTime()) {
+        supabase.from('messages').delete().eq('id', row.id).catch(() => {});
+        bannedIpsCache.delete(row.author_nick);
+      } else {
+        list.push({
+          ip: row.author_nick,
+          reason: parsed.reason || 'IP Bloqueado',
+          remaining: calculateRemaining(parsed.expiresAt),
+          isPermanent: !parsed.expiresAt,
+          bannedAt: parsed.bannedAt || row.created_at,
+          associatedNick: row.author_platform || parsed.associatedNick || '–'
+        });
+      }
+    }
+
+    res.json(list);
+  } catch (err) {
+    res.json([]);
+  }
+});
+
 // ─── TELEMETRIA DO PLUGIN AO VIVO (login, logout, XP, inventário) ──────────
 const liveTelemetryCache = new Map();
 const lastDbSyncMap = new Map();
@@ -807,6 +1007,12 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       currentBan = parseBanInfo(player.ban_reason);
     }
 
+    // 5. IPs detectados (Navegador e Jogo Minecraft)
+    const webIp = userWebIps.get(key) || null;
+    const gameIp = (gameData && gameData.ip && gameData.ip !== '127.0.0.1') ? gameData.ip : null;
+    const isGameIpBanned = gameIp ? !!(await checkIpBan(gameIp)) : false;
+    const isWebIpBanned = webIp ? !!(await checkIpBan(webIp)) : false;
+
     res.json({
       player: player || { nick, status: 'unknown' },
       currentBan,
@@ -814,6 +1020,10 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       chatMessages: (chatMsgs || []).map(m => ({ content: m.content, at: m.created_at })),
       gameData,
       isLive,
+      webIp,
+      gameIp,
+      isGameIpBanned,
+      isWebIpBanned,
       totalBans: banHistory.length
     });
   } catch (err) {
@@ -826,6 +1036,25 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
 app.get('/api/check/:nick', async (req, res) => {
   try {
     const nick = req.params.nick.trim();
+    const ip = (req.query.ip || '').trim();
+
+    // 1. Verifica se o IP está banido
+    if (ip) {
+      const ipBan = await checkIpBan(ip);
+      if (ipBan) {
+        return res.json({
+          allowed: false,
+          banned: true,
+          ipBanned: true,
+          reason: `[IP BAN] ${ipBan.reason}`,
+          remaining: ipBan.remaining,
+          isPermanent: ipBan.isPermanent,
+          nick,
+          ip
+        });
+      }
+    }
+
     const { data: player, error } = await supabase
       .from('players')
       .select('status, ban_reason')
