@@ -3,12 +3,14 @@ package com.mapabermuda.whitelist;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Statistic;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.player.PlayerExpChangeEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
@@ -95,7 +97,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        log.info("Mapa Bermuda Whitelist & Ban por IP v1.8 - ATIVA!");
+        log.info("Mapa Bermuda Whitelist, IP Ban, Horas & Mortes v1.9 - ATIVA!");
     }
 
     @Override
@@ -127,6 +129,45 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
         log.info("[Whitelist] 🔴 Desconexao: " + cleanName);
         String payload = buildTelemetryJson(player, cleanName, "logout");
+        getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+    }
+
+    // ── Evento de Morte (PlayerDeathEvent) ──
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        String cleanName = cleanNick(player.getName());
+        if (BYPASS.contains(cleanName.toLowerCase())) return;
+
+        String deathMsg = event.getDeathMessage();
+        if (deathMsg == null || deathMsg.isBlank()) {
+            deathMsg = cleanName + " morreu.";
+        }
+
+        String world = player.getWorld() != null ? player.getWorld().getName() : "world";
+        int x = (int) player.getLocation().getX();
+        int y = (int) player.getLocation().getY();
+        int z = (int) player.getLocation().getZ();
+
+        String killerName = null;
+        if (player.getKiller() != null) {
+            killerName = cleanNick(player.getKiller().getName());
+        }
+
+        log.info("[Whitelist] 💀 Morte registrada: " + deathMsg + " [" + world + " " + x + "," + y + "," + z + "]");
+
+        String payload = "{"
+            + "\"secret\":\"" + PLUGIN_SECRET + "\","
+            + "\"event\":\"death\","
+            + "\"deathMessage\":\"" + escJson(deathMsg) + "\","
+            + "\"world\":\"" + escJson(world) + "\","
+            + "\"x\":" + x + ","
+            + "\"y\":" + y + ","
+            + "\"z\":" + z + ","
+            + "\"location\":\"" + x + ", " + y + ", " + z + "\","
+            + "\"killer\":" + (killerName == null ? "null" : "\"" + escJson(killerName) + "\"")
+            + "}";
+
         getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
@@ -181,7 +222,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }, 1L);
     }
 
-    // ── Constrói JSON completo (Roda na Main Thread) ──
+    // ── Constrói JSON completo com Estatísticas (Roda na Main Thread) ──
     private String buildTelemetryJson(Player player, String cleanName, String event) {
         try {
             int xp = player.getTotalExperience();
@@ -194,6 +235,23 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             int z = (int) player.getLocation().getZ();
             String gamemode = player.getGameMode().name();
             String ip = getPlayerIp(player);
+
+            // Estatísticas nativas do Minecraft (Tempo jogado, Mortes, Kills)
+            int playTicks = 0;
+            int totalDeaths = 0;
+            int mobKills = 0;
+            int playerKills = 0;
+            try {
+                playTicks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+                totalDeaths = player.getStatistic(Statistic.DEATHS);
+                mobKills = player.getStatistic(Statistic.MOB_KILLS);
+                playerKills = player.getStatistic(Statistic.PLAYER_KILLS);
+            } catch (Exception ignored) {}
+
+            long totalSeconds = playTicks / 20L;
+            long hours = totalSeconds / 3600;
+            long minutes = (totalSeconds % 3600) / 60;
+            String playtimeFormatted = (hours > 0 ? hours + "h " : "") + minutes + "m";
 
             PlayerInventory inv = player.getInventory();
             String helmet = formatItem(inv.getHelmet());
@@ -231,6 +289,11 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 + "\"location\":\"" + x + ", " + y + ", " + z + "\","
                 + "\"gamemode\":\"" + escJson(gamemode) + "\","
                 + "\"ip\":\"" + escJson(ip) + "\","
+                + "\"playtimeSeconds\":" + totalSeconds + ","
+                + "\"playtimeFormatted\":\"" + escJson(playtimeFormatted) + "\","
+                + "\"totalDeaths\":" + totalDeaths + ","
+                + "\"mobKills\":" + mobKills + ","
+                + "\"playerKills\":" + playerKills + ","
                 + "\"armor\":{"
                 +   "\"helmet\":" + (helmet == null ? "null" : "\"" + escJson(helmet) + "\"") + ","
                 +   "\"chestplate\":" + (chestplate == null ? "null" : "\"" + escJson(chestplate) + "\"") + ","
@@ -280,7 +343,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 .uri(URI.create(TELEM_URL + encodedNick))
                 .timeout(Duration.ofSeconds(4))
                 .header("Content-Type", "application/json")
-                .header("User-Agent", "MapaBermuda-Plugin/1.8")
+                .header("User-Agent", "MapaBermuda-Plugin/1.9")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
             httpClient.send(req, HttpResponse.BodyHandlers.discarding());
@@ -291,7 +354,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(Duration.ofSeconds(4))
-            .header("User-Agent", "MapaBermuda-Plugin/1.8")
+            .header("User-Agent", "MapaBermuda-Plugin/1.9")
             .GET()
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
