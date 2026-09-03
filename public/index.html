@@ -828,7 +828,19 @@
     function iniciarAutoRefresh() {
       setInterval(() => carregarChat(), 2500);
       setInterval(() => carregarBans(), 3000);
-      setInterval(() => { if (isUserAdmin) carregarAdminData(); }, 3000);
+      setInterval(() => {
+        if (isUserAdmin) {
+          carregarAdminData();
+          const bansList = document.getElementById('admin-bans-list');
+          if (bansList && !bansList.classList.contains('hidden')) {
+            carregarAdminBans();
+          }
+          const ipBansList = document.getElementById('admin-ip-bans-list');
+          if (ipBansList && !ipBansList.classList.contains('hidden')) {
+            carregarAdminIpBans();
+          }
+        }
+      }, 3000);
       setInterval(() => atualizarMeuStatusSilencioso(), 5000);
     }
 
@@ -1593,7 +1605,17 @@
           webIp,
           gameIp,
           isGameIpBanned: d.isGameIpBanned,
-          isWebIpBanned: d.isWebIpBanned
+          isWebIpBanned: d.isWebIpBanned,
+          playtime: d.playtimeFormatted,
+          totalDeaths: d.totalDeaths,
+          bansLen: (d.banHistory || []).length,
+          bansLast: (d.banHistory && d.banHistory[0]) ? (d.banHistory[0].logged_at || d.banHistory[0].banned_at) : null,
+          deathsLen: (d.deathHistory || []).length,
+          deathsLast: (d.deathHistory && d.deathHistory[0]) ? d.deathHistory[0].at : null,
+          sessionsLen: (d.sessionHistory || []).length,
+          sessionsLast: (d.sessionHistory && d.sessionHistory[0]) ? d.sessionHistory[0].at : null,
+          chatLen: (d.chatMessages || []).length,
+          chatLast: (d.chatMessages && d.chatMessages[0]) ? d.chatMessages[0].at : null
         });
 
         if (isBackgroundUpdate && currentPayloadHash === lastInspectPayloadHash) {
@@ -1742,111 +1764,109 @@
           document.getElementById('inspect-inventory-section').classList.add('hidden');
         }
 
-        // 5. Histórico de Bans (Permanente no Supabase - Nunca é apagado)
-        if (!isBackgroundUpdate) {
-          const bans = d.banHistory || [];
-          document.getElementById('inspect-total-bans').textContent = `${bans.length} ${bans.length === 1 ? 'registro' : 'registros'}`;
-          document.getElementById('inspect-bans').innerHTML = bans.length === 0
-            ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhum ban registrado para este jogador. ✨</div>'
-            : bans.map((b, idx) => {
-                const isUnban = b.action === 'unban';
-                if (isUnban) {
-                  return `
-                    <div class="bg-emerald-950/30 border border-emerald-500/20 rounded-xl px-3 py-2 space-y-1">
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs font-bold text-emerald-300">🔓 ${escapeHtml(b.reason || 'Desbanido pelo Administrador')}</span>
-                        <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-500/30">REVOGADO</span>
-                      </div>
-                      <div class="text-[9px] text-slate-400">
-                        <span>Data: ${b.logged_at ? new Date(b.logged_at).toLocaleString('pt-BR') : '–'}</span>
-                      </div>
-                    </div>
-                  `;
-                }
-
-                const isCurrentActive = (p.status === 'banned' && idx === 0);
+        // 5. Histórico de Bans (Permanente no Supabase - Atualização AO VIVO)
+        const bans = d.banHistory || [];
+        document.getElementById('inspect-total-bans').textContent = `${bans.length} ${bans.length === 1 ? 'registro' : 'registros'}`;
+        document.getElementById('inspect-bans').innerHTML = bans.length === 0
+          ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhum ban registrado para este jogador. ✨</div>'
+          : bans.map((b, idx) => {
+              const isUnban = b.action === 'unban';
+              if (isUnban) {
                 return `
-                  <div class="bg-rose-950/40 border border-rose-500/20 rounded-xl px-3 py-2 space-y-1">
+                  <div class="bg-emerald-950/30 border border-emerald-500/20 rounded-xl px-3 py-2 space-y-1">
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-xs font-bold text-rose-300">🔨 ${escapeHtml(b.reason || 'Violação das regras')}</span>
-                      <div class="flex items-center gap-1">
-                        ${isCurrentActive ? '<span class="text-[8px] font-black px-1.5 py-0.5 rounded bg-red-600 text-white animate-pulse">ATIVO</span>' : '<span class="text-[8px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-slate-300">HISTÓRICO</span>'}
-                        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-500/30">${escapeHtml(b.duration || 'Permanente')}</span>
-                      </div>
+                      <span class="text-xs font-bold text-emerald-300">🔓 ${escapeHtml(b.reason || 'Desbanido pelo Administrador')}</span>
+                      <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-500/30">REVOGADO</span>
+                    </div>
+                    <div class="text-[9px] text-slate-400">
+                      <span>Data: ${b.logged_at ? new Date(b.logged_at).toLocaleString('pt-BR') : '–'}</span>
+                    </div>
+                  </div>
+                `;
+              }
+
+              const isCurrentActive = (p.status === 'banned' && idx === 0);
+              return `
+                <div class="bg-rose-950/40 border border-rose-500/20 rounded-xl px-3 py-2 space-y-1">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-bold text-rose-300">🔨 ${escapeHtml(b.reason || 'Violação das regras')}</span>
+                    <div class="flex items-center gap-1">
+                      ${isCurrentActive ? '<span class="text-[8px] font-black px-1.5 py-0.5 rounded bg-red-600 text-white animate-pulse">ATIVO</span>' : '<span class="text-[8px] font-bold px-1.5 py-0.5 rounded bg-white/10 text-slate-300">HISTÓRICO</span>'}
+                      <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-500/30">${escapeHtml(b.duration || 'Permanente')}</span>
+                    </div>
+                  </div>
+                  <div class="text-[9px] text-slate-400 flex items-center justify-between">
+                    <span>Data: ${b.logged_at ? new Date(b.logged_at).toLocaleString('pt-BR') : '–'}</span>
+                    ${b.expire_at ? `<span class="text-amber-300">Expira: ${new Date(b.expire_at).toLocaleString('pt-BR')}</span>` : ''}
+                  </div>
+                </div>
+              `;
+            }).join('');
+
+        // 5.1 Histórico de Mortes (Atualização AO VIVO)
+        const deaths = d.deathHistory || [];
+        const deathsEl = document.getElementById('inspect-deaths');
+        const deathsTotalEl = document.getElementById('inspect-total-deaths');
+        if (deathsTotalEl) {
+          const totalDeathsCount = (gd && gd.totalDeaths !== undefined) ? gd.totalDeaths : deaths.length;
+          deathsTotalEl.textContent = `${totalDeathsCount} ${totalDeathsCount === 1 ? 'morte' : 'mortes'}`;
+        }
+        if (deathsEl) {
+          deathsEl.innerHTML = deaths.length === 0
+            ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma morte registrada ainda. O jogador é imortal! 🛡️</div>'
+            : deaths.map(m => `
+              <div class="bg-red-950/40 border border-red-500/20 rounded-xl px-3 py-2 space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-red-300">💀 ${escapeHtml(m.message || 'Morte em combate')}</span>
+                  ${m.killer ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">Assassino: ${escapeHtml(m.killer)}</span>` : ''}
+                </div>
+                <div class="text-[9px] text-slate-400 flex items-center justify-between">
+                  <span class="font-mono text-cyan-300">📍 ${escapeHtml(m.world || 'world')} [${escapeHtml(m.location || '0, 0, 0')}]</span>
+                  <span>${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</span>
+                </div>
+              </div>
+            `).join('');
+        }
+
+        // 5.2 Histórico de Conexões (Entrada e Saída - Atualização AO VIVO)
+        const sessions = d.sessionHistory || [];
+        const sessionsEl = document.getElementById('inspect-sessions');
+        const sessionsTotalEl = document.getElementById('inspect-total-sessions');
+        if (sessionsTotalEl) {
+          sessionsTotalEl.textContent = `${sessions.length} ${sessions.length === 1 ? 'conexão' : 'conexões'}`;
+        }
+        if (sessionsEl) {
+          sessionsEl.innerHTML = sessions.length === 0
+            ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma conexão registrada ainda. 🚪</div>'
+            : sessions.map(s => {
+                const isLogin = s.event === 'login';
+                return `
+                  <div class="${isLogin ? 'bg-emerald-950/30 border-emerald-500/20' : 'bg-slate-900/50 border-white/[0.06]'} border rounded-xl px-3 py-2 space-y-1">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-bold ${isLogin ? 'text-emerald-300' : 'text-slate-300'} flex items-center gap-1.5">
+                        ${isLogin ? '🟢 Entrou no Servidor' : '🔴 Saiu do Servidor'}
+                      </span>
+                      <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-cyan-300 border border-white/[0.08]">IP: ${escapeHtml(s.ip || '–')}</span>
                     </div>
                     <div class="text-[9px] text-slate-400 flex items-center justify-between">
-                      <span>Data: ${b.logged_at ? new Date(b.logged_at).toLocaleString('pt-BR') : '–'}</span>
-                      ${b.expire_at ? `<span class="text-amber-300">Expira: ${new Date(b.expire_at).toLocaleString('pt-BR')}</span>` : ''}
+                      <span class="font-mono text-cyan-200">📍 ${escapeHtml(s.world || 'world')} [${escapeHtml(s.location || '0, 0, 0')}]</span>
+                      <span>${s.at ? new Date(s.at).toLocaleString('pt-BR') : ''}</span>
                     </div>
                   </div>
                 `;
               }).join('');
-
-          // 5.1 Histórico de Mortes (apenas no primeiro carregamento)
-          const deaths = d.deathHistory || [];
-          const deathsEl = document.getElementById('inspect-deaths');
-          const deathsTotalEl = document.getElementById('inspect-total-deaths');
-          if (deathsTotalEl) {
-            const totalDeathsCount = (gd && gd.totalDeaths !== undefined) ? gd.totalDeaths : deaths.length;
-            deathsTotalEl.textContent = `${totalDeathsCount} ${totalDeathsCount === 1 ? 'morte' : 'mortes'}`;
-          }
-          if (deathsEl) {
-            deathsEl.innerHTML = deaths.length === 0
-              ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma morte registrada ainda. O jogador é imortal! 🛡️</div>'
-              : deaths.map(m => `
-                <div class="bg-red-950/40 border border-red-500/20 rounded-xl px-3 py-2 space-y-1">
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-bold text-red-300">💀 ${escapeHtml(m.message || 'Morte em combate')}</span>
-                    ${m.killer ? `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30">Assassino: ${escapeHtml(m.killer)}</span>` : ''}
-                  </div>
-                  <div class="text-[9px] text-slate-400 flex items-center justify-between">
-                    <span class="font-mono text-cyan-300">📍 ${escapeHtml(m.world || 'world')} [${escapeHtml(m.location || '0, 0, 0')}]</span>
-                    <span>${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</span>
-                  </div>
-                </div>
-              `).join('');
-          }
-
-          // 5.2 Histórico de Conexões (Entrada e Saída In-Game)
-          const sessions = d.sessionHistory || [];
-          const sessionsEl = document.getElementById('inspect-sessions');
-          const sessionsTotalEl = document.getElementById('inspect-total-sessions');
-          if (sessionsTotalEl) {
-            sessionsTotalEl.textContent = `${sessions.length} ${sessions.length === 1 ? 'conexão' : 'conexões'}`;
-          }
-          if (sessionsEl) {
-            sessionsEl.innerHTML = sessions.length === 0
-              ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma conexão registrada ainda. 🚪</div>'
-              : sessions.map(s => {
-                  const isLogin = s.event === 'login';
-                  return `
-                    <div class="${isLogin ? 'bg-emerald-950/30 border-emerald-500/20' : 'bg-slate-900/50 border-white/[0.06]'} border rounded-xl px-3 py-2 space-y-1">
-                      <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs font-bold ${isLogin ? 'text-emerald-300' : 'text-slate-300'} flex items-center gap-1.5">
-                          ${isLogin ? '🟢 Entrou no Servidor' : '🔴 Saiu do Servidor'}
-                        </span>
-                        <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-cyan-300 border border-white/[0.08]">IP: ${escapeHtml(s.ip || '–')}</span>
-                      </div>
-                      <div class="text-[9px] text-slate-400 flex items-center justify-between">
-                        <span class="font-mono text-cyan-200">📍 ${escapeHtml(s.world || 'world')} [${escapeHtml(s.location || '0, 0, 0')}]</span>
-                        <span>${s.at ? new Date(s.at).toLocaleString('pt-BR') : ''}</span>
-                      </div>
-                    </div>
-                  `;
-                }).join('');
-          }
-
-          // 6. Mensagens do Chat (apenas no primeiro carregamento)
-          const msgs = d.chatMessages || [];
-          document.getElementById('inspect-chat').innerHTML = msgs.length === 0
-            ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma mensagem no chat encontrada.</div>'
-            : msgs.map(m => `
-              <div class="bg-black/40 rounded-lg px-2.5 py-1.5 flex items-start gap-2 border border-white/[0.04]">
-                <div class="text-xs text-slate-200 flex-1 break-words">${escapeHtml(m.content)}</div>
-                <div class="text-[9px] text-slate-500 font-mono flex-shrink-0">${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</div>
-              </div>
-            `).join('');
         }
+
+        // 6. Mensagens do Chat (Atualização AO VIVO)
+        const msgs = d.chatMessages || [];
+        document.getElementById('inspect-chat').innerHTML = msgs.length === 0
+          ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma mensagem no chat encontrada.</div>'
+          : msgs.map(m => `
+            <div class="bg-black/40 rounded-lg px-2.5 py-1.5 flex items-start gap-2 border border-white/[0.04]">
+              <div class="text-xs text-slate-200 flex-1 break-words">${escapeHtml(m.content)}</div>
+              <div class="text-[9px] text-slate-500 font-mono flex-shrink-0">${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</div>
+            </div>
+          `).join('');
 
         // Botões de ação rápida
         document.getElementById('inspect-ban-btn').onclick = () => { fecharInspecionar(); preencherBanForm(nick, 'nick'); };
@@ -1857,10 +1877,8 @@
           fecharInspecionar();
         };
 
-        if (!isBackgroundUpdate) {
-          document.getElementById('inspect-loading').classList.add('hidden');
-          document.getElementById('inspect-content').classList.remove('hidden');
-        }
+        document.getElementById('inspect-loading').classList.add('hidden');
+        document.getElementById('inspect-content').classList.remove('hidden');
       } catch (err) {
         if (!isBackgroundUpdate) {
           document.getElementById('inspect-loading').textContent = '❌ Erro ao carregar dados do jogador: ' + err.message;
