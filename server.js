@@ -19,6 +19,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ─── Helper Seguro para Operações Supabase (evita .catch is not a function) ───
+function safeDb(op) {
+  return Promise.resolve(op).catch(() => {});
+}
+
 // ─── Token Stateless (Funciona 100% no Vercel Serverless sem perder sessão) ───
 function createAuthToken(payload) {
   const data = JSON.stringify({ ...payload, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 }); // 30 dias
@@ -590,7 +595,7 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
         const ban = parseBanInfo(p.ban_reason);
         if (ban.expired) {
           approved++;
-          supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', p.nick).catch(() => {});
+          safeDb(supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', p.nick));
         } else {
           banned++;
         }
@@ -874,18 +879,20 @@ app.delete('/api/admin/remove/:nick', requireAdmin, async (req, res) => {
     if (error) throw error;
 
     // 2. Remove TODOS os registros e logs dele na tabela messages (telemetria, mortes, conexões, bans, chat)
-    await supabase
-      .from('messages')
-      .delete()
-      .ilike('author_nick', nick)
-      .catch(() => {});
+    await safeDb(
+      supabase
+        .from('messages')
+        .delete()
+        .ilike('author_nick', nick)
+    );
 
     // 3. Remove conta cadastrada na tabela auth_users se houver
-    await supabase
-      .from('auth_users')
-      .delete()
-      .ilike('nick', nick)
-      .catch(() => {});
+    await safeDb(
+      supabase
+        .from('auth_users')
+        .delete()
+        .ilike('nick', nick)
+    );
 
     // 4. Limpa caches de memória do servidor
     liveTelemetryCache.delete(key);
@@ -933,7 +940,7 @@ async function checkIpBan(ip) {
   if (cached) {
     if (cached.expiresAt && Date.now() >= new Date(cached.expiresAt).getTime()) {
       bannedIpsCache.delete(cleanIp);
-      supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', cleanIp).catch(() => {});
+      safeDb(supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', cleanIp));
       return null;
     }
     return cached;
@@ -954,7 +961,7 @@ async function checkIpBan(ip) {
     try { parsed = JSON.parse(data.content); } catch { parsed = { reason: data.content }; }
 
     if (parsed.expiresAt && Date.now() >= new Date(parsed.expiresAt).getTime()) {
-      supabase.from('messages').delete().eq('id', data.id).catch(() => {});
+      safeDb(supabase.from('messages').delete().eq('id', data.id));
       return null;
     }
 
@@ -1082,7 +1089,7 @@ app.get('/api/admin/ip-bans', requireAdmin, async (req, res) => {
       try { parsed = JSON.parse(row.content); } catch { parsed = { reason: row.content }; }
 
       if (parsed.expiresAt && now >= new Date(parsed.expiresAt).getTime()) {
-        supabase.from('messages').delete().eq('id', row.id).catch(() => {});
+        safeDb(supabase.from('messages').delete().eq('id', row.id));
         bannedIpsCache.delete(row.author_nick);
       } else {
         list.push({
@@ -1119,13 +1126,13 @@ function registrarConsoleLog(type, content, sender = 'Sistema') {
   if (liveConsoleLogs.length > 200) liveConsoleLogs.shift();
 
   // Persiste no Supabase assincronamente sem travar a requisição
-  supabase.from('messages').insert([{
+  safeDb(supabase.from('messages').insert([{
     author_nick: sender,
     author_role: 'console_log',
     author_platform: type,
     content: JSON.stringify(logEntry),
     created_at: logEntry.created_at
-  }]).catch(() => {});
+  }]));
 
   return logEntry;
 }
@@ -1202,29 +1209,31 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     const lastSync = lastDbSyncMap.get(nick.toLowerCase()) || 0;
     if (now - lastSync > 3000 || payload.event === 'login' || payload.event === 'logout') {
       lastDbSyncMap.set(nick.toLowerCase(), now);
-      supabase.from('messages')
-        .select('id')
-        .ilike('author_nick', nick)
-        .eq('author_role', 'telemetry')
-        .limit(1)
-        .maybeSingle()
-        .then(({ data: existing }) => {
-          if (existing && existing.id) {
-            supabase.from('messages').update({
-              content: JSON.stringify(payload),
-              author_platform: payload.ip || 'plugin',
-              created_at: payload.reported_at
-            }).eq('id', existing.id).catch(() => {});
-          } else {
-            supabase.from('messages').insert([{
-              author_nick: nick,
-              author_role: 'telemetry',
-              author_platform: payload.ip || 'plugin',
-              content: JSON.stringify(payload),
-              created_at: payload.reported_at
-            }]).catch(() => {});
-          }
-        }).catch(() => {});
+      safeDb(
+        supabase.from('messages')
+          .select('id')
+          .ilike('author_nick', nick)
+          .eq('author_role', 'telemetry')
+          .limit(1)
+          .maybeSingle()
+      ).then((res) => {
+        const existing = res && res.data ? res.data : null;
+        if (existing && existing.id) {
+          safeDb(supabase.from('messages').update({
+            content: JSON.stringify(payload),
+            author_platform: payload.ip || 'plugin',
+            created_at: payload.reported_at
+          }).eq('id', existing.id));
+        } else {
+          safeDb(supabase.from('messages').insert([{
+            author_nick: nick,
+            author_role: 'telemetry',
+            author_platform: payload.ip || 'plugin',
+            content: JSON.stringify(payload),
+            created_at: payload.reported_at
+          }]));
+        }
+      });
     }
 
     res.json({ success: true, live: true, commands: pendingConsoleCommands.splice(0) });
@@ -1566,7 +1575,7 @@ app.get('/api/admin/console/logs', requireAdmin, async (req, res) => {
 app.post('/api/admin/console/clear', requireAdmin, async (req, res) => {
   try {
     liveConsoleLogs.length = 0;
-    await supabase.from('messages').delete().eq('author_role', 'console_log').catch(() => {});
+    await safeDb(supabase.from('messages').delete().eq('author_role', 'console_log'));
     registrarConsoleLog('info', '🧹 O console foi limpo pelo Administrador.', 'Sistema');
     res.json({ success: true, message: 'Console limpo com sucesso!' });
   } catch (err) {
