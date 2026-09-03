@@ -97,7 +97,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        log.info("Mapa Bermuda Whitelist, IP Ban, Horas & Mortes v1.9 - ATIVA!");
+        // ── Task: Comandos remotos do Console & Mensagens In-Game (1s) ───────
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+            checkRemoteCommands();
+        }, 20L, 20L);
+
+        log.info("Mapa Bermuda Whitelist, Console & Comandos v2.0 - ATIVA!");
     }
 
     @Override
@@ -343,8 +348,110 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 .uri(URI.create(TELEM_URL + encodedNick))
                 .timeout(Duration.ofSeconds(4))
                 .header("Content-Type", "application/json")
-                .header("User-Agent", "MapaBermuda-Plugin/1.9")
+                .header("User-Agent", "MapaBermuda-Plugin/2.0")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            String body = resp.body();
+            if (body != null && body.contains("\"commands\":[")) {
+                processCommandsJson(body);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // ── Checagem periódica de comandos remotos do console (a cada 1s) ────────
+    private void checkRemoteCommands() {
+        try {
+            String url = API_URL.replace("/api/check/", "/api/plugin/commands?secret=" + PLUGIN_SECRET);
+            HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
+                .header("x-plugin-secret", PLUGIN_SECRET)
+                .header("User-Agent", "MapaBermuda-Plugin/2.0")
+                .GET()
+                .build();
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            String body = resp.body();
+            if (body != null && body.contains("\"commands\":[")) {
+                processCommandsJson(body);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // ── Execução de comandos recebidos do console web & broadcast in-game ─────
+    private void processCommandsJson(String json) {
+        if (json == null || !json.contains("\"commands\":[")) return;
+        int startArr = json.indexOf("\"commands\":[");
+        if (startArr == -1) return;
+        int endArr = json.indexOf("]", startArr);
+        if (endArr == -1) return;
+        String arrContent = json.substring(startArr + 12, endArr).trim();
+        if (arrContent.isEmpty() || arrContent.equals("[]")) return;
+
+        int idx = 0;
+        while ((idx = arrContent.indexOf("{", idx)) != -1) {
+            int close = arrContent.indexOf("}", idx);
+            if (close == -1) break;
+            String obj = arrContent.substring(idx + 1, close);
+            idx = close + 1;
+
+            String type = extractJsonField("{" + obj + "}", "type");
+            String command = extractJsonField("{" + obj + "}", "command");
+            String message = extractJsonField("{" + obj + "}", "message");
+            String sender = extractJsonField("{" + obj + "}", "sender");
+            if (sender == null || sender.isBlank()) sender = "Admin";
+
+            if ("broadcast".equalsIgnoreCase(type) || message != null) {
+                final String broadcastMsg = message != null ? message : command;
+                final String finalSender = sender;
+                getServer().getScheduler().runTask(this, () -> {
+                    Component comp = Component.text()
+                        .append(Component.text("[ADMIN] ", NamedTextColor.GOLD, TextDecoration.BOLD))
+                        .append(Component.text(broadcastMsg, NamedTextColor.WHITE, TextDecoration.BOLD))
+                        .build();
+                    for (Player p : getServer().getOnlinePlayers()) {
+                        p.sendMessage(comp);
+                        try {
+                            p.playSound(p.getLocation(), org.bukkit.Sound.BLOCK_NOTE_BLOCK_BELL, 1.0f, 1.0f);
+                        } catch (Exception ignored) {}
+                    }
+                    log.info("[Console/Broadcast] " + finalSender + ": " + broadcastMsg);
+                });
+            } else if (command != null && !command.isBlank()) {
+                final String cmdToRun = command.startsWith("/") ? command.substring(1) : command;
+                getServer().getScheduler().runTask(this, () -> {
+                    log.info("[Console/Exec] Executando comando: /" + cmdToRun);
+                    try {
+                        getServer().dispatchCommand(getServer().getConsoleSender(), cmdToRun);
+                    } catch (Exception e) {
+                        log.warning("[Console/Exec] Erro executando: " + e.getMessage());
+                    }
+                });
+            }
+        }
+    }
+
+    // ── Envia chat dos jogadores in-game para o console do admin ──────────────
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerChat(org.bukkit.event.player.AsyncPlayerChatEvent event) {
+        try {
+            String nick = cleanNick(event.getPlayer().getName());
+            String msg = event.getMessage();
+            enviarLogConsole("💬 [CHAT] " + nick + ": " + msg);
+        } catch (Exception ignored) {}
+    }
+
+    private void enviarLogConsole(String text) {
+        try {
+            String url = API_URL.replace("/api/check/", "/api/plugin/console-logs?secret=" + PLUGIN_SECRET);
+            String payload = "{\"logs\":[\"" + escJson(text) + "\"]}";
+            HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(3))
+                .header("Content-Type", "application/json")
+                .header("x-plugin-secret", PLUGIN_SECRET)
+                .header("User-Agent", "MapaBermuda-Plugin/2.0")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build();
             httpClient.send(req, HttpResponse.BodyHandlers.discarding());
         } catch (Exception ignored) {}
