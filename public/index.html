@@ -1449,6 +1449,7 @@
 
     let liveInspectTimer = null;
     let currentInspectingNick = null;
+    let lastInspectPayloadHash = null;
 
     async function inspecionarJogador(nick, isBackgroundUpdate = false) {
       const modal = document.getElementById('inspect-modal');
@@ -1456,6 +1457,7 @@
 
       if (!isBackgroundUpdate) {
         currentInspectingNick = nick;
+        lastInspectPayloadHash = null;
         document.getElementById('inspect-loading').classList.remove('hidden');
         document.getElementById('inspect-content').classList.add('hidden');
         
@@ -1476,23 +1478,47 @@
         const p = d.player || {};
         const gd = d.gameData;
         const isLive = !!d.isLive;
+        const webIp = d.webIp || null;
+        const gameIp = d.gameIp || (gd && gd.ip && gd.ip !== '127.0.0.1' ? gd.ip : null);
 
-        // Subtítulo do header com badge AO VIVO
+        // ── CACHE ANTI-PISCAR (Zero Flicker) ───────────────────────────────
+        // Se os dados não mudaram em relação à última consulta, NÃO toca no DOM!
+        const currentPayloadHash = JSON.stringify({
+          status: p.status,
+          rep: gd ? gd.reported_at : null,
+          hp: gd ? gd.health : null,
+          fd: gd ? gd.food : null,
+          xp: gd ? gd.xp : null,
+          lvl: gd ? gd.level : null,
+          loc: gd ? gd.location : null,
+          world: gd ? gd.world : null,
+          arm: gd ? gd.armor : null,
+          hand: gd ? gd.hand : null,
+          invLen: gd && gd.items ? gd.items.length : 0,
+          isLive,
+          webIp,
+          gameIp,
+          isGameIpBanned: d.isGameIpBanned,
+          isWebIpBanned: d.isWebIpBanned
+        });
+
+        if (isBackgroundUpdate && currentPayloadHash === lastInspectPayloadHash) {
+          return; // Dados 100% idênticos: ZERO alteração no DOM, tela completamente estável!
+        }
+        lastInspectPayloadHash = currentPayloadHash;
+
+        // Subtítulo do header com badge AO VIVO (sem piscar animação brusca)
         const statusColors = { approved: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', banned: 'bg-rose-500/20 text-rose-300 border-rose-500/30', pending: 'bg-amber-500/20 text-amber-300 border-amber-500/30', rejected: 'bg-orange-500/20 text-orange-300 border-orange-500/30' };
         const statusBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${statusColors[p.status] || 'bg-white/10 text-slate-300'}">${(p.status || 'Pendente').toUpperCase()}</span>`;
         const platformBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300 border border-white/10">${escapeHtml(p.platform || 'Bedrock')}</span>`;
         
         const liveBadge = isLive 
-          ? `<span class="flex items-center gap-1 text-[10px] font-extrabold text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 rounded-full shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 🔴 AO VIVO (2s)</span>`
+          ? `<span class="flex items-center gap-1.5 text-[10px] font-extrabold text-emerald-400 bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-0.5 rounded-full shadow-sm"><span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span> 🔴 AO VIVO (2s)</span>`
           : `<span class="text-[10px] font-bold text-slate-400 bg-white/10 border border-white/10 px-2 py-0.5 rounded-full">⚪ Offline</span>`;
 
         document.getElementById('inspect-subtitle').innerHTML = `${liveBadge} ${statusBadge} ${platformBadge}`;
 
         // 1. Informações da Conta & Conexão
-        const ip = (gd && gd.ip) || (d.sessions && d.sessions[0] && d.sessions[0].ip) || 'Aguardando login';
-        const webIp = d.webIp || null;
-        const gameIp = d.gameIp || (gd && gd.ip && gd.ip !== '127.0.0.1' ? gd.ip : null);
-
         const webIpHtml = webIp 
           ? `<div class="flex items-center justify-between gap-1 mt-0.5">
                <span class="font-mono text-cyan-300 truncate text-[11px]">${escapeHtml(webIp)}</span>
@@ -1538,11 +1564,11 @@
           document.getElementById('inspect-no-game').classList.add('hidden');
           document.getElementById('inspect-game-section').classList.remove('hidden');
 
-          // Online / Offline badge
+          // Online / Offline badge (sem animate-ping brusco)
           const badgeEl = document.getElementById('inspect-online-badge');
           if (isLive) {
-            badgeEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1';
-            badgeEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Online no Jogo`;
+            badgeEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5';
+            badgeEl.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span> Online no Jogo`;
           } else {
             badgeEl.className = 'px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-500/20 text-slate-300 border border-white/10';
             badgeEl.textContent = '⚪ Desconectado';
@@ -1619,34 +1645,36 @@
           document.getElementById('inspect-inventory-section').classList.add('hidden');
         }
 
-        // 5. Histórico de Bans
-        const bans = d.banHistory || [];
-        document.getElementById('inspect-total-bans').textContent = `${bans.length} ${bans.length === 1 ? 'ban' : 'bans'}`;
-        document.getElementById('inspect-bans').innerHTML = bans.length === 0
-          ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhum ban registrado para este jogador. ✨</div>'
-          : bans.map(b => `
-            <div class="bg-rose-950/40 border border-rose-500/20 rounded-xl px-3 py-2 space-y-1">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-xs font-bold text-rose-300">🔨 ${escapeHtml(b.reason || 'Violação das regras')}</span>
-                <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-500/30">${escapeHtml(b.duration || 'Permanente')}</span>
+        // 5. Histórico de Bans (Apenas no primeiro carregamento)
+        if (!isBackgroundUpdate) {
+          const bans = d.banHistory || [];
+          document.getElementById('inspect-total-bans').textContent = `${bans.length} ${bans.length === 1 ? 'ban' : 'bans'}`;
+          document.getElementById('inspect-bans').innerHTML = bans.length === 0
+            ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhum ban registrado para este jogador. ✨</div>'
+            : bans.map(b => `
+              <div class="bg-rose-950/40 border border-rose-500/20 rounded-xl px-3 py-2 space-y-1">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold text-rose-300">🔨 ${escapeHtml(b.reason || 'Violação das regras')}</span>
+                  <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-200 border border-rose-500/30">${escapeHtml(b.duration || 'Permanente')}</span>
+                </div>
+                <div class="text-[9px] text-slate-400 flex items-center justify-between">
+                  <span>Data: ${b.logged_at ? new Date(b.logged_at).toLocaleString('pt-BR') : '–'}</span>
+                  ${b.expire_at ? `<span class="text-amber-300">Expira: ${new Date(b.expire_at).toLocaleString('pt-BR')}</span>` : ''}
+                </div>
               </div>
-              <div class="text-[9px] text-slate-400 flex items-center justify-between">
-                <span>Data: ${b.logged_at ? new Date(b.logged_at).toLocaleString('pt-BR') : '–'}</span>
-                ${b.expire_at ? `<span class="text-amber-300">Expira: ${new Date(b.expire_at).toLocaleString('pt-BR')}</span>` : ''}
-              </div>
-            </div>
-          `).join('');
+            `).join('');
 
-        // 6. Mensagens do Chat
-        const msgs = d.chatMessages || [];
-        document.getElementById('inspect-chat').innerHTML = msgs.length === 0
-          ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma mensagem no chat encontrada.</div>'
-          : msgs.map(m => `
-            <div class="bg-black/40 rounded-lg px-2.5 py-1.5 flex items-start gap-2 border border-white/[0.04]">
-              <div class="text-xs text-slate-200 flex-1 break-words">${escapeHtml(m.content)}</div>
-              <div class="text-[9px] text-slate-500 font-mono flex-shrink-0">${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</div>
-            </div>
-          `).join('');
+          // 6. Mensagens do Chat (Apenas no primeiro carregamento)
+          const msgs = d.chatMessages || [];
+          document.getElementById('inspect-chat').innerHTML = msgs.length === 0
+            ? '<div class="text-xs text-slate-500 text-center py-2 bg-black/30 rounded-xl">Nenhuma mensagem no chat encontrada.</div>'
+            : msgs.map(m => `
+              <div class="bg-black/40 rounded-lg px-2.5 py-1.5 flex items-start gap-2 border border-white/[0.04]">
+                <div class="text-xs text-slate-200 flex-1 break-words">${escapeHtml(m.content)}</div>
+                <div class="text-[9px] text-slate-500 font-mono flex-shrink-0">${m.at ? new Date(m.at).toLocaleString('pt-BR') : ''}</div>
+              </div>
+            `).join('');
+        }
 
         // Botões de ação rápida
         document.getElementById('inspect-ban-btn').onclick = () => { fecharInspecionar(); preencherBanForm(nick); };
