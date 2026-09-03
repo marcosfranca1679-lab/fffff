@@ -1163,7 +1163,7 @@ app.post('/api/telemetry/:nick', async (req, res) => {
           created_at: now
         }]);
       } catch (_) {}
-      registrarConsoleLog('error', `💀 ${payload.deathMessage || `${nick} morreu`}`, 'Minecraft');
+      registrarConsoleLog('error', '\uD83D\uDC80 ' + (payload.deathMessage || (nick + ' morreu')), 'Minecraft');
       return res.json({ success: true, deathLogged: true, commands: pendingConsoleCommands.splice(0) });
     }
 
