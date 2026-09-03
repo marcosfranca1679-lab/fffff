@@ -3,6 +3,7 @@ package com.mapabermuda.whitelist;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -23,6 +24,9 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     private static final String API_URL = "https://fffff-autoforge.vercel.app/api/check/";
 
+    // Intervalo de verificação dos jogadores online (em ticks). 200 ticks = 10 segundos.
+    private static final long CHECK_INTERVAL_TICKS = 200L;
+
     private static final Set<String> BYPASS = Set.of(
         "admin",
         "marcos",
@@ -39,7 +43,49 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .connectTimeout(Duration.ofSeconds(6))
             .build();
         getServer().getPluginManager().registerEvents(this, this);
-        log.info("Mapa Bermuda Whitelist & Ban - ATIVA! Conectada em: " + API_URL);
+
+        // ── Task assíncrona: verifica jogadores online a cada 10 segundos ──
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+            for (Player player : getServer().getOnlinePlayers()) {
+                String name = player.getName();
+                String cleanName = name.startsWith(".") ? name.substring(1) : name;
+
+                if (BYPASS.contains(cleanName.toLowerCase())) continue;
+
+                try {
+                    String encodedName = URLEncoder.encode(cleanName, StandardCharsets.UTF_8);
+                    HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(API_URL + encodedName))
+                        .timeout(Duration.ofSeconds(5))
+                        .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.4")
+                        .GET()
+                        .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                    String body = response.body() != null ? response.body() : "";
+
+                    boolean banned = body.contains("\"banned\":true");
+
+                    if (banned) {
+                        final String banBody = body;
+                        log.info("[Whitelist] 🔨 '" + cleanName + "' banido enquanto online! Expulsando...");
+
+                        // Kick deve ser na thread principal (sync)
+                        getServer().getScheduler().runTask(this, () -> {
+                            if (player.isOnline()) {
+                                player.kick(buildBanMessage(cleanName, banBody));
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    // Silencioso: não expulsar por falha de rede
+                    log.fine("[Whitelist] Erro verificando '" + cleanName + "' online: " + e.getMessage());
+                }
+            }
+        }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
+
+        log.info("Mapa Bermuda Whitelist & Ban v1.4 - ATIVA! Conectada em: " + API_URL);
+        log.info("[Whitelist] Verificacao de jogadores online ativada (a cada 10 segundos).");
     }
 
     @Override
@@ -107,7 +153,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL + encodedName))
                 .timeout(Duration.ofSeconds(5))
-                .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.3")
+                .header("User-Agent", "MapaBermuda-Whitelist-Plugin/1.4")
                 .GET()
                 .build();
 
