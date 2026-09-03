@@ -1450,6 +1450,7 @@
     let liveInspectTimer = null;
     let currentInspectingNick = null;
     let lastInspectPayloadHash = null;
+    let lastKnownGameData = null;
 
     async function inspecionarJogador(nick, isBackgroundUpdate = false) {
       const modal = document.getElementById('inspect-modal');
@@ -1458,6 +1459,7 @@
       if (!isBackgroundUpdate) {
         currentInspectingNick = nick;
         lastInspectPayloadHash = null;
+        lastKnownGameData = null;
         document.getElementById('inspect-loading').classList.remove('hidden');
         document.getElementById('inspect-content').classList.add('hidden');
         
@@ -1476,7 +1478,10 @@
         const res = await apiFetch(`/api/admin/player/${encodeURIComponent(nick)}`);
         const d = await res.json();
         const p = d.player || {};
-        const gd = d.gameData;
+        const gd = d.gameData || lastKnownGameData;
+        if (d.gameData) {
+          lastKnownGameData = d.gameData;
+        }
         const isLive = !!d.isLive;
         const webIp = d.webIp || null;
         const gameIp = d.gameIp || (gd && gd.ip && gd.ip !== '127.0.0.1' ? gd.ip : null);
@@ -1700,6 +1705,8 @@
         liveInspectTimer = null;
       }
       currentInspectingNick = null;
+      lastKnownGameData = null;
+      lastInspectPayloadHash = null;
       document.getElementById('inspect-modal').classList.add('hidden');
     }
 
