@@ -892,20 +892,34 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     // 1. Atualiza INSTANTANEAMENTE no cache de memória (tempo real ao vivo, 0ms)
     liveTelemetryCache.set(nick.toLowerCase(), payload);
 
-    // 2. Sincroniza com Supabase a cada 15s ou em eventos de entrada/saída
+    // 2. Sincroniza com Supabase a cada 3s ou em login/logout sem apagar a linha (evita lacuna temporal)
     const now = Date.now();
     const lastSync = lastDbSyncMap.get(nick.toLowerCase()) || 0;
-    if (now - lastSync > 15000 || payload.event === 'login' || payload.event === 'logout') {
+    if (now - lastSync > 3000 || payload.event === 'login' || payload.event === 'logout') {
       lastDbSyncMap.set(nick.toLowerCase(), now);
-      supabase.from('messages').delete().ilike('author_nick', nick).eq('author_role', 'telemetry').then(() => {
-        supabase.from('messages').insert([{
-          author_nick: nick,
-          author_role: 'telemetry',
-          author_platform: payload.ip || 'plugin',
-          content: JSON.stringify(payload),
-          created_at: new Date().toISOString()
-        }]).catch(() => {});
-      }).catch(() => {});
+      supabase.from('messages')
+        .select('id')
+        .ilike('author_nick', nick)
+        .eq('author_role', 'telemetry')
+        .limit(1)
+        .maybeSingle()
+        .then(({ data: existing }) => {
+          if (existing && existing.id) {
+            supabase.from('messages').update({
+              content: JSON.stringify(payload),
+              author_platform: payload.ip || 'plugin',
+              created_at: payload.reported_at
+            }).eq('id', existing.id).catch(() => {});
+          } else {
+            supabase.from('messages').insert([{
+              author_nick: nick,
+              author_role: 'telemetry',
+              author_platform: payload.ip || 'plugin',
+              content: JSON.stringify(payload),
+              created_at: payload.reported_at
+            }]).catch(() => {});
+          }
+        }).catch(() => {});
     }
 
     res.json({ success: true, live: true });
@@ -948,13 +962,8 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
     let gameData = liveTelemetryCache.get(key) || null;
     let isLive = false;
 
-    if (gameData) {
-      const diffSec = (Date.now() - new Date(gameData.reported_at).getTime()) / 1000;
-      if (diffSec < 8 && gameData.event !== 'logout') {
-        isLive = true;
-      }
-    } else {
-      // Fallback para o banco de dados
+    if (!gameData) {
+      // Fallback para o banco de dados Supabase
       const { data: telemetry } = await supabase
         .from('messages')
         .select('content, created_at, author_platform')
@@ -967,11 +976,16 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       if (telemetry) {
         try {
           gameData = JSON.parse(telemetry.content);
-          const diffSec = (Date.now() - new Date(gameData.reported_at || telemetry.created_at).getTime()) / 1000;
-          if (diffSec < 8 && gameData.event !== 'logout') {
-            isLive = true;
-          }
+          if (gameData) liveTelemetryCache.set(key, gameData);
         } catch {}
+      }
+    }
+
+    if (gameData) {
+      const repTime = gameData.reported_at ? new Date(gameData.reported_at).getTime() : 0;
+      const diffSec = (Date.now() - repTime) / 1000;
+      if (diffSec < 10 && gameData.event !== 'logout') {
+        isLive = true;
       }
     }
 
