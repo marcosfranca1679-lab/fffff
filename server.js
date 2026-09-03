@@ -672,7 +672,10 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
   }
 });
 
-// ─── TELEMETRIA DO PLUGIN (login, logout, XP, inventário) ─────────────────
+// ─── TELEMETRIA DO PLUGIN AO VIVO (login, logout, XP, inventário) ──────────
+const liveTelemetryCache = new Map();
+const lastDbSyncMap = new Map();
+
 app.post('/api/telemetry/:nick', async (req, res) => {
   try {
     const nick = req.params.nick.trim();
@@ -684,29 +687,38 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     payload.nick = nick;
     payload.reported_at = new Date().toISOString();
 
-    // Remove telemetrias anteriores deste nick para não acumular
-    await supabase.from('messages').delete().ilike('author_nick', nick).eq('author_role', 'telemetry');
+    // 1. Atualiza INSTANTANEAMENTE no cache de memória (tempo real ao vivo, 0ms)
+    liveTelemetryCache.set(nick.toLowerCase(), payload);
 
-    await supabase.from('messages').insert([{
-      author_nick: nick,
-      author_role: 'telemetry',
-      author_platform: payload.ip || 'plugin',
-      content: JSON.stringify(payload),
-      created_at: new Date().toISOString()
-    }]);
+    // 2. Sincroniza com Supabase a cada 15s ou em eventos de entrada/saída
+    const now = Date.now();
+    const lastSync = lastDbSyncMap.get(nick.toLowerCase()) || 0;
+    if (now - lastSync > 15000 || payload.event === 'login' || payload.event === 'logout') {
+      lastDbSyncMap.set(nick.toLowerCase(), now);
+      supabase.from('messages').delete().ilike('author_nick', nick).eq('author_role', 'telemetry').then(() => {
+        supabase.from('messages').insert([{
+          author_nick: nick,
+          author_role: 'telemetry',
+          author_platform: payload.ip || 'plugin',
+          content: JSON.stringify(payload),
+          created_at: new Date().toISOString()
+        }]).catch(() => {});
+      }).catch(() => {});
+    }
 
-    res.json({ success: true });
+    res.json({ success: true, live: true });
   } catch (err) {
     res.json({ success: false, error: err.message });
   }
 });
 
-// ─── INSPECIONAR JOGADOR (Admin) ──────────────────────────────────────────
+// ─── INSPECIONAR JOGADOR AO VIVO (Admin) ───────────────────────────────────
 app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
   try {
     const nick = req.params.nick.trim();
+    const key = nick.toLowerCase();
 
-    // 1. Dados do jogador
+    // 1. Dados do jogador no banco
     const { data: player } = await supabase
       .from('players')
       .select('*')
@@ -730,14 +742,36 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    // 4. Telemetria do plugin (mais recente)
-    const { data: telemetry } = await supabase
-      .from('messages')
-      .select('content, created_at, author_platform')
-      .ilike('author_nick', nick)
-      .eq('author_role', 'telemetry')
-      .order('created_at', { ascending: false })
-      .limit(5);
+    // 4. Telemetria: verifica primeiro o cache AO VIVO em memória
+    let gameData = liveTelemetryCache.get(key) || null;
+    let isLive = false;
+
+    if (gameData) {
+      const diffSec = (Date.now() - new Date(gameData.reported_at).getTime()) / 1000;
+      if (diffSec < 8 && gameData.event !== 'logout') {
+        isLive = true;
+      }
+    } else {
+      // Fallback para o banco de dados
+      const { data: telemetry } = await supabase
+        .from('messages')
+        .select('content, created_at, author_platform')
+        .ilike('author_nick', nick)
+        .eq('author_role', 'telemetry')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (telemetry) {
+        try {
+          gameData = JSON.parse(telemetry.content);
+          const diffSec = (Date.now() - new Date(gameData.reported_at || telemetry.created_at).getTime()) / 1000;
+          if (diffSec < 8 && gameData.event !== 'logout') {
+            isLive = true;
+          }
+        } catch {}
+      }
+    }
 
     // Parsear ban logs
     const banHistory = (banLogs || []).map(b => {
@@ -767,27 +801,6 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       }
     }
 
-    // Pegar dado mais recente de telemetria
-    let gameData = null;
-    if (telemetry && telemetry.length > 0) {
-      try { gameData = JSON.parse(telemetry[0].content); } catch {}
-    }
-
-    // Histórico de sessões
-    const sessions = (telemetry || []).map(t => {
-      try {
-        const d = JSON.parse(t.content);
-        return { 
-          event: d.event || 'update', 
-          at: d.reported_at || t.created_at, 
-          ip: d.ip || t.author_platform, 
-          xp: d.xp, 
-          health: d.health,
-          level: d.level
-        };
-      } catch { return { at: t.created_at }; }
-    });
-
     // Ban atual
     let currentBan = null;
     if (player && player.status === 'banned') {
@@ -800,13 +813,14 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       banHistory,
       chatMessages: (chatMsgs || []).map(m => ({ content: m.content, at: m.created_at })),
       gameData,
-      sessions,
+      isLive,
       totalBans: banHistory.length
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ─── CHECK (Minecraft Plugin) ─────────────────────────────────────────────
 app.get('/api/check/:nick', async (req, res) => {
