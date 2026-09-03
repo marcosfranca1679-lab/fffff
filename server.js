@@ -339,7 +339,7 @@ app.get('/api/chat', async (req, res) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank")')
       .order('created_at', { ascending: false })
       .limit(60);
 
@@ -411,11 +411,11 @@ app.post('/api/chat', requireAuth, async (req, res) => {
 // Limpeza manual do chat pelo Administrador
 app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
   try {
-    // Apaga ESTRITAMENTE as mensagens de chat reais (preserva telemetria, bans, ips banidos, mortes, conexões e logs de console)
+    // Apaga ESTRITAMENTE as mensagens de chat reais (preserva telemetria, bans, ips banidos, mortes, conexões, logs de console e ranks)
     await supabase
       .from('messages')
       .delete()
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log")');
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank")');
 
     // Insere mensagem de sistema informando que foi limpo
     await supabase.from('messages').insert([{
