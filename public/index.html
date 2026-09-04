@@ -1315,6 +1315,14 @@
     }
 
     function selecionarCanal(canalId, categoria) {
+      // Canais que exigem login
+      const canaisProtegidos = ['chat', 'admin', 'console'];
+      if (canaisProtegidos.includes(canalId) && !currentUser) {
+        mostrarFeedback('🔒 Faça login para acessar este canal.', 'red');
+        abrirModalAuth('login');
+        return;
+      }
+
       currentChannel = canalId;
       currentCategory = categoria;
       fecharSubmenu();
