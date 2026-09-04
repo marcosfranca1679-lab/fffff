@@ -417,28 +417,29 @@
 
       <!-- Módulos do Admin: 3 abas principais -->
       <div class="glass-card rounded-2xl shadow-lg overflow-hidden">
-        <!-- Navegação de módulos: 5 abas sem cortar texto -->
-        <div class="flex items-center border-b border-white/[0.08] bg-black/40 overflow-x-auto no-scrollbar text-center">
+        <!-- Navegação de módulos: 5 abas com logos e sem cortar -->
+        <div class="flex items-center gap-1.5 border-b border-white/[0.08] bg-black/50 p-2 overflow-x-auto no-scrollbar">
           <button onclick="mudarModuloAdmin('online')" id="admin-mod-online"
-            class="flex-1 min-w-[70px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20 whitespace-nowrap">
-            <span>Online</span>
-            <span id="badge-online-count" class="bg-emerald-500/25 text-emerald-300 px-1.5 py-0.2 rounded-full text-[9px] font-mono">0</span>
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 border border-emerald-500/40 text-emerald-300 bg-emerald-950/40 shadow-sm whitespace-nowrap">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
+            <span>Ao Vivo</span>
+            <span id="badge-online-count" class="bg-emerald-500/25 text-emerald-300 px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold flex-shrink-0">0</span>
           </button>
           <button onclick="mudarModuloAdmin('whitelist')" id="admin-mod-whitelist"
-            class="flex-1 min-w-[70px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white whitespace-nowrap">
-            <span>Whitelist</span>
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>📋 Whitelist</span>
           </button>
           <button onclick="mudarModuloAdmin('banimentos')" id="admin-mod-banimentos"
-            class="flex-1 min-w-[65px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white whitespace-nowrap">
-            <span>Bans</span>
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>🔨 Bans</span>
           </button>
           <button onclick="mudarModuloAdmin('vidas')" id="admin-mod-vidas"
-            class="flex-1 min-w-[65px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white whitespace-nowrap">
-            <span>Vidas</span>
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>❤️ Vidas</span>
           </button>
           <button onclick="mudarModuloAdmin('manutencao')" id="admin-mod-manutencao"
-            class="flex-1 min-w-[65px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white whitespace-nowrap">
-            <span>Manut.</span>
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>⚙️ Manutenção</span>
           </button>
         </div>
 
@@ -1396,10 +1397,10 @@
         const content = document.getElementById(`admin-mod-content-${m}`);
         if (!btn || !content) return;
         if (m === modulo) {
-          btn.className = 'flex-1 min-w-[65px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20 whitespace-nowrap';
+          btn.className = 'flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-emerald-500/40 text-emerald-300 bg-emerald-950/40 shadow-sm whitespace-nowrap';
           content.classList.remove('hidden');
         } else {
-          btn.className = 'flex-1 min-w-[65px] sm:min-w-0 py-2.5 px-2 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white hover:bg-white/[0.04] whitespace-nowrap';
+          btn.className = 'flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap';
           content.classList.add('hidden');
         }
       });
