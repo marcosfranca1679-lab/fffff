@@ -1078,6 +1078,9 @@
           if (ipBansList && !ipBansList.classList.contains('hidden')) {
             carregarAdminIpBans();
           }
+          if (adminModulo === 'vidas' && currentChannel === 'admin') {
+            carregarAdminVidas();
+          }
           if (currentChannel === 'console') {
             carregarConsoleLogs(true);
           }
