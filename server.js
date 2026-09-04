@@ -1140,45 +1140,33 @@ function registrarConsoleLog(type, content, sender = 'Sistema') {
 // ─── SISTEMA DE VIDAS (5 VIDAS + RESET A CADA 8 HORAS) ──────────────────────
 const LIVES_CYCLE_MS = 8 * 60 * 60 * 1000; // 8 horas em ms
 const playerLivesCache = new Map(); // nick.toLowerCase() -> { lives: 5, max_lives: 5, ... }
-let lastGlobalLivesResetTime = Date.now();
 
-function formatRemainingResetTime(ms) {
-  if (ms <= 0) return '0m';
-  const totalSec = Math.floor(ms / 1000);
+function getLivesCycleInfo() {
+  const now = Date.now();
+  // Ciclo universal de 8 horas fixo (00h, 08h, 16h UTC) — NUNCA reseta ao alterar vidas de um jogador!
+  const cycleIndex = Math.floor(now / LIVES_CYCLE_MS);
+  const nextCycleTimestamp = (cycleIndex + 1) * LIVES_CYCLE_MS;
+  const remainingMs = Math.max(0, nextCycleTimestamp - now);
+
+  const totalSec = Math.floor(remainingMs / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
   let parts = [];
   if (h > 0) parts.push(`${h}h`);
   if (m > 0 || h === 0) parts.push(`${m}m`);
-  return parts.join(' ');
+  parts.push(`${s}s`);
+
+  return {
+    cycleIndex,
+    nextCycleTimestamp,
+    remainingMs,
+    remainingFormatted: parts.join(' ')
+  };
 }
 
 async function checkAndRunLivesCycleReset() {
-  const now = Date.now();
-  try {
-    const { data: config } = await supabase
-      .from('lives_config')
-      .select('*')
-      .eq('id', 1)
-      .maybeSingle();
-
-    if (config && config.last_global_reset) {
-      lastGlobalLivesResetTime = new Date(config.last_global_reset).getTime();
-    }
-  } catch (_) {}
-
-  // Se passou de 8 horas, reseta as vidas de todos automaticamente
-  if (now - lastGlobalLivesResetTime >= LIVES_CYCLE_MS) {
-    await executarResetGlobalVidas('Automático (Ciclo de 8 horas)');
-  }
-
-  const elapsed = now - lastGlobalLivesResetTime;
-  const remainingMs = Math.max(0, LIVES_CYCLE_MS - elapsed);
-  return {
-    lastResetTime: lastGlobalLivesResetTime,
-    remainingMs,
-    remainingFormatted: formatRemainingResetTime(remainingMs)
-  };
+  return getLivesCycleInfo();
 }
 
 async function executarResetGlobalVidas(origem = 'Sistema') {
@@ -2078,7 +2066,8 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
       success: true,
       players: result,
       cycle: {
-        lastResetTime: new Date(cycle.lastResetTime).toISOString(),
+        cycleIndex: cycle.cycleIndex,
+        nextCycleTimestamp: cycle.nextCycleTimestamp,
         remainingMs: cycle.remainingMs,
         remainingFormatted: cycle.remainingFormatted,
         cycleHours: 8
