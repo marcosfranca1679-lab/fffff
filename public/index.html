@@ -3,43 +3,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Mapa Bermuda — Servidor & Comunidade</title>
+  <title>5DAY MC — Servidor Oficial 1.21+ • Bedrock & Java</title>
+  <link rel="icon" type="image/jpeg" href="/logo.jpg" />
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@700;900&display=swap" rel="stylesheet" />
   <style>
     body {
       font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
       -webkit-tap-highlight-color: transparent;
       padding-bottom: env(safe-area-inset-bottom);
-      background: 
-        linear-gradient(180deg, rgba(8, 12, 22, 0.68) 0%, rgba(10, 16, 30, 0.78) 45%, rgba(6, 9, 16, 0.92) 100%),
+      background-color: #0b0718;
+      background-image: 
+        radial-gradient(circle at 50% 15%, rgba(139, 92, 246, 0.28) 0%, rgba(30, 16, 56, 0.65) 40%, rgba(11, 7, 24, 0.95) 100%),
         url('/bg.jpg');
       background-size: cover;
       background-position: center;
       background-attachment: fixed;
       background-repeat: no-repeat;
     }
-    
-    /* Vidro Fosco */
+
+    /* Animações e Efeitos Épicos 5DAY MC */
+    @keyframes float-hero {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-10px) rotate(0.4deg); }
+    }
+    .animate-float {
+      animation: float-hero 5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-amethyst {
+      0%, 100% { box-shadow: 0 0 25px rgba(139, 92, 246, 0.35), 0 0 50px rgba(109, 40, 217, 0.15); }
+      50% { box-shadow: 0 0 45px rgba(168, 85, 247, 0.6), 0 0 80px rgba(139, 92, 246, 0.3); }
+    }
+    .glow-amethyst {
+      animation: pulse-amethyst 4s ease-in-out infinite;
+    }
+
+    @keyframes particle-drift {
+      0% { transform: translateY(0) scale(0.8); opacity: 0; }
+      50% { opacity: 0.8; }
+      100% { transform: translateY(-120px) scale(1.2); opacity: 0; }
+    }
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      background: radial-gradient(circle, #c084fc 20%, rgba(168, 85, 247, 0) 80%);
+      pointer-events: none;
+      animation: particle-drift 6s infinite ease-out;
+    }
+
+    /* Vidro Fosco Tema 5DAY MC (Tons Ametista e Obsidiana) */
     .glass-rail {
-      background: rgba(10, 15, 28, 0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(13, 9, 28, 0.88);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border-right: 1px solid rgba(168, 85, 247, 0.16);
     }
     .glass-card {
-      background: rgba(15, 23, 42, 0.76);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+      background: rgba(19, 13, 38, 0.78);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(168, 85, 247, 0.18);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    .glass-card-gold {
+      background: rgba(28, 20, 10, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(251, 191, 36, 0.2);
     }
     .glass-flyout {
-      background: rgba(10, 16, 30, 0.96);
-      backdrop-filter: blur(28px);
-      -webkit-backdrop-filter: blur(28px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);
+      background: rgba(14, 9, 28, 0.97);
+      backdrop-filter: blur(32px);
+      -webkit-backdrop-filter: blur(32px);
+      border: 1px solid rgba(168, 85, 247, 0.22);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
     }
 
     /* ══════════════════════════════════════════════════════════════════════════
@@ -139,11 +178,12 @@
   ══════════════════════════════════════════════════════════════════════════ -->
   <aside class="w-[56px] md:w-[72px] glass-rail flex flex-col items-center py-3 md:py-4 gap-3 flex-shrink-0 z-40">
     
-    <!-- 1. Logo / Servidor -->
-    <div class="relative group">
-      <button onclick="alternarSubmenu('info')" class="btn-3d btn-3d-diamond w-10 h-10 md:w-11 md:h-11" title="Mapa Bermuda">
-        <span class="text-lg md:text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">⛏️</span>
+    <!-- 1. Logo / Home 5DAY MC -->
+    <div class="relative group flex flex-col items-center">
+      <button onclick="selecionarCanal('home', 'home')" id="icon-home-btn" class="w-10 h-10 md:w-11 md:h-11 rounded-2xl overflow-hidden border-2 border-purple-500/50 hover:border-amber-400/80 transition-all duration-200 shadow-lg hover:shadow-purple-500/30 hover:scale-105 flex-shrink-0" title="Início – 5DAY MC">
+        <img src="/logo.jpg" alt="5DAY MC" class="w-full h-full object-cover" />
       </button>
+      <span class="text-[9px] md:text-[10px] font-bold text-purple-300 drop-shadow mt-0.5">Início</span>
     </div>
 
     <div class="w-6 md:w-8 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent my-0.5"></div>
@@ -260,8 +300,131 @@
 
     <div id="feedback" class="hidden px-4 py-1.5 text-xs font-semibold text-center z-20"></div>
 
+    <!-- ── 0. HOME / LANDING PAGE ────────────────────────────────────────────── -->
+    <section id="view-home" class="hidden flex-1 overflow-y-auto relative">
+      <!-- Partículas flutuantes -->
+      <div id="home-particles" class="pointer-events-none absolute inset-0 overflow-hidden z-0">
+        <div class="particle w-2 h-2" style="left:10%;top:80%;animation-delay:0s;animation-duration:7s"></div>
+        <div class="particle w-1.5 h-1.5" style="left:25%;top:85%;animation-delay:1.2s;animation-duration:9s"></div>
+        <div class="particle w-3 h-3" style="left:40%;top:90%;animation-delay:0.6s;animation-duration:6s"></div>
+        <div class="particle w-1 h-1" style="left:60%;top:75%;animation-delay:2s;animation-duration:8s"></div>
+        <div class="particle w-2 h-2" style="left:75%;top:88%;animation-delay:0.3s;animation-duration:10s"></div>
+        <div class="particle w-1.5 h-1.5" style="left:88%;top:82%;animation-delay:1.8s;animation-duration:7.5s"></div>
+        <div class="particle w-2.5 h-2.5" style="left:55%;top:92%;animation-delay:0.9s;animation-duration:6.5s"></div>
+        <div class="particle w-1 h-1" style="left:15%;top:70%;animation-delay:3s;animation-duration:9.5s"></div>
+      </div>
+
+      <!-- Conteúdo Hero -->
+      <div class="relative z-10 flex flex-col items-center justify-start min-h-full px-4 pt-8 pb-10 space-y-8">
+
+        <!-- Logo + Título -->
+        <div class="flex flex-col items-center gap-4 text-center">
+          <div class="animate-float glow-amethyst rounded-3xl overflow-hidden border-2 border-amber-400/60 shadow-2xl">
+            <img src="/logo.jpg" alt="5DAY MC Logo" class="w-28 h-28 md:w-36 md:h-36 object-cover" />
+          </div>
+          <div class="space-y-1.5">
+            <h1 class="text-3xl md:text-5xl font-black text-white tracking-tight" style="font-family:'Cinzel',serif;text-shadow:0 0 30px rgba(168,85,247,0.7),0 2px 8px rgba(0,0,0,0.8)">
+              5DAY MC
+            </h1>
+            <p class="text-sm md:text-base text-purple-200/90 font-semibold max-w-xs md:max-w-sm">
+              &#9876;&#65039; Servidor Minecraft Oficial &middot; Java &amp; Bedrock &middot; 1.21+
+            </p>
+            <div class="flex items-center justify-center gap-2 mt-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#4ade80] animate-pulse"></span>
+              <span class="text-xs text-emerald-300 font-bold">Servidor Online</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card visitante (não logado) -->
+        <div id="home-guest-card" class="w-full max-w-md glass-card rounded-2xl p-5 space-y-4 text-center">
+          <p class="text-slate-300 text-sm font-medium leading-relaxed">
+            Bem-vindo ao <span class="text-amber-400 font-bold">5DAY MC</span>! 🎮<br/>
+            Faça login ou cadastre-se para pedir whitelist e jogar.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-3">
+            <button onclick="abrirModalAuth('login')"
+              class="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-lg hover:shadow-purple-500/40 transition-all duration-200 active:scale-95">
+              🔑 Fazer Login
+            </button>
+            <button onclick="abrirModalAuth('register')"
+              class="flex-1 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-slate-950 shadow-lg hover:shadow-amber-500/40 transition-all duration-200 active:scale-95">
+              ✨ Criar Conta
+            </button>
+          </div>
+        </div>
+
+        <!-- Card logado -->
+        <div id="home-logged-card" class="hidden w-full max-w-md glass-card rounded-2xl p-5 space-y-4 text-center">
+          <div class="flex items-center justify-center gap-3">
+            <div id="home-avatar" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-xl font-extrabold text-slate-950 shadow-md border-t border-white/50">?</div>
+            <div class="text-left">
+              <div id="home-nick" class="text-white font-extrabold text-base">Jogador</div>
+              <div class="text-xs text-emerald-400 font-semibold">Bem-vindo de volta! 👋</div>
+            </div>
+          </div>
+          <button onclick="selecionarCanal('geral','info')"
+            class="w-full py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-lg hover:shadow-purple-500/40 transition-all duration-200 active:scale-95">
+            🚀 Acessar Meu Painel ➔
+          </button>
+        </div>
+
+        <!-- IP do Servidor -->
+        <div class="w-full max-w-md bg-black/50 border border-purple-500/30 rounded-2xl p-4 space-y-2">
+          <div class="text-xs font-bold text-purple-300 uppercase tracking-widest text-center mb-3">🌐 Conecte-se ao Servidor</div>
+          <div class="flex items-center justify-between gap-2 bg-slate-950/70 rounded-xl px-3 py-2 border border-white/[0.08]">
+            <div>
+              <div class="text-[10px] text-slate-400 font-bold uppercase">IP</div>
+              <div class="text-xs font-mono font-bold text-white select-all">dettt343.aternos.me</div>
+            </div>
+            <button onclick="copiarTexto('dettt343.aternos.me')" class="text-[11px] font-bold bg-violet-600/80 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg transition flex-shrink-0 active:scale-95">
+              Copiar
+            </button>
+          </div>
+          <div class="flex items-center justify-between gap-2 bg-slate-950/70 rounded-xl px-3 py-2 border border-white/[0.08]">
+            <div>
+              <div class="text-[10px] text-slate-400 font-bold uppercase">Porta (Bedrock)</div>
+              <div class="text-xs font-mono font-bold text-white select-all">24164</div>
+            </div>
+            <button onclick="copiarTexto('24164')" class="text-[11px] font-bold bg-violet-600/80 hover:bg-violet-500 text-white px-3 py-1.5 rounded-lg transition flex-shrink-0 active:scale-95">
+              Copiar
+            </button>
+          </div>
+        </div>
+
+        <!-- Feature Cards -->
+        <div class="w-full max-w-md grid grid-cols-2 gap-3">
+          <div class="glass-card rounded-xl p-3 text-center space-y-1">
+            <div class="text-2xl">❤️</div>
+            <div class="text-xs font-extrabold text-white">5 Vidas</div>
+            <div class="text-[10px] text-slate-400 leading-snug">Sistema único de vidas limitadas</div>
+          </div>
+          <div class="glass-card rounded-xl p-3 text-center space-y-1">
+            <div class="text-2xl">🌐</div>
+            <div class="text-xs font-extrabold text-white">Crossplay</div>
+            <div class="text-[10px] text-slate-400 leading-snug">Java &amp; Bedrock juntos</div>
+          </div>
+          <div class="glass-card rounded-xl p-3 text-center space-y-1">
+            <div class="text-2xl">🏆</div>
+            <div class="text-xs font-extrabold text-white">Rankings</div>
+            <div class="text-[10px] text-slate-400 leading-snug">Top jogadores por horas</div>
+          </div>
+          <div class="glass-card rounded-xl p-3 text-center space-y-1">
+            <div class="text-2xl">💬</div>
+            <div class="text-xs font-extrabold text-white">Chat Geral</div>
+            <div class="text-[10px] text-slate-400 leading-snug">Comunidade ativa em tempo real</div>
+          </div>
+        </div>
+
+        <!-- Footer da home -->
+        <p class="text-[11px] text-slate-500 text-center pb-2">
+          &copy; 2024 5DAY MC &middot; Todos os direitos reservados
+        </p>
+      </div>
+    </section>
+
     <!-- ── 1. SUBDIVISÃO: GERAL / STATUS (#geral-status) ───────────────────── -->
-    <section id="view-geral" class="flex-1 overflow-y-auto p-2.5 md:p-6 max-w-3xl w-full mx-auto space-y-3 md:space-y-4">
+    <section id="view-geral" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-3xl w-full mx-auto space-y-3 md:space-y-4">
       
       <!-- Card do Perfil -->
       <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-lg">
@@ -1057,6 +1220,8 @@
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
+      // Mostra home imediatamente enquanto verifica sessão
+      selecionarCanal('home', 'home');
       await verificarSessao();
       carregarBans();
       carregarRankingHorasSilencioso();
@@ -1154,7 +1319,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas'].forEach(c => {
+      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -1163,6 +1328,7 @@
       if (activeView) activeView.classList.remove('hidden');
 
       const titles = {
+        home: '5DAY MC',
         geral: 'geral-status',
         bans:  'mural-banidos',
         chat:  'chat-geral',
@@ -1173,6 +1339,24 @@
 
       if (titles[canalId]) {
         document.getElementById('current-channel-title').textContent = titles[canalId];
+      }
+
+      // Atualizar cards da home
+      if (canalId === 'home') {
+        const guestCard = document.getElementById('home-guest-card');
+        const loggedCard = document.getElementById('home-logged-card');
+        if (currentUser) {
+          if (guestCard) guestCard.classList.add('hidden');
+          if (loggedCard) loggedCard.classList.remove('hidden');
+          const nick = currentUser.nick || 'Jogador';
+          const homeNick = document.getElementById('home-nick');
+          const homeAvatar = document.getElementById('home-avatar');
+          if (homeNick) homeNick.textContent = nick;
+          if (homeAvatar) homeAvatar.textContent = nick.substring(0,1).toUpperCase();
+        } else {
+          if (guestCard) guestCard.classList.remove('hidden');
+          if (loggedCard) loggedCard.classList.add('hidden');
+        }
       }
 
       if (canalId === 'chat') scrollChatToBottom();
@@ -1195,10 +1379,10 @@
           carregarChat();
           if (isUserAdmin) carregarAdminData();
         } else {
-          abrirModalAuth();
+          selecionarCanal('home', 'home');
         }
       } catch (err) {
-        abrirModalAuth();
+        selecionarCanal('home', 'home');
       }
     }
 
@@ -2692,8 +2876,9 @@
     }
 
     // ── Login / Cadastro ─────────────────────────────────────────────────────
-    function abrirModalAuth() {
+    function abrirModalAuth(tab) {
       document.getElementById('auth-modal').classList.remove('hidden');
+      if (tab) alternarAuthTab(tab);
     }
 
     function fecharModalAuth() {
