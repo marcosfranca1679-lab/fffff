@@ -1180,16 +1180,16 @@ async function salvarVidasNoBanco(nick, livesObj) {
     updated_at: now
   };
 
-  // 1. Persiste na tabela messages (permissão garantida)
+  // 1. Persiste na tabela messages com match exato de nick
   try {
-    const { data: existing } = await supabase
+    const { data: records } = await supabase
       .from('messages')
-      .select('id')
-      .ilike('author_nick', nick)
-      .eq('author_role', 'player_lives')
-      .maybeSingle();
+      .select('id, author_nick')
+      .eq('author_role', 'player_lives');
 
-    if (existing && existing.id) {
+    const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
+
+    if (matched && matched.id) {
       await safeDb(
         supabase
           .from('messages')
@@ -1198,7 +1198,7 @@ async function salvarVidasNoBanco(nick, livesObj) {
             author_platform: String(livesObj.lives),
             created_at: now
           })
-          .eq('id', existing.id)
+          .eq('id', matched.id)
       );
     } else {
       await safeDb(
@@ -1230,17 +1230,17 @@ async function salvarVidasNoBanco(nick, livesObj) {
 }
 
 async function carregarVidasDoBanco(nick, cycle) {
-  // 1. Tenta carregar de messages
+  // 1. Tenta carregar de messages com match exato
   try {
-    const { data: msg } = await supabase
+    const { data: records } = await supabase
       .from('messages')
-      .select('content')
-      .ilike('author_nick', nick)
-      .eq('author_role', 'player_lives')
-      .maybeSingle();
+      .select('author_nick, content')
+      .eq('author_role', 'player_lives');
 
-    if (msg && msg.content) {
-      const parsed = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+    const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
+
+    if (matched && matched.content) {
+      const parsed = typeof matched.content === 'string' ? JSON.parse(matched.content) : matched.content;
       if (parsed.cycleIndex !== undefined && parsed.cycleIndex < cycle.cycleIndex) {
         return { lives: 5, last_death_at: parsed.last_death_at || null };
       }
@@ -1306,34 +1306,17 @@ async function obterVidasJogador(nick) {
   const key = nick.toLowerCase();
   const cycle = getLivesCycleInfo();
 
-  if (playerLivesCache.has(key)) {
-    const data = playerLivesCache.get(key);
-    if (data.cycleIndex !== undefined && data.cycleIndex < cycle.cycleIndex) {
-      data.lives = 5;
-      data.isEliminated = false;
-      data.cycleIndex = cycle.cycleIndex;
-    }
-    const lv = data.lives !== undefined ? data.lives : 5;
-    return {
-      nick,
-      lives: Math.max(0, Math.min(5, lv)),
-      max_lives: 5,
-      isEliminated: lv <= 0,
-      cycleIndex: cycle.cycleIndex,
-      remainingReset: cycle.remainingFormatted,
-      remainingMs: cycle.remainingMs
-    };
-  }
-
+  // Consulta SEMPRE o banco primeiro para garantir dados atualizados entre instâncias da Vercel
   const dbData = await carregarVidasDoBanco(nick, cycle);
-  const lives = dbData ? dbData.lives : 5;
-  const lastDeath = dbData ? dbData.last_death_at : null;
+  let lives = dbData !== null ? dbData.lives : (playerLivesCache.has(key) ? playerLivesCache.get(key).lives : 5);
+  let lastDeath = dbData !== null ? dbData.last_death_at : (playerLivesCache.has(key) ? playerLivesCache.get(key).last_death_at : null);
 
+  const safeLives = Math.max(0, Math.min(5, lives !== undefined ? lives : 5));
   const obj = {
     nick,
-    lives,
+    lives: safeLives,
     max_lives: 5,
-    isEliminated: lives <= 0,
+    isEliminated: safeLives <= 0,
     cycleIndex: cycle.cycleIndex,
     last_death_at: lastDeath,
     remainingReset: cycle.remainingFormatted,
@@ -1769,11 +1752,13 @@ app.get('/api/check/:nick', async (req, res) => {
     if (livesData && livesData.isEliminated) {
       return res.json({
         allowed: false,
-        banned: false,
+        banned: true,
         outOfLives: true,
         lives: 0,
+        reason: `Suas 5 vidas acabaram! Aguarde o proximo reset em ${livesData.remainingReset} para voltar a jogar.`,
+        remaining: livesData.remainingReset,
+        isPermanent: false,
         remainingReset: livesData.remainingReset,
-        reason: `Suas 5 vidas acabaram! O próximo reset é em ${livesData.remainingReset}.`,
         nick
       });
     }
@@ -2151,7 +2136,7 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
         isOnline,
         last_death_at: (msgEntry && msgEntry.last_death_at) || (liveEntry ? liveEntry.last_death_at : null)
       };
-    }).sort((a, b) => a.lives - b.lives); // Eliminados primeiro
+    }).sort((a, b) => a.nick.localeCompare(b.nick, 'pt-BR', { sensitivity: 'base' }));
 
     res.json({
       success: true,
