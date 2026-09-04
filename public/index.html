@@ -1412,6 +1412,7 @@
     }
 
     // ── Sistema de Vidas (Admin) ──────────────────────────────────────────────
+    let targetNextCycleTimestamp = null;
     let livesResetCountdown = null;
 
     async function carregarAdminVidas() {
@@ -1423,10 +1424,9 @@
         const data = await res.json();
         if (!data.success) { container.innerHTML = '<div class="text-xs text-rose-400 text-center py-4">Erro ao carregar vidas.</div>'; return; }
 
-        // Atualiza o cronômetro do próximo reset
-        if (timerEl && data.cycle) {
-          timerEl.textContent = data.cycle.remainingFormatted || '–';
-          iniciarContagemRegressivaVidas(data.cycle.remainingMs || 0);
+        // Mantém o cronômetro do reset exato e contínuo (nunca reseta ao mudar vidas)
+        if (data.cycle) {
+          atualizarContagemRegressivaVidas(data.cycle.nextCycleTimestamp, data.cycle.remainingMs);
         }
 
         const players = data.players || [];
@@ -1469,24 +1469,42 @@
       }
     }
 
-    function iniciarContagemRegressivaVidas(remainingMs) {
-      if (livesResetCountdown) clearInterval(livesResetCountdown);
-      let ms = remainingMs;
+    function atualizarContagemRegressivaVidas(nextTimestamp, fallbackRemainingMs) {
+      if (nextTimestamp) {
+        targetNextCycleTimestamp = nextTimestamp;
+      } else if (!targetNextCycleTimestamp && fallbackRemainingMs) {
+        targetNextCycleTimestamp = Date.now() + fallbackRemainingMs;
+      }
+
       const timerEl = document.getElementById('lives-reset-timer');
-      livesResetCountdown = setInterval(() => {
-        ms -= 1000;
-        if (!timerEl) { clearInterval(livesResetCountdown); return; }
+      if (!timerEl) return;
+
+      const formatDiff = () => {
+        if (!targetNextCycleTimestamp) return;
+        const now = Date.now();
+        const ms = Math.max(0, targetNextCycleTimestamp - now);
         if (ms <= 0) {
-          timerEl.textContent = 'Resetando...';
-          clearInterval(livesResetCountdown);
+          timerEl.textContent = 'Resetando vidas...';
+          targetNextCycleTimestamp = null;
           setTimeout(() => carregarAdminVidas(), 2000);
           return;
         }
-        const h = Math.floor(ms / 3600000);
-        const m = Math.floor((ms % 3600000) / 60000);
-        const s = Math.floor((ms % 60000) / 1000);
-        timerEl.textContent = (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm ' : '') + s + 's';
-      }, 1000);
+        const totalSec = Math.floor(ms / 1000);
+        const h = Math.floor(totalSec / 3600);
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        let parts = [];
+        if (h > 0) parts.push(`${h}h`);
+        if (m > 0 || h === 0) parts.push(`${m}m`);
+        parts.push(`${s}s`);
+        timerEl.textContent = parts.join(' ');
+      };
+
+      formatDiff();
+
+      if (!livesResetCountdown) {
+        livesResetCountdown = setInterval(formatDiff, 1000);
+      }
     }
 
     async function ajustarVidaAdmin(nick, lives) {
