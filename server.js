@@ -1169,9 +1169,109 @@ async function checkAndRunLivesCycleReset() {
   return getLivesCycleInfo();
 }
 
+// ─── HELPERS DE PERSISTÊNCIA DE VIDAS (Supabase messages + player_lives) ──────
+async function salvarVidasNoBanco(nick, livesObj) {
+  const now = new Date().toISOString();
+  const payload = {
+    lives: livesObj.lives,
+    max_lives: livesObj.max_lives || 5,
+    cycleIndex: livesObj.cycleIndex,
+    last_death_at: livesObj.last_death_at || null,
+    updated_at: now
+  };
+
+  // 1. Persiste na tabela messages (permissão garantida)
+  try {
+    const { data: existing } = await supabase
+      .from('messages')
+      .select('id')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'player_lives')
+      .maybeSingle();
+
+    if (existing && existing.id) {
+      await safeDb(
+        supabase
+          .from('messages')
+          .update({
+            content: JSON.stringify(payload),
+            author_platform: String(livesObj.lives),
+            created_at: now
+          })
+          .eq('id', existing.id)
+      );
+    } else {
+      await safeDb(
+        supabase
+          .from('messages')
+          .insert([{
+            author_nick: nick,
+            author_role: 'player_lives',
+            author_platform: String(livesObj.lives),
+            content: JSON.stringify(payload),
+            created_at: now
+          }])
+      );
+    }
+  } catch (_) {}
+
+  // 2. Tenta também na tabela player_lives (fallback)
+  safeDb(
+    supabase
+      .from('player_lives')
+      .upsert({
+        nick,
+        lives: livesObj.lives,
+        max_lives: 5,
+        last_death_at: livesObj.last_death_at || null,
+        updated_at: now
+      }, { onConflict: 'nick' })
+  );
+}
+
+async function carregarVidasDoBanco(nick, cycle) {
+  // 1. Tenta carregar de messages
+  try {
+    const { data: msg } = await supabase
+      .from('messages')
+      .select('content')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'player_lives')
+      .maybeSingle();
+
+    if (msg && msg.content) {
+      const parsed = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+      if (parsed.cycleIndex !== undefined && parsed.cycleIndex < cycle.cycleIndex) {
+        return { lives: 5, last_death_at: parsed.last_death_at || null };
+      }
+      return {
+        lives: Math.max(0, Math.min(5, parsed.lives !== undefined ? parsed.lives : 5)),
+        last_death_at: parsed.last_death_at || null
+      };
+    }
+  } catch (_) {}
+
+  // 2. Fallback em player_lives
+  try {
+    const { data: pl } = await supabase
+      .from('player_lives')
+      .select('*')
+      .ilike('nick', nick)
+      .maybeSingle();
+
+    if (pl) {
+      return {
+        lives: Math.max(0, Math.min(5, pl.lives !== undefined ? pl.lives : 5)),
+        last_death_at: pl.last_death_at || null
+      };
+    }
+  } catch (_) {}
+
+  return null;
+}
+
 async function executarResetGlobalVidas(origem = 'Sistema') {
   const now = new Date().toISOString();
-  lastGlobalLivesResetTime = Date.now();
 
   for (const [, val] of playerLivesCache.entries()) {
     val.lives = 5;
@@ -1179,10 +1279,16 @@ async function executarResetGlobalVidas(origem = 'Sistema') {
     val.updated_at = now;
   }
 
+  // Reseta todos os registros em messages
   safeDb(
     supabase
-      .from('lives_config')
-      .upsert({ id: 1, cycle_hours: 8, last_global_reset: now, updated_at: now })
+      .from('messages')
+      .update({
+        author_platform: '5',
+        content: JSON.stringify({ lives: 5, max_lives: 5, updated_at: now }),
+        created_at: now
+      })
+      .eq('author_role', 'player_lives')
   );
 
   safeDb(
@@ -1198,47 +1304,37 @@ async function executarResetGlobalVidas(origem = 'Sistema') {
 async function obterVidasJogador(nick) {
   if (!nick) return { nick: '', lives: 5, max_lives: 5, isEliminated: false };
   const key = nick.toLowerCase();
-  const cycle = await checkAndRunLivesCycleReset();
+  const cycle = getLivesCycleInfo();
 
   if (playerLivesCache.has(key)) {
     const data = playerLivesCache.get(key);
+    if (data.cycleIndex !== undefined && data.cycleIndex < cycle.cycleIndex) {
+      data.lives = 5;
+      data.isEliminated = false;
+      data.cycleIndex = cycle.cycleIndex;
+    }
     const lv = data.lives !== undefined ? data.lives : 5;
     return {
       nick,
       lives: Math.max(0, Math.min(5, lv)),
       max_lives: 5,
       isEliminated: lv <= 0,
+      cycleIndex: cycle.cycleIndex,
       remainingReset: cycle.remainingFormatted,
       remainingMs: cycle.remainingMs
     };
   }
 
-  let lives = 5;
-  let lastDeath = null;
-  try {
-    const { data } = await supabase
-      .from('player_lives')
-      .select('*')
-      .ilike('nick', nick)
-      .maybeSingle();
-
-    if (data) {
-      lives = Math.max(0, Math.min(5, data.lives !== undefined ? data.lives : 5));
-      lastDeath = data.last_death_at;
-    } else {
-      safeDb(
-        supabase
-          .from('player_lives')
-          .insert([{ nick, lives: 5, max_lives: 5, updated_at: new Date().toISOString() }])
-      );
-    }
-  } catch (_) {}
+  const dbData = await carregarVidasDoBanco(nick, cycle);
+  const lives = dbData ? dbData.lives : 5;
+  const lastDeath = dbData ? dbData.last_death_at : null;
 
   const obj = {
     nick,
     lives,
     max_lives: 5,
     isEliminated: lives <= 0,
+    cycleIndex: cycle.cycleIndex,
     last_death_at: lastDeath,
     remainingReset: cycle.remainingFormatted,
     remainingMs: cycle.remainingMs
@@ -1259,24 +1355,15 @@ async function descontarVidaJogador(nick) {
   current.isEliminated = newLives <= 0;
   playerLivesCache.set(key, current);
 
-  safeDb(
-    supabase
-      .from('player_lives')
-      .upsert({
-        nick,
-        lives: newLives,
-        max_lives: 5,
-        last_death_at: now,
-        updated_at: now
-      }, { onConflict: 'nick' })
-  );
+  await salvarVidasNoBanco(nick, current);
 
   if (newLives <= 0) {
     const kickCmd = {
       id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
-      type: 'command',
+      type: 'kick',
+      target: nick,
+      command: `kick ${nick} Suas 5 vidas acabaram! Aguarde o reset em ${current.remainingReset}.`,
       sender: 'Sistema',
-      command: `kick ${nick} §c💔 Suas 5 vidas acabaram! Aguarde o reset em ${current.remainingReset}.`,
       created_at: now
     };
     pendingConsoleCommands.push(kickCmd);
@@ -1300,16 +1387,7 @@ async function definirVidasJogador(nick, lives) {
   current.updated_at = now;
   playerLivesCache.set(key, current);
 
-  safeDb(
-    supabase
-      .from('player_lives')
-      .upsert({
-        nick,
-        lives: safeLives,
-        max_lives: 5,
-        updated_at: now
-      }, { onConflict: 'nick' })
-  );
+  await salvarVidasNoBanco(nick, current);
 
   // Se o admin zerou as vidas, expulsa o jogador do Minecraft imediatamente
   if (safeLives <= 0) {
@@ -2025,11 +2103,15 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
   try {
     const cycle = await checkAndRunLivesCycleReset();
 
-    // Busca de dados do Supabase
+    // Busca de dados do Supabase (tabela messages e player_lives)
+    const { data: msgLives } = await supabase
+      .from('messages')
+      .select('author_nick, content')
+      .eq('author_role', 'player_lives');
+
     const { data: dbLives } = await supabase
       .from('player_lives')
-      .select('*')
-      .order('lives', { ascending: true });
+      .select('*');
 
     // Busca todos os jogadores aprovados
     const { data: players } = await supabase
@@ -2037,17 +2119,26 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
       .select('nick, status, platform')
       .eq('status', 'approved');
 
-    const playerMap = new Map((players || []).map(p => [p.nick.toLowerCase(), p]));
+    const msgMap = new Map();
+    (msgLives || []).forEach(m => {
+      try {
+        const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+        msgMap.set(m.author_nick.toLowerCase(), parsed);
+      } catch (_) {}
+    });
+
     const livesMap = new Map((dbLives || []).map(l => [l.nick.toLowerCase(), l]));
 
     // Mescla: todos os jogadores aprovados com suas vidas
     const result = (players || []).map(p => {
       const key = p.nick.toLowerCase();
+      const msgEntry = msgMap.get(key);
       const liveEntry = livesMap.get(key);
       const cacheEntry = playerLivesCache.get(key);
 
       let lives = 5;
       if (cacheEntry && cacheEntry.lives !== undefined) lives = cacheEntry.lives;
+      else if (msgEntry && msgEntry.lives !== undefined) lives = msgEntry.lives;
       else if (liveEntry && liveEntry.lives !== undefined) lives = liveEntry.lives;
 
       const isOnline = !!(liveTelemetryCache.get(key) && liveTelemetryCache.get(key).event !== 'logout');
@@ -2058,7 +2149,7 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
         max_lives: 5,
         isEliminated: lives <= 0,
         isOnline,
-        last_death_at: liveEntry ? liveEntry.last_death_at : null
+        last_death_at: (msgEntry && msgEntry.last_death_at) || (liveEntry ? liveEntry.last_death_at : null)
       };
     }).sort((a, b) => a.lives - b.lives); // Eliminados primeiro
 
