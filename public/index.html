@@ -1257,10 +1257,13 @@
         const allMsgs = await res.json();
         const container = document.getElementById('chat-messages');
 
-        // Filtra estritamente apenas mensagens do chat geral (exclui console, telemetria, ranks e logs)
+        // Filtra estritamente apenas mensagens do chat geral (exclui console, telemetria, ranks, logs e vidas)
         const msgs = (allMsgs || []).filter(m => {
           const r = m.author_role;
-          return r !== 'console_log' && r !== 'playtime_rank' && r !== 'telemetry' && r !== 'death_log' && r !== 'session_log' && r !== 'ban_log' && r !== 'ip_ban';
+          const c = (m.content || '').trim();
+          if (r === 'console_log' || r === 'playtime_rank' || r === 'telemetry' || r === 'death_log' || r === 'session_log' || r === 'ban_log' || r === 'ip_ban' || r === 'player_lives') return false;
+          if (c.startsWith('{"lives":') || c.startsWith('{"event":')) return false;
+          return true;
         });
 
         const shouldScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 60) || lastChatCount === 0;
