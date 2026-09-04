@@ -1164,8 +1164,9 @@ const playerLivesCache = new Map(); // nick.toLowerCase() -> { lives: 5, max_liv
 
 function getLivesCycleInfo() {
   const now = Date.now();
-  // Ciclo universal de 8 horas fixo (00h, 08h, 16h UTC) — NUNCA reseta ao alterar vidas de um jogador!
+  // Ciclo universal de 8 horas fixo (00h, 08h, 16h UTC)
   const cycleIndex = Math.floor(now / LIVES_CYCLE_MS);
+  const currentCycleStart = cycleIndex * LIVES_CYCLE_MS;
   const nextCycleTimestamp = (cycleIndex + 1) * LIVES_CYCLE_MS;
   const remainingMs = Math.max(0, nextCycleTimestamp - now);
 
@@ -1180,15 +1181,56 @@ function getLivesCycleInfo() {
 
   return {
     cycleIndex,
+    currentCycleStart,
     nextCycleTimestamp,
     remainingMs,
     remainingFormatted: parts.join(' ')
   };
 }
 
+let lastCheckTime = 0;
 async function checkAndRunLivesCycleReset() {
-  return getLivesCycleInfo();
+  const cycle = getLivesCycleInfo();
+  const now = Date.now();
+
+  // Throttle da checagem para evitar chamadas excessivas ao banco (máx 1 a cada 10s)
+  if (now - lastCheckTime < 10000) {
+    return cycle;
+  }
+  lastCheckTime = now;
+
+  try {
+    // 1. Verifica lives_config no Supabase
+    const { data: cfg } = await supabase
+      .from('lives_config')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+
+    let needsReset = false;
+    if (!cfg || !cfg.last_global_reset) {
+      needsReset = true;
+    } else {
+      const lastResetMs = new Date(cfg.last_global_reset).getTime();
+      // Se o último reset foi ANTES do início do ciclo atual, ou se passaram >= 8 horas
+      if (lastResetMs < cycle.currentCycleStart || (now - lastResetMs) >= LIVES_CYCLE_MS) {
+        needsReset = true;
+      }
+    }
+
+    if (needsReset) {
+      await executarResetGlobalVidas('Ciclo Automático de 8 Horas');
+    }
+  } catch (err) {
+    console.error('Erro em checkAndRunLivesCycleReset:', err);
+  }
+
+  return cycle;
 }
+
+// Executa verificação de ciclo de 8h imediatamente na inicialização e a cada 1 minuto
+checkAndRunLivesCycleReset().catch(() => {});
+setInterval(() => checkAndRunLivesCycleReset().catch(() => {}), 60000);
 
 // ─── PERSISTÊNCIA DEDICADA DE VIDAS (player_lives + contingência) ─────────────
 async function salvarVidasNoBanco(nick, livesObj) {
@@ -1245,15 +1287,38 @@ async function salvarVidasNoBanco(nick, livesObj) {
 }
 
 async function carregarVidasDoBanco(nick, cycle) {
-  // 1. Tenta ler da tabela dedicada player_lives
+  if (!cycle) cycle = getLivesCycleInfo();
+  const now = Date.now();
+
+  // 1. Tenta ler da tabela dedicada player_lives (sem maybeSingle para evitar erro caso haja registros duplicados)
   try {
-    const { data: pl } = await supabase
+    const { data: rows } = await supabase
       .from('player_lives')
       .select('*')
       .ilike('nick', nick)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    const pl = rows && rows.length > 0 ? rows[0] : null;
 
     if (pl && pl.lives !== undefined) {
+      // VERIFICAÇÃO AUTOMÁTICA DE 8 HORAS POR JOGADOR:
+      // Se a última morte/atualização ocorreu em um ciclo anterior ou há mais de 8h, restaura para 5 vidas!
+      const updatedAtMs = pl.updated_at ? new Date(pl.updated_at).getTime() : 0;
+      const lastDeathMs = pl.last_death_at ? new Date(pl.last_death_at).getTime() : 0;
+      const latestActivityMs = Math.max(updatedAtMs, lastDeathMs);
+
+      if (pl.lives < 5 && latestActivityMs > 0 && (latestActivityMs < cycle.currentCycleStart || (now - latestActivityMs) >= LIVES_CYCLE_MS)) {
+        const resetObj = {
+          lives: 5,
+          max_lives: 5,
+          last_death_at: null,
+          cycleIndex: cycle.cycleIndex
+        };
+        await salvarVidasNoBanco(nick, resetObj);
+        return { lives: 5, last_death_at: null };
+      }
+
       return {
         lives: Math.max(0, Math.min(5, pl.lives)),
         last_death_at: pl.last_death_at || null
@@ -1265,14 +1330,22 @@ async function carregarVidasDoBanco(nick, cycle) {
   try {
     const { data: records } = await supabase
       .from('messages')
-      .select('author_nick, content')
-      .eq('author_role', 'system_lives');
+      .select('author_nick, content, created_at')
+      .eq('author_role', 'system_lives')
+      .order('created_at', { ascending: false });
 
     const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
     if (matched && matched.content) {
       const parsed = typeof matched.content === 'string' ? JSON.parse(matched.content) : matched.content;
+      const parsedLives = parsed.lives !== undefined ? parsed.lives : 5;
+      const msgTimeMs = matched.created_at ? new Date(matched.created_at).getTime() : 0;
+
+      if (parsedLives < 5 && msgTimeMs > 0 && (msgTimeMs < cycle.currentCycleStart || (now - msgTimeMs) >= LIVES_CYCLE_MS)) {
+        return { lives: 5, last_death_at: null };
+      }
+
       return {
-        lives: Math.max(0, Math.min(5, parsed.lives !== undefined ? parsed.lives : 5)),
+        lives: Math.max(0, Math.min(5, parsedLives)),
         last_death_at: parsed.last_death_at || null
       };
     }
@@ -1293,14 +1366,21 @@ async function executarResetGlobalVidas(origem = 'Sistema') {
   await safeDb(
     supabase
       .from('player_lives')
-      .update({ lives: 5, updated_at: now })
+      .update({ lives: 5, last_death_at: null, updated_at: now })
       .neq('lives', 5)
   );
 
-  safeDb(
+  await safeDb(
     supabase
       .from('lives_config')
       .upsert({ id: 1, cycle_hours: 8, last_global_reset: now, updated_at: now }, { onConflict: 'id' })
+  );
+
+  await safeDb(
+    supabase
+      .from('messages')
+      .delete()
+      .eq('author_role', 'system_lives')
   );
 
   registrarConsoleLog('info', `❤️ As vidas de todos os jogadores foram restauradas para 5! (${origem})`, 'Sistema');
@@ -1309,7 +1389,9 @@ async function executarResetGlobalVidas(origem = 'Sistema') {
 async function obterVidasJogador(nick) {
   if (!nick) return { nick: '', lives: 5, max_lives: 5, isEliminated: false };
   const key = nick.toLowerCase();
-  const cycle = getLivesCycleInfo();
+  
+  // Executa checagem de ciclo automático (se 8 horas passaram, reseta o banco)
+  const cycle = await checkAndRunLivesCycleReset();
 
   // Consulta SEMPRE o banco primeiro para garantir dados atualizados entre instâncias da Vercel
   const dbData = await carregarVidasDoBanco(nick, cycle);
@@ -2126,8 +2208,18 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
       const msgEntry = msgMap.get(key);
 
       let lives = 5;
-      if (liveEntry && liveEntry.lives !== undefined) lives = liveEntry.lives;
-      else if (msgEntry && msgEntry.lives !== undefined) lives = msgEntry.lives;
+      if (liveEntry && liveEntry.lives !== undefined) {
+        const updatedAtMs = liveEntry.updated_at ? new Date(liveEntry.updated_at).getTime() : 0;
+        const lastDeathMs = liveEntry.last_death_at ? new Date(liveEntry.last_death_at).getTime() : 0;
+        const actMs = Math.max(updatedAtMs, lastDeathMs);
+        if (liveEntry.lives < 5 && actMs > 0 && (actMs < cycle.currentCycleStart || (Date.now() - actMs) >= LIVES_CYCLE_MS)) {
+          lives = 5;
+        } else {
+          lives = liveEntry.lives;
+        }
+      } else if (msgEntry && msgEntry.lives !== undefined) {
+        lives = msgEntry.lives;
+      }
 
       const isOnline = !!(liveTelemetryCache.get(key) && liveTelemetryCache.get(key).event !== 'logout');
       return {
