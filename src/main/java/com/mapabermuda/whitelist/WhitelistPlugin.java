@@ -439,7 +439,19 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             String sender = extractJsonField("{" + obj + "}", "sender");
             if (sender == null || sender.isBlank()) sender = "Admin";
 
-            if ("broadcast".equalsIgnoreCase(type) || message != null) {
+            if ("kick".equalsIgnoreCase(type)) {
+                final String target = extractJsonField("{" + obj + "}", "target");
+                if (target != null && !target.isBlank()) {
+                    getServer().getScheduler().runTask(this, () -> {
+                        Player p = getServer().getPlayerExact(target);
+                        if (p == null) p = getServer().getPlayer(target);
+                        if (p != null && p.isOnline()) {
+                            log.info("[Lives] Expulsando jogador sem vidas: " + p.getName());
+                            p.kick(buildNoLivesMessage(p.getName(), "em breve"));
+                        }
+                    });
+                }
+            } else if ("broadcast".equalsIgnoreCase(type) || message != null) {
                 final String broadcastMsg = message != null ? message : command;
                 final String finalSender = sender;
                 getServer().getScheduler().runTask(this, () -> {
