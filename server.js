@@ -2088,11 +2088,16 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
   try {
     const cycle = await checkAndRunLivesCycleReset();
 
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     // Busca de dados do Supabase (tabela messages e player_lives)
     const { data: msgLives } = await supabase
       .from('messages')
-      .select('author_nick, content')
-      .eq('author_role', 'player_lives');
+      .select('author_nick, content, created_at')
+      .eq('author_role', 'player_lives')
+      .order('created_at', { ascending: false });
 
     const { data: dbLives } = await supabase
       .from('player_lives')
@@ -2106,24 +2111,27 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
 
     const msgMap = new Map();
     (msgLives || []).forEach(m => {
-      try {
-        const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
-        msgMap.set(m.author_nick.toLowerCase(), parsed);
-      } catch (_) {}
+      const k = (m.author_nick || '').toLowerCase();
+      if (k && !msgMap.has(k)) {
+        try {
+          const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+          msgMap.set(k, parsed);
+        } catch (_) {}
+      }
     });
 
     const livesMap = new Map((dbLives || []).map(l => [l.nick.toLowerCase(), l]));
 
-    // Mescla: todos os jogadores aprovados com suas vidas
+    // Mescla: todos os jogadores aprovados com suas vidas (SEMPRE lê do banco, ignora cache)
     const result = (players || []).map(p => {
       const key = p.nick.toLowerCase();
+      // Busca exata por nick (case-insensitive mas sem prefix-match)
       const msgEntry = msgMap.get(key);
       const liveEntry = livesMap.get(key);
-      const cacheEntry = playerLivesCache.get(key);
 
+      // Prioridade: messages (fonte principal) > player_lives (fallback) > 5 (padrão)
       let lives = 5;
-      if (cacheEntry && cacheEntry.lives !== undefined) lives = cacheEntry.lives;
-      else if (msgEntry && msgEntry.lives !== undefined) lives = msgEntry.lives;
+      if (msgEntry && msgEntry.lives !== undefined) lives = msgEntry.lives;
       else if (liveEntry && liveEntry.lives !== undefined) lives = liveEntry.lives;
 
       const isOnline = !!(liveTelemetryCache.get(key) && liveTelemetryCache.get(key).event !== 'logout');
