@@ -1169,54 +1169,10 @@ async function checkAndRunLivesCycleReset() {
   return getLivesCycleInfo();
 }
 
-// ─── HELPERS DE PERSISTÊNCIA DE VIDAS (Supabase messages + player_lives) ──────
+// ─── PERSISTÊNCIA DEDICADA DE VIDAS (Tabela player_lives) ───────────────────
 async function salvarVidasNoBanco(nick, livesObj) {
   const now = new Date().toISOString();
-  const payload = {
-    lives: livesObj.lives,
-    max_lives: livesObj.max_lives || 5,
-    cycleIndex: livesObj.cycleIndex,
-    last_death_at: livesObj.last_death_at || null,
-    updated_at: now
-  };
-
-  // 1. Persiste na tabela messages com match exato de nick
-  try {
-    const { data: records } = await supabase
-      .from('messages')
-      .select('id, author_nick')
-      .eq('author_role', 'player_lives');
-
-    const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
-
-    if (matched && matched.id) {
-      await safeDb(
-        supabase
-          .from('messages')
-          .update({
-            content: JSON.stringify(payload),
-            author_platform: String(livesObj.lives),
-            created_at: now
-          })
-          .eq('id', matched.id)
-      );
-    } else {
-      await safeDb(
-        supabase
-          .from('messages')
-          .insert([{
-            author_nick: nick,
-            author_role: 'player_lives',
-            author_platform: String(livesObj.lives),
-            content: JSON.stringify(payload),
-            created_at: now
-          }])
-      );
-    }
-  } catch (_) {}
-
-  // 2. Tenta também na tabela player_lives (fallback)
-  safeDb(
+  await safeDb(
     supabase
       .from('player_lives')
       .upsert({
@@ -1230,28 +1186,6 @@ async function salvarVidasNoBanco(nick, livesObj) {
 }
 
 async function carregarVidasDoBanco(nick, cycle) {
-  // 1. Tenta carregar de messages com match exato
-  try {
-    const { data: records } = await supabase
-      .from('messages')
-      .select('author_nick, content')
-      .eq('author_role', 'player_lives');
-
-    const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
-
-    if (matched && matched.content) {
-      const parsed = typeof matched.content === 'string' ? JSON.parse(matched.content) : matched.content;
-      if (parsed.cycleIndex !== undefined && parsed.cycleIndex < cycle.cycleIndex) {
-        return { lives: 5, last_death_at: parsed.last_death_at || null };
-      }
-      return {
-        lives: Math.max(0, Math.min(5, parsed.lives !== undefined ? parsed.lives : 5)),
-        last_death_at: parsed.last_death_at || null
-      };
-    }
-  } catch (_) {}
-
-  // 2. Fallback em player_lives
   try {
     const { data: pl } = await supabase
       .from('player_lives')
@@ -1266,7 +1200,6 @@ async function carregarVidasDoBanco(nick, cycle) {
       };
     }
   } catch (_) {}
-
   return null;
 }
 
@@ -1279,23 +1212,17 @@ async function executarResetGlobalVidas(origem = 'Sistema') {
     val.updated_at = now;
   }
 
-  // Reseta todos os registros em messages
-  safeDb(
-    supabase
-      .from('messages')
-      .update({
-        author_platform: '5',
-        content: JSON.stringify({ lives: 5, max_lives: 5, updated_at: now }),
-        created_at: now
-      })
-      .eq('author_role', 'player_lives')
-  );
-
-  safeDb(
+  await safeDb(
     supabase
       .from('player_lives')
       .update({ lives: 5, updated_at: now })
       .neq('lives', 5)
+  );
+
+  safeDb(
+    supabase
+      .from('lives_config')
+      .upsert({ id: 1, cycle_hours: 8, last_global_reset: now, updated_at: now }, { onConflict: 'id' })
   );
 
   registrarConsoleLog('info', `❤️ As vidas de todos os jogadores foram restauradas para 5! (${origem})`, 'Sistema');
@@ -2092,13 +2019,7 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 
-    // Busca de dados do Supabase (tabela messages e player_lives)
-    const { data: msgLives } = await supabase
-      .from('messages')
-      .select('author_nick, content, created_at')
-      .eq('author_role', 'player_lives')
-      .order('created_at', { ascending: false });
-
+    // Busca de dados da tabela dedicada player_lives
     const { data: dbLives } = await supabase
       .from('player_lives')
       .select('*');
@@ -2109,30 +2030,13 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
       .select('nick, status, platform')
       .eq('status', 'approved');
 
-    const msgMap = new Map();
-    (msgLives || []).forEach(m => {
-      const k = (m.author_nick || '').toLowerCase();
-      if (k && !msgMap.has(k)) {
-        try {
-          const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
-          msgMap.set(k, parsed);
-        } catch (_) {}
-      }
-    });
-
     const livesMap = new Map((dbLives || []).map(l => [l.nick.toLowerCase(), l]));
 
-    // Mescla: todos os jogadores aprovados com suas vidas (SEMPRE lê do banco, ignora cache)
+    // Mescla: todos os jogadores aprovados com suas vidas da tabela player_lives
     const result = (players || []).map(p => {
       const key = p.nick.toLowerCase();
-      // Busca exata por nick (case-insensitive mas sem prefix-match)
-      const msgEntry = msgMap.get(key);
       const liveEntry = livesMap.get(key);
-
-      // Prioridade: messages (fonte principal) > player_lives (fallback) > 5 (padrão)
-      let lives = 5;
-      if (msgEntry && msgEntry.lives !== undefined) lives = msgEntry.lives;
-      else if (liveEntry && liveEntry.lives !== undefined) lives = liveEntry.lives;
+      const lives = (liveEntry && liveEntry.lives !== undefined) ? liveEntry.lives : 5;
 
       const isOnline = !!(liveTelemetryCache.get(key) && liveTelemetryCache.get(key).event !== 'logout');
       return {
@@ -2142,7 +2046,7 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
         max_lives: 5,
         isEliminated: lives <= 0,
         isOnline,
-        last_death_at: (msgEntry && msgEntry.last_death_at) || (liveEntry ? liveEntry.last_death_at : null)
+        last_death_at: liveEntry ? liveEntry.last_death_at : null
       };
     }).sort((a, b) => a.nick.localeCompare(b.nick, 'pt-BR', { sensitivity: 'base' }));
 
