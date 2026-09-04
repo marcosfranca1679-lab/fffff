@@ -1507,7 +1507,14 @@
       }
     }
 
+    let adjustingLivesMap = new Set();
+
     async function ajustarVidaAdmin(nick, lives) {
+      if (!nick) return;
+      const key = nick.toLowerCase();
+      if (adjustingLivesMap.has(key)) return;
+      adjustingLivesMap.add(key);
+
       try {
         const res = await apiFetch('/api/admin/lives/set', { method: 'POST', body: JSON.stringify({ nick, lives }) });
         const data = await res.json();
@@ -1517,7 +1524,11 @@
         } else {
           mostrarFeedback(data.error || 'Erro ao ajustar vidas.', 'red');
         }
-      } catch (_) { mostrarFeedback('Erro ao conectar.', 'red'); }
+      } catch (_) {
+        mostrarFeedback('Erro ao conectar.', 'red');
+      } finally {
+        setTimeout(() => adjustingLivesMap.delete(key), 400);
+      }
     }
 
     async function resetarVidasAdmin() {
