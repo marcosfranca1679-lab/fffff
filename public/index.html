@@ -417,8 +417,8 @@
 
       <!-- Módulos do Admin: 3 abas principais -->
       <div class="glass-card rounded-2xl shadow-lg overflow-hidden">
-        <!-- Navegação de módulos: 4 abas perfeitamente divididas sem cortar -->
-        <div class="grid grid-cols-4 border-b border-white/[0.08] bg-black/40 text-center">
+        <!-- Navegação de módulos: 5 abas -->
+        <div class="grid grid-cols-5 border-b border-white/[0.08] bg-black/40 text-center">
           <button onclick="mudarModuloAdmin('online')" id="admin-mod-online"
             class="py-2.5 px-1 text-[11px] font-bold transition flex items-center justify-center gap-1 border-b-2 border-emerald-400 text-emerald-300 bg-emerald-900/20 truncate">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0"></span>
@@ -427,11 +427,15 @@
           </button>
           <button onclick="mudarModuloAdmin('whitelist')" id="admin-mod-whitelist"
             class="py-2.5 px-1 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white truncate">
-            <span>📋 Whitelist</span>
+            <span>📋 WL</span>
           </button>
           <button onclick="mudarModuloAdmin('banimentos')" id="admin-mod-banimentos"
             class="py-2.5 px-1 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white truncate">
             <span>🔨 Bans</span>
+          </button>
+          <button onclick="mudarModuloAdmin('vidas')" id="admin-mod-vidas"
+            class="py-2.5 px-1 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white truncate">
+            <span>❤️ Vidas</span>
           </button>
           <button onclick="mudarModuloAdmin('manutencao')" id="admin-mod-manutencao"
             class="py-2.5 px-1 text-[11px] font-bold transition flex items-center justify-center gap-1 text-slate-400 hover:text-white truncate">
@@ -611,6 +615,30 @@
               <div class="text-center text-slate-400 text-xs py-4">Carregando IPs banidos...</div>
             </div>
           </div>
+        </div>
+
+        <!-- ── MÓDULO VIDAS ───────────────────────────────────────────── -->
+        <div id="admin-mod-content-vidas" class="hidden p-3 md:p-4 space-y-3">
+
+          <!-- Topo: Ciclo de Reset + Botão de Reset Forçado -->
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <div class="text-xs font-bold text-white">Sistema de Vidas</div>
+              <div class="text-[10px] text-slate-400">
+                Próximo reset automático: <span id="lives-reset-timer" class="font-mono text-amber-300">–</span>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="carregarAdminVidas()" class="bg-white/[0.08] hover:bg-white/[0.14] text-slate-200 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition">🔄 Atualizar</button>
+              <button onclick="resetarVidasAdmin()" class="bg-rose-600/80 hover:bg-rose-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm">❤️ Resetar Todos Agora</button>
+            </div>
+          </div>
+
+          <!-- Lista de Jogadores e Vidas -->
+          <div id="admin-lives-list" class="space-y-1.5">
+            <div class="text-center py-6 text-slate-400 text-xs italic">Carregando vidas...</div>
+          </div>
+
         </div>
 
         <!-- ── MÓDULO MANUTENÇÃO ────────────────────────────────────── -->
@@ -1363,7 +1391,7 @@
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['online', 'whitelist', 'banimentos', 'manutencao'];
+      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
@@ -1377,14 +1405,111 @@
         }
       });
 
-      if (modulo === 'online') {
-        renderAdminOnlinePlayers();
-      }
-      if (modulo === 'banimentos') {
-        carregarAdminBans();
-        carregarAdminIpBans();
-      }
+      if (modulo === 'online') renderAdminOnlinePlayers();
+      if (modulo === 'banimentos') { carregarAdminBans(); carregarAdminIpBans(); }
       if (modulo === 'manutencao') atualizarStatsManu();
+      if (modulo === 'vidas') carregarAdminVidas();
+    }
+
+    // ── Sistema de Vidas (Admin) ──────────────────────────────────────────────
+    let livesResetCountdown = null;
+
+    async function carregarAdminVidas() {
+      const container = document.getElementById('admin-lives-list');
+      const timerEl = document.getElementById('lives-reset-timer');
+      if (!container) return;
+      try {
+        const res = await apiFetch('/api/admin/lives');
+        const data = await res.json();
+        if (!data.success) { container.innerHTML = '<div class="text-xs text-rose-400 text-center py-4">Erro ao carregar vidas.</div>'; return; }
+
+        // Atualiza o cronômetro do próximo reset
+        if (timerEl && data.cycle) {
+          timerEl.textContent = data.cycle.remainingFormatted || '–';
+          iniciarContagemRegressivaVidas(data.cycle.remainingMs || 0);
+        }
+
+        const players = data.players || [];
+        if (players.length === 0) {
+          container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic">Nenhum jogador aprovado encontrado.</div>';
+          return;
+        }
+
+        container.innerHTML = players.map(p => {
+          const hearts = [];
+          for (let i = 0; i < 5; i++) {
+            hearts.push(i < p.lives ? '❤️' : '🖤');
+          }
+          const statusColor = p.isEliminated ? 'border-rose-500/40 bg-rose-950/20' : p.isOnline ? 'border-emerald-500/25' : 'border-white/[0.06]';
+          const livesColor = p.isEliminated ? 'text-rose-400' : p.lives <= 2 ? 'text-amber-400' : 'text-emerald-400';
+
+          return `
+            <div class="p-2.5 rounded-xl border ${statusColor} bg-black/30 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <img src="https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/32" class="w-8 h-8 rounded-lg border border-white/10 bg-black/40 object-cover flex-shrink-0"
+                  onerror="this.src='https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(p.nick)}'" />
+                <div class="min-w-0">
+                  <div class="font-bold text-xs text-white truncate">${escapeHtml(p.nick)}</div>
+                  <div class="text-[10px] ${livesColor} font-mono">${hearts.join('')} <span class="text-slate-400 ml-1">${p.lives}/5</span></div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <button onclick="ajustarVidaAdmin('${escapeHtml(p.nick)}', ${Math.max(0, p.lives - 1)})"
+                  class="w-7 h-7 rounded-lg bg-white/[0.08] hover:bg-rose-600/60 text-white text-xs font-bold transition flex items-center justify-center" title="Remover 1 vida">−</button>
+                <button onclick="ajustarVidaAdmin('${escapeHtml(p.nick)}', 5)"
+                  class="px-2.5 h-7 rounded-lg bg-white/[0.08] hover:bg-emerald-600/60 text-white text-[10px] font-bold transition" title="Restaurar 5 vidas">❤️×5</button>
+                <button onclick="ajustarVidaAdmin('${escapeHtml(p.nick)}', ${Math.min(5, p.lives + 1)})"
+                  class="w-7 h-7 rounded-lg bg-white/[0.08] hover:bg-emerald-600/60 text-white text-xs font-bold transition flex items-center justify-center" title="Adicionar 1 vida">+</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (_) {
+        if (container) container.innerHTML = '<div class="text-xs text-rose-400 text-center py-4">Erro ao conectar.</div>';
+      }
+    }
+
+    function iniciarContagemRegressivaVidas(remainingMs) {
+      if (livesResetCountdown) clearInterval(livesResetCountdown);
+      let ms = remainingMs;
+      const timerEl = document.getElementById('lives-reset-timer');
+      livesResetCountdown = setInterval(() => {
+        ms -= 1000;
+        if (!timerEl) { clearInterval(livesResetCountdown); return; }
+        if (ms <= 0) {
+          timerEl.textContent = 'Resetando...';
+          clearInterval(livesResetCountdown);
+          setTimeout(() => carregarAdminVidas(), 2000);
+          return;
+        }
+        const h = Math.floor(ms / 3600000);
+        const m = Math.floor((ms % 3600000) / 60000);
+        const s = Math.floor((ms % 60000) / 1000);
+        timerEl.textContent = (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'm ' : '') + s + 's';
+      }, 1000);
+    }
+
+    async function ajustarVidaAdmin(nick, lives) {
+      try {
+        const res = await apiFetch('/api/admin/lives/set', { method: 'POST', body: JSON.stringify({ nick, lives }) });
+        const data = await res.json();
+        if (data.success) {
+          mostrarFeedback(`❤️ ${nick}: ${lives}/5 vidas`, 'green');
+          await carregarAdminVidas();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao ajustar vidas.', 'red');
+        }
+      } catch (_) { mostrarFeedback('Erro ao conectar.', 'red'); }
+    }
+
+    async function resetarVidasAdmin() {
+      if (!confirm('❤️ Resetar vidas de TODOS os jogadores para 5 agora?\n\nEsta ação não pode ser desfeita.')) return;
+      try {
+        const res = await apiFetch('/api/admin/lives/reset-all', { method: 'POST' });
+        const data = await res.json();
+        mostrarFeedback(data.message || '✅ Vidas resetadas!', data.success ? 'green' : 'red');
+        if (data.success) await carregarAdminVidas();
+      } catch (_) { mostrarFeedback('Erro ao resetar vidas.', 'red'); }
     }
 
     async function carregarAdminBans() {
