@@ -1122,25 +1122,38 @@ app.get('/api/admin/ip-bans', requireAdmin, async (req, res) => {
 const pendingConsoleCommands = [];
 const liveConsoleLogs = [];
 
+// Limpeza automática de logs com mais de 24 horas
+async function limparServerLogs24Horas() {
+  try {
+    const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await safeDb(
+      supabase
+        .from('server_logs')
+        .delete()
+        .lt('created_at', limite24h)
+    );
+  } catch (_) {}
+}
+
 function registrarConsoleLog(type, content, sender = 'Sistema') {
+  const now = new Date().toISOString();
   const logEntry = {
     id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
     type, // 'command' | 'broadcast' | 'info' | 'error'
     content,
     sender,
     time: new Date().toLocaleTimeString('pt-BR', { hour12: false }),
-    created_at: new Date().toISOString()
+    created_at: now
   };
   liveConsoleLogs.push(logEntry);
   if (liveConsoleLogs.length > 200) liveConsoleLogs.shift();
 
-  // Persiste no Supabase assincronamente sem travar a requisição
-  safeDb(supabase.from('messages').insert([{
-    author_nick: sender,
-    author_role: 'console_log',
-    author_platform: type,
-    content: JSON.stringify(logEntry),
-    created_at: logEntry.created_at
+  // 1. Persiste na tabela dedicada server_logs (isolada de messages)
+  safeDb(supabase.from('server_logs').insert([{
+    type,
+    content,
+    sender,
+    created_at: now
   }]));
 
   return logEntry;
@@ -1834,30 +1847,28 @@ app.post('/api/admin/console/execute', requireAdmin, async (req, res) => {
 // 2. Admin busca logs recentes do console
 app.get('/api/admin/console/logs', requireAdmin, async (req, res) => {
   try {
+    // Limpa automaticamente logs com mais de 24 horas
+    limparServerLogs24Horas().catch(() => {});
+
     if (liveConsoleLogs.length > 0) {
       return res.json(liveConsoleLogs);
     }
 
-    // Se a memória estava vazia, busca os últimos do Supabase
+    // Busca os últimos da tabela dedicada server_logs
     const { data } = await supabase
-      .from('messages')
+      .from('server_logs')
       .select('*')
-      .eq('author_role', 'console_log')
       .order('created_at', { ascending: false })
-      .limit(60);
+      .limit(80);
 
-    const logs = (data || []).reverse().map(row => {
-      try { return JSON.parse(row.content); } catch {
-        return {
-          id: row.id,
-          type: row.author_platform || 'info',
-          content: row.content,
-          sender: row.author_nick,
-          time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour12: false }),
-          created_at: row.created_at
-        };
-      }
-    });
+    const logs = (data || []).reverse().map(row => ({
+      id: row.id,
+      type: row.type || 'info',
+      content: row.content,
+      sender: row.sender || 'Sistema',
+      time: new Date(row.created_at).toLocaleTimeString('pt-BR', { hour12: false }),
+      created_at: row.created_at
+    }));
 
     res.json(logs);
   } catch (err) {
@@ -1869,6 +1880,7 @@ app.get('/api/admin/console/logs', requireAdmin, async (req, res) => {
 app.post('/api/admin/console/clear', requireAdmin, async (req, res) => {
   try {
     liveConsoleLogs.length = 0;
+    await safeDb(supabase.from('server_logs').delete().neq('id', 0));
     await safeDb(supabase.from('messages').delete().eq('author_role', 'console_log'));
     registrarConsoleLog('info', '🧹 O console foi limpo pelo Administrador.', 'Sistema');
     res.json({ success: true, message: 'Console limpo com sucesso!' });
