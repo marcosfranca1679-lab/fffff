@@ -319,11 +319,9 @@ async function limparMensagens30Dias() {
 async function limparLogsMortesESessoes3Dias() {
   try {
     const limite3Dias = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    await supabase
-      .from('messages')
-      .delete()
-      .lt('created_at', limite3Dias)
-      .in('author_role', ['death_log', 'session_log']);
+    await safeDb(supabase.from('player_deaths').delete().lt('created_at', limite3Dias));
+    await safeDb(supabase.from('player_sessions').delete().lt('created_at', limite3Dias));
+    await safeDb(supabase.from('messages').delete().lt('created_at', limite3Dias).in('author_role', ['death_log', 'session_log']));
   } catch (err) {
     // Silencioso
   }
@@ -354,15 +352,16 @@ app.get('/api/chat', async (req, res) => {
 app.post('/api/admin/clean-logs', requireAdmin, async (req, res) => {
   try {
     const mode = req.body.mode || 'all'; // '3days' ou 'all'
-    let query = supabase.from('messages').delete().in('author_role', ['death_log', 'session_log']);
-
     if (mode === '3days') {
       const limite = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-      query = query.lt('created_at', limite);
+      await safeDb(supabase.from('player_deaths').delete().lt('created_at', limite));
+      await safeDb(supabase.from('player_sessions').delete().lt('created_at', limite));
+      await safeDb(supabase.from('messages').delete().lt('created_at', limite).in('author_role', ['death_log', 'session_log']));
+    } else {
+      await safeDb(supabase.from('player_deaths').delete().neq('id', 0));
+      await safeDb(supabase.from('player_sessions').delete().neq('id', 0));
+      await safeDb(supabase.from('messages').delete().in('author_role', ['death_log', 'session_log']));
     }
-
-    const { error } = await query;
-    if (error) throw error;
 
     const msg = mode === '3days'
       ? '🧹 Logs de mortes e conexões com mais de 3 dias foram apagados com sucesso!'
@@ -1410,24 +1409,17 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     payload.nick = nick;
     payload.reported_at = new Date().toISOString();
 
-    // Evento de morte (PlayerDeathEvent) — deduz 1 vida no sistema de vidas
+    // Evento de morte (PlayerDeathEvent) — salva em player_deaths e deduz 1 vida
     if (payload.event === 'death') {
       const now = new Date().toISOString();
-      try {
-        await supabase.from('messages').insert([{
-          author_nick: nick,
-          author_role: 'death_log',
-          author_platform: payload.world || 'world',
-          content: JSON.stringify({
-            message: payload.deathMessage || `${nick} morreu`,
-            world: payload.world || 'world',
-            location: payload.location || `${payload.x}, ${payload.y}, ${payload.z}`,
-            killer: payload.killer || null,
-            at: now
-          }),
-          created_at: now
-        }]);
-      } catch (_) {}
+      safeDb(supabase.from('player_deaths').insert([{
+        nick,
+        message: payload.deathMessage || `${nick} morreu`,
+        killer: payload.killer || null,
+        world: payload.world || 'world',
+        location: payload.location || (payload.x !== undefined ? `${payload.x}, ${payload.y}, ${payload.z}` : '0, 0, 0'),
+        created_at: now
+      }]));
 
       // Deduz 1 vida do jogador no sistema de vidas
       const livesData = await descontarVidaJogador(nick);
@@ -1444,25 +1436,18 @@ app.post('/api/telemetry/:nick', async (req, res) => {
       });
     }
 
-    // Evento de login ou logout no Minecraft (Histórico Permanente de Conexões)
+    // Evento de login ou logout no Minecraft — salva em player_sessions
     if (payload.event === 'login' || payload.event === 'logout') {
       const now = new Date().toISOString();
-      try {
-        await supabase.from('messages').insert([{
-          author_nick: nick,
-          author_role: 'session_log',
-          author_platform: payload.event,
-          content: JSON.stringify({
-            event: payload.event,
-            ip: payload.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '–',
-            world: payload.world || 'world',
-            location: payload.location || (payload.x !== undefined ? `${payload.x}, ${payload.y}, ${payload.z}` : '0, 0, 0'),
-            gamemode: payload.gamemode || 'SURVIVAL',
-            at: now
-          }),
-          created_at: now
-        }]);
-      } catch (_) {}
+      safeDb(supabase.from('player_sessions').insert([{
+        nick,
+        event: payload.event,
+        ip: payload.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '–',
+        world: payload.world || 'world',
+        location: payload.location || (payload.x !== undefined ? `${payload.x}, ${payload.y}, ${payload.z}` : '0, 0, 0'),
+        gamemode: payload.gamemode || 'SURVIVAL',
+        created_at: now
+      }]));
 
       if (payload.event === 'login') {
         registrarConsoleLog('info', `🟢 ${nick} entrou no jogo (IP: ${payload.ip || '–'}, Mundo: ${payload.world || 'world'})`, 'Minecraft');
@@ -1562,59 +1547,38 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       .limit(20);
 
     // 3.1 Histórico de mortes (death_log)
-    const { data: deathLogs } = await supabase
-      .from('messages')
-      .select('content, created_at, author_platform')
-      .ilike('author_nick', nick)
-      .eq('author_role', 'death_log')
+    // 3.1 Histórico de mortes (tabela dedicada player_deaths)
+    const { data: dbDeaths } = await supabase
+      .from('player_deaths')
+      .select('*')
+      .ilike('nick', nick)
       .order('created_at', { ascending: false })
       .limit(30);
 
-    const deathHistory = (deathLogs || []).map(d => {
-      try {
-        const parsed = JSON.parse(d.content);
-        return {
-          message: parsed.message || `${nick} morreu`,
-          world: parsed.world || d.author_platform || 'world',
-          location: parsed.location || '0, 0, 0',
-          killer: parsed.killer || null,
-          at: parsed.at || d.created_at
-        };
-      } catch {
-        return { message: d.content, world: d.author_platform, at: d.created_at };
-      }
-    });
+    const deathHistory = (dbDeaths || []).map(d => ({
+      message: d.message || `${nick} morreu`,
+      world: d.world || 'world',
+      location: d.location || '0, 0, 0',
+      killer: d.killer || null,
+      at: d.created_at
+    }));
 
-    // 3.2 Histórico de entrada e saída (session_log) - Permanente
-    const { data: sessionLogs } = await supabase
-      .from('messages')
-      .select('content, created_at, author_platform')
-      .ilike('author_nick', nick)
-      .eq('author_role', 'session_log')
+    // 3.2 Histórico de entrada e saída (tabela dedicada player_sessions)
+    const { data: dbSessions } = await supabase
+      .from('player_sessions')
+      .select('*')
+      .ilike('nick', nick)
       .order('created_at', { ascending: false })
       .limit(50);
 
-    const sessionHistory = (sessionLogs || []).map(s => {
-      try {
-        const parsed = JSON.parse(s.content);
-        return {
-          event: parsed.event || s.author_platform || 'login',
-          ip: parsed.ip || '–',
-          world: parsed.world || 'world',
-          location: parsed.location || '0, 0, 0',
-          gamemode: parsed.gamemode || 'SURVIVAL',
-          at: parsed.at || s.created_at
-        };
-      } catch {
-        return {
-          event: s.author_platform || 'login',
-          ip: '–',
-          world: 'world',
-          location: '0, 0, 0',
-          at: s.created_at
-        };
-      }
-    });
+    const sessionHistory = (dbSessions || []).map(s => ({
+      event: s.event || 'login',
+      ip: s.ip || '–',
+      world: s.world || 'world',
+      location: s.location || '0, 0, 0',
+      gamemode: s.gamemode || 'SURVIVAL',
+      at: s.created_at
+    }));
 
     // 4. Telemetria: verifica primeiro o cache AO VIVO em memória
     let gameData = liveTelemetryCache.get(key) || null;
