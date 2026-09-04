@@ -1137,6 +1137,195 @@ function registrarConsoleLog(type, content, sender = 'Sistema') {
   return logEntry;
 }
 
+// ─── SISTEMA DE VIDAS (5 VIDAS + RESET A CADA 8 HORAS) ──────────────────────
+const LIVES_CYCLE_MS = 8 * 60 * 60 * 1000; // 8 horas em ms
+const playerLivesCache = new Map(); // nick.toLowerCase() -> { lives: 5, max_lives: 5, ... }
+let lastGlobalLivesResetTime = Date.now();
+
+function formatRemainingResetTime(ms) {
+  if (ms <= 0) return '0m';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  let parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || h === 0) parts.push(`${m}m`);
+  return parts.join(' ');
+}
+
+async function checkAndRunLivesCycleReset() {
+  const now = Date.now();
+  try {
+    const { data: config } = await supabase
+      .from('lives_config')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (config && config.last_global_reset) {
+      lastGlobalLivesResetTime = new Date(config.last_global_reset).getTime();
+    }
+  } catch (_) {}
+
+  // Se passou de 8 horas, reseta as vidas de todos automaticamente
+  if (now - lastGlobalLivesResetTime >= LIVES_CYCLE_MS) {
+    await executarResetGlobalVidas('Automático (Ciclo de 8 horas)');
+  }
+
+  const elapsed = now - lastGlobalLivesResetTime;
+  const remainingMs = Math.max(0, LIVES_CYCLE_MS - elapsed);
+  return {
+    lastResetTime: lastGlobalLivesResetTime,
+    remainingMs,
+    remainingFormatted: formatRemainingResetTime(remainingMs)
+  };
+}
+
+async function executarResetGlobalVidas(origem = 'Sistema') {
+  const now = new Date().toISOString();
+  lastGlobalLivesResetTime = Date.now();
+
+  for (const [, val] of playerLivesCache.entries()) {
+    val.lives = 5;
+    val.isEliminated = false;
+    val.updated_at = now;
+  }
+
+  safeDb(
+    supabase
+      .from('lives_config')
+      .upsert({ id: 1, cycle_hours: 8, last_global_reset: now, updated_at: now })
+  );
+
+  safeDb(
+    supabase
+      .from('player_lives')
+      .update({ lives: 5, updated_at: now })
+      .neq('lives', 5)
+  );
+
+  registrarConsoleLog('info', `❤️ As vidas de todos os jogadores foram restauradas para 5! (${origem})`, 'Sistema');
+}
+
+async function obterVidasJogador(nick) {
+  if (!nick) return { nick: '', lives: 5, max_lives: 5, isEliminated: false };
+  const key = nick.toLowerCase();
+  const cycle = await checkAndRunLivesCycleReset();
+
+  if (playerLivesCache.has(key)) {
+    const data = playerLivesCache.get(key);
+    const lv = data.lives !== undefined ? data.lives : 5;
+    return {
+      nick,
+      lives: Math.max(0, Math.min(5, lv)),
+      max_lives: 5,
+      isEliminated: lv <= 0,
+      remainingReset: cycle.remainingFormatted,
+      remainingMs: cycle.remainingMs
+    };
+  }
+
+  let lives = 5;
+  let lastDeath = null;
+  try {
+    const { data } = await supabase
+      .from('player_lives')
+      .select('*')
+      .ilike('nick', nick)
+      .maybeSingle();
+
+    if (data) {
+      lives = Math.max(0, Math.min(5, data.lives !== undefined ? data.lives : 5));
+      lastDeath = data.last_death_at;
+    } else {
+      safeDb(
+        supabase
+          .from('player_lives')
+          .insert([{ nick, lives: 5, max_lives: 5, updated_at: new Date().toISOString() }])
+      );
+    }
+  } catch (_) {}
+
+  const obj = {
+    nick,
+    lives,
+    max_lives: 5,
+    isEliminated: lives <= 0,
+    last_death_at: lastDeath,
+    remainingReset: cycle.remainingFormatted,
+    remainingMs: cycle.remainingMs
+  };
+  playerLivesCache.set(key, obj);
+  return obj;
+}
+
+async function descontarVidaJogador(nick) {
+  if (!nick) return null;
+  const key = nick.toLowerCase();
+  const current = await obterVidasJogador(nick);
+  const now = new Date().toISOString();
+
+  const newLives = Math.max(0, current.lives - 1);
+  current.lives = newLives;
+  current.last_death_at = now;
+  current.isEliminated = newLives <= 0;
+  playerLivesCache.set(key, current);
+
+  safeDb(
+    supabase
+      .from('player_lives')
+      .upsert({
+        nick,
+        lives: newLives,
+        max_lives: 5,
+        last_death_at: now,
+        updated_at: now
+      }, { onConflict: 'nick' })
+  );
+
+  if (newLives <= 0) {
+    const kickCmd = {
+      id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+      type: 'command',
+      sender: 'Sistema',
+      command: `kick ${nick} §c💔 Suas 5 vidas acabaram! Aguarde o reset em ${current.remainingReset}.`,
+      created_at: now
+    };
+    pendingConsoleCommands.push(kickCmd);
+    registrarConsoleLog('error', `💀 ${nick} perdeu todas as 5 vidas e foi eliminado! Próximo reset em ${current.remainingReset}.`, 'Sistema');
+  } else {
+    registrarConsoleLog('info', `💔 ${nick} morreu e perdeu 1 vida (${newLives}/5 vidas restantes)`, 'Minecraft');
+  }
+
+  return current;
+}
+
+async function definirVidasJogador(nick, lives) {
+  if (!nick) return null;
+  const key = nick.toLowerCase();
+  const safeLives = Math.max(0, Math.min(5, parseInt(lives, 10) || 0));
+  const now = new Date().toISOString();
+  const current = await obterVidasJogador(nick);
+
+  current.lives = safeLives;
+  current.isEliminated = safeLives <= 0;
+  current.updated_at = now;
+  playerLivesCache.set(key, current);
+
+  safeDb(
+    supabase
+      .from('player_lives')
+      .upsert({
+        nick,
+        lives: safeLives,
+        max_lives: 5,
+        updated_at: now
+      }, { onConflict: 'nick' })
+  );
+
+  return current;
+}
+
 // ─── TELEMETRIA DO PLUGIN AO VIVO (login, logout, XP, inventário) ──────────
 const liveTelemetryCache = new Map();
 const lastDbSyncMap = new Map();
@@ -1152,7 +1341,7 @@ app.post('/api/telemetry/:nick', async (req, res) => {
     payload.nick = nick;
     payload.reported_at = new Date().toISOString();
 
-    // Evento de morte (PlayerDeathEvent)
+    // Evento de morte (PlayerDeathEvent) — deduz 1 vida no sistema de vidas
     if (payload.event === 'death') {
       const now = new Date().toISOString();
       try {
@@ -1170,8 +1359,20 @@ app.post('/api/telemetry/:nick', async (req, res) => {
           created_at: now
         }]);
       } catch (_) {}
+
+      // Deduz 1 vida do jogador no sistema de vidas
+      const livesData = await descontarVidaJogador(nick);
+      const livesRemaining = livesData ? livesData.lives : null;
+
       registrarConsoleLog('error', '\uD83D\uDC80 ' + (payload.deathMessage || (nick + ' morreu')), 'Minecraft');
-      return res.json({ success: true, deathLogged: true, commands: pendingConsoleCommands.splice(0) });
+      return res.json({
+        success: true,
+        deathLogged: true,
+        livesRemaining,
+        isEliminated: livesData ? livesData.isEliminated : false,
+        remainingReset: livesData ? livesData.remainingReset : null,
+        commands: pendingConsoleCommands.splice(0)
+      });
     }
 
     // Evento de login ou logout no Minecraft (Histórico Permanente de Conexões)
@@ -1481,7 +1682,23 @@ app.get('/api/check/:nick', async (req, res) => {
     }
 
     const allowed = player.status === 'approved';
-    res.json({ allowed: !!allowed, banned: false, nick });
+    if (!allowed) return res.json({ allowed: false, banned: false, nick });
+
+    // Verifica vidas: se jogador aprovado mas sem vidas, bloqueia entrada
+    const livesData = await obterVidasJogador(nick);
+    if (livesData && livesData.isEliminated) {
+      return res.json({
+        allowed: false,
+        banned: false,
+        outOfLives: true,
+        lives: 0,
+        remainingReset: livesData.remainingReset,
+        reason: `Suas 5 vidas acabaram! O próximo reset é em ${livesData.remainingReset}.`,
+        nick
+      });
+    }
+
+    res.json({ allowed: true, banned: false, lives: livesData ? livesData.lives : 5, nick });
   } catch (err) {
     res.json({ allowed: false, banned: false, nick: req.params.nick });
   }
@@ -1783,6 +2000,107 @@ app.get('/api/ranking/playtime', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao carregar ranking: ' + err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SISTEMA DE VIDAS — ROTAS DA API
+// ════════════════════════════════════════════════════════════════════════════
+
+// Status de vidas de um jogador específico (público — usado pelo plugin)
+app.get('/api/lives/status/:nick', async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const data = await obterVidasJogador(nick);
+    res.json({ success: true, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Lista todos os jogadores e suas vidas (Admin)
+app.get('/api/admin/lives', requireAdmin, async (req, res) => {
+  try {
+    const cycle = await checkAndRunLivesCycleReset();
+
+    // Busca de dados do Supabase
+    const { data: dbLives } = await supabase
+      .from('player_lives')
+      .select('*')
+      .order('lives', { ascending: true });
+
+    // Busca todos os jogadores aprovados
+    const { data: players } = await supabase
+      .from('players')
+      .select('nick, status, platform')
+      .eq('status', 'approved');
+
+    const playerMap = new Map((players || []).map(p => [p.nick.toLowerCase(), p]));
+    const livesMap = new Map((dbLives || []).map(l => [l.nick.toLowerCase(), l]));
+
+    // Mescla: todos os jogadores aprovados com suas vidas
+    const result = (players || []).map(p => {
+      const key = p.nick.toLowerCase();
+      const liveEntry = livesMap.get(key);
+      const cacheEntry = playerLivesCache.get(key);
+
+      let lives = 5;
+      if (cacheEntry && cacheEntry.lives !== undefined) lives = cacheEntry.lives;
+      else if (liveEntry && liveEntry.lives !== undefined) lives = liveEntry.lives;
+
+      const isOnline = !!(liveTelemetryCache.get(key) && liveTelemetryCache.get(key).event !== 'logout');
+      return {
+        nick: p.nick,
+        platform: p.platform || 'MC',
+        lives: Math.max(0, Math.min(5, lives)),
+        max_lives: 5,
+        isEliminated: lives <= 0,
+        isOnline,
+        last_death_at: liveEntry ? liveEntry.last_death_at : null
+      };
+    }).sort((a, b) => a.lives - b.lives); // Eliminados primeiro
+
+    res.json({
+      success: true,
+      players: result,
+      cycle: {
+        lastResetTime: new Date(cycle.lastResetTime).toISOString(),
+        remainingMs: cycle.remainingMs,
+        remainingFormatted: cycle.remainingFormatted,
+        cycleHours: 8
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Define as vidas de um jogador (Admin)
+app.post('/api/admin/lives/set', requireAdmin, async (req, res) => {
+  try {
+    const { nick, lives } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick é obrigatório.' });
+    const safeLives = Math.max(0, Math.min(5, parseInt(lives, 10)));
+    const data = await definirVidasJogador(nick, safeLives);
+    registrarConsoleLog('info', `❤️ Admin ajustou as vidas de ${nick} para ${safeLives}/5`, 'Admin');
+    res.json({ success: true, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reseta vidas de TODOS para 5 (Admin — forçado imediatamente)
+app.post('/api/admin/lives/reset-all', requireAdmin, async (req, res) => {
+  try {
+    await executarResetGlobalVidas('Admin (Forçado)');
+    const cycle = await checkAndRunLivesCycleReset();
+    res.json({
+      success: true,
+      message: '✅ Vidas de todos os jogadores foram restauradas para 5!',
+      nextReset: cycle.remainingFormatted
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
