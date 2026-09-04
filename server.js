@@ -2176,6 +2176,75 @@ app.get('/api/ranking/playtime', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════
+//  SISTEMA DE VOZ EM TEMPO REAL ESTILO DISCORD (WEBRTC — 100% SEM SUPABASE)
+// ════════════════════════════════════════════════════════════════════════════
+const voiceRoomPeers = new Map(); // peerId -> { nick, platform, avatar, isMuted, isDeafened, lastSeen, joinedAt }
+
+function cleanupVoicePeers() {
+  const now = Date.now();
+  for (const [peerId, peer] of voiceRoomPeers.entries()) {
+    if (now - peer.lastSeen > 12000) { // 12 segundos sem heartbeat remove
+      voiceRoomPeers.delete(peerId);
+    }
+  }
+}
+
+// Entrar ou registrar presença na sala de voz
+app.post('/api/voice/join', (req, res) => {
+  cleanupVoicePeers();
+  const { peerId, nick, platform, isMuted, isDeafened } = req.body || {};
+  if (!peerId || !nick) {
+    return res.status(400).json({ error: 'peerId e nick são obrigatórios.' });
+  }
+
+  const now = Date.now();
+  voiceRoomPeers.set(peerId, {
+    peerId,
+    nick,
+    platform: platform || 'Minecraft',
+    avatar: `https://mc-heads.net/avatar/${encodeURIComponent(nick)}/64`,
+    isMuted: !!isMuted,
+    isDeafened: !!isDeafened,
+    lastSeen: now,
+    joinedAt: voiceRoomPeers.has(peerId) ? voiceRoomPeers.get(peerId).joinedAt : now
+  });
+
+  const activePeers = Array.from(voiceRoomPeers.values());
+  res.json({ success: true, count: activePeers.length, peers: activePeers });
+});
+
+// Listar peers ativos na chamada de voz
+app.get('/api/voice/peers', (req, res) => {
+  cleanupVoicePeers();
+  const activePeers = Array.from(voiceRoomPeers.values());
+  res.json({ success: true, count: activePeers.length, peers: activePeers });
+});
+
+// Heartbeat periódico (mantém o peer vivo e sincroniza status de mute)
+app.post('/api/voice/heartbeat', (req, res) => {
+  cleanupVoicePeers();
+  const { peerId, isMuted, isDeafened } = req.body || {};
+  if (peerId && voiceRoomPeers.has(peerId)) {
+    const peer = voiceRoomPeers.get(peerId);
+    peer.lastSeen = Date.now();
+    if (isMuted !== undefined) peer.isMuted = !!isMuted;
+    if (isDeafened !== undefined) peer.isDeafened = !!isDeafened;
+  }
+  const activePeers = Array.from(voiceRoomPeers.values());
+  res.json({ success: true, count: activePeers.length, peers: activePeers });
+});
+
+// Sair da chamada de voz
+app.post('/api/voice/leave', (req, res) => {
+  const { peerId } = req.body || {};
+  if (peerId) {
+    voiceRoomPeers.delete(peerId);
+  }
+  cleanupVoicePeers();
+  res.json({ success: true });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 //  SISTEMA DE VIDAS — ROTAS DA API
 // ════════════════════════════════════════════════════════════════════════════
 
