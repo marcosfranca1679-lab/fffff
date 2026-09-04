@@ -1169,9 +1169,18 @@ async function checkAndRunLivesCycleReset() {
   return getLivesCycleInfo();
 }
 
-// ─── PERSISTÊNCIA DEDICADA DE VIDAS (Tabela player_lives) ───────────────────
+// ─── PERSISTÊNCIA DEDICADA DE VIDAS (player_lives + contingência) ─────────────
 async function salvarVidasNoBanco(nick, livesObj) {
   const now = new Date().toISOString();
+  const payload = {
+    lives: livesObj.lives,
+    max_lives: 5,
+    cycleIndex: livesObj.cycleIndex,
+    last_death_at: livesObj.last_death_at || null,
+    updated_at: now
+  };
+
+  // 1. Tenta salvar na tabela dedicada player_lives
   await safeDb(
     supabase
       .from('player_lives')
@@ -1183,9 +1192,39 @@ async function salvarVidasNoBanco(nick, livesObj) {
         updated_at: now
       }, { onConflict: 'nick' })
   );
+
+  // 2. Contingência garantida (tabela messages com role system_lives — nunca falha)
+  try {
+    const { data: records } = await supabase
+      .from('messages')
+      .select('id, author_nick')
+      .eq('author_role', 'system_lives');
+
+    const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
+    if (matched && matched.id) {
+      await safeDb(
+        supabase.from('messages').update({
+          content: JSON.stringify(payload),
+          author_platform: String(livesObj.lives),
+          created_at: now
+        }).eq('id', matched.id)
+      );
+    } else {
+      await safeDb(
+        supabase.from('messages').insert([{
+          author_nick: nick,
+          author_role: 'system_lives',
+          author_platform: String(livesObj.lives),
+          content: JSON.stringify(payload),
+          created_at: now
+        }])
+      );
+    }
+  } catch (_) {}
 }
 
 async function carregarVidasDoBanco(nick, cycle) {
+  // 1. Tenta ler da tabela dedicada player_lives
   try {
     const { data: pl } = await supabase
       .from('player_lives')
@@ -1193,13 +1232,31 @@ async function carregarVidasDoBanco(nick, cycle) {
       .ilike('nick', nick)
       .maybeSingle();
 
-    if (pl) {
+    if (pl && pl.lives !== undefined) {
       return {
-        lives: Math.max(0, Math.min(5, pl.lives !== undefined ? pl.lives : 5)),
+        lives: Math.max(0, Math.min(5, pl.lives)),
         last_death_at: pl.last_death_at || null
       };
     }
   } catch (_) {}
+
+  // 2. Contingência em system_lives
+  try {
+    const { data: records } = await supabase
+      .from('messages')
+      .select('author_nick, content')
+      .eq('author_role', 'system_lives');
+
+    const matched = (records || []).find(r => r.author_nick && r.author_nick.toLowerCase() === nick.toLowerCase());
+    if (matched && matched.content) {
+      const parsed = typeof matched.content === 'string' ? JSON.parse(matched.content) : matched.content;
+      return {
+        lives: Math.max(0, Math.min(5, parsed.lives !== undefined ? parsed.lives : 5)),
+        last_death_at: parsed.last_death_at || null
+      };
+    }
+  } catch (_) {}
+
   return null;
 }
 
@@ -2019,10 +2076,15 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 
-    // Busca de dados da tabela dedicada player_lives
+    // Busca de dados da tabela dedicada player_lives e contingência
     const { data: dbLives } = await supabase
       .from('player_lives')
       .select('*');
+
+    const { data: msgLives } = await supabase
+      .from('messages')
+      .select('author_nick, content')
+      .eq('author_role', 'system_lives');
 
     // Busca todos os jogadores aprovados
     const { data: players } = await supabase
@@ -2030,13 +2092,28 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
       .select('nick, status, platform')
       .eq('status', 'approved');
 
+    const msgMap = new Map();
+    (msgLives || []).forEach(m => {
+      const k = (m.author_nick || '').toLowerCase();
+      if (k && !msgMap.has(k)) {
+        try {
+          const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+          msgMap.set(k, parsed);
+        } catch (_) {}
+      }
+    });
+
     const livesMap = new Map((dbLives || []).map(l => [l.nick.toLowerCase(), l]));
 
-    // Mescla: todos os jogadores aprovados com suas vidas da tabela player_lives
+    // Mescla: todos os jogadores aprovados com suas vidas
     const result = (players || []).map(p => {
       const key = p.nick.toLowerCase();
       const liveEntry = livesMap.get(key);
-      const lives = (liveEntry && liveEntry.lives !== undefined) ? liveEntry.lives : 5;
+      const msgEntry = msgMap.get(key);
+
+      let lives = 5;
+      if (liveEntry && liveEntry.lives !== undefined) lives = liveEntry.lives;
+      else if (msgEntry && msgEntry.lives !== undefined) lives = msgEntry.lives;
 
       const isOnline = !!(liveTelemetryCache.get(key) && liveTelemetryCache.get(key).event !== 'logout');
       return {
@@ -2046,7 +2123,7 @@ app.get('/api/admin/lives', requireAdmin, async (req, res) => {
         max_lives: 5,
         isEliminated: lives <= 0,
         isOnline,
-        last_death_at: liveEntry ? liveEntry.last_death_at : null
+        last_death_at: liveEntry ? liveEntry.last_death_at : (msgEntry ? msgEntry.last_death_at : null)
       };
     }).sort((a, b) => a.nick.localeCompare(b.nick, 'pt-BR', { sensitivity: 'base' }));
 
