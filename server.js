@@ -1482,6 +1482,25 @@ app.post('/api/telemetry/:nick', async (req, res) => {
           }]));
         }
       });
+
+      // 3. Atualiza tabela dedicada player_rankings (isolada do chat)
+      if (payload.playtimeSeconds !== undefined || payload.playtimeFormatted) {
+        let sec = Number(payload.playtimeSeconds) || 0;
+        if (!sec && payload.playtimeFormatted) {
+          sec = parseFormattedPlaytimeToSeconds(payload.playtimeFormatted);
+        }
+        safeDb(
+          supabase.from('player_rankings').upsert({
+            nick,
+            playtime_seconds: sec,
+            playtime_formatted: payload.playtimeFormatted || formatPlaytimeFromSeconds(sec),
+            total_deaths: Number(payload.totalDeaths) || 0,
+            level: Number(payload.level) || 0,
+            last_seen_at: payload.reported_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'nick' })
+        );
+      }
     }
 
     res.json({ success: true, live: true, commands: pendingConsoleCommands.splice(0) });
@@ -1907,7 +1926,13 @@ function parseFormattedPlaytimeToSeconds(str) {
 
 app.get('/api/ranking/playtime', async (req, res) => {
   try {
-    // 1. Busca todos os registros de telemetria salvos no Supabase
+    // 1. Busca todos os registros da tabela dedicada player_rankings
+    const { data: dbRanks } = await supabase
+      .from('player_rankings')
+      .select('*')
+      .order('playtime_seconds', { ascending: false });
+
+    // Fallback de telemetria se player_rankings ainda estiver sendo populada
     const { data: dbTelemetry } = await supabase
       .from('messages')
       .select('author_nick, content, created_at')
@@ -1937,7 +1962,24 @@ app.get('/api/ranking/playtime', async (req, res) => {
       });
     }
 
-    // Carrega do banco de telemetria
+    // Carrega dados da tabela dedicada player_rankings
+    for (const row of (dbRanks || [])) {
+      const nick = (row.nick || '').trim();
+      if (!nick) continue;
+      const key = nick.toLowerCase();
+      const sec = Number(row.playtime_seconds) || 0;
+      playersMap.set(key, {
+        nick: row.nick,
+        playtimeSeconds: sec,
+        playtimeFormatted: row.playtime_formatted || formatPlaytimeFromSeconds(sec),
+        totalDeaths: Number(row.total_deaths) || 0,
+        level: Number(row.level) || 0,
+        isOnline: false,
+        lastReported: row.updated_at || row.last_seen_at
+      });
+    }
+
+    // Carrega também do banco de telemetria como contingência
     for (const row of (dbTelemetry || [])) {
       const nick = (row.author_nick || '').trim();
       if (!nick) continue;
@@ -2027,19 +2069,6 @@ app.get('/api/ranking/playtime', async (req, res) => {
       isOnline: !!p.isOnline,
       avatar: `https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/64`
     }));
-
-    // 7. Persiste o snapshot mais recente do ranking na tabela messages com author_role = 'playtime_rank'
-    if (top5.length > 0) {
-      safeDb(
-        supabase.from('messages').insert([{
-          author_nick: 'Sistema',
-          author_role: 'playtime_rank',
-          author_platform: 'web',
-          content: JSON.stringify(top5),
-          created_at: new Date().toISOString()
-        }])
-      );
-    }
 
     res.json({
       success: true,
