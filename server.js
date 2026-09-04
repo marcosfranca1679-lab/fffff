@@ -339,7 +339,7 @@ app.get('/api/chat', async (req, res) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank","player_lives")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank","player_lives","system_lives")')
       .order('created_at', { ascending: false })
       .limit(60);
 
@@ -411,11 +411,20 @@ app.post('/api/chat', requireAuth, async (req, res) => {
 // Limpeza manual do chat pelo Administrador
 app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
   try {
-    // Apaga ESTRITAMENTE as mensagens de chat reais (preserva telemetria, bans, ips banidos, mortes, conexões, logs de console, ranks e vidas)
+    // Apaga ESTRITAMENTE as conversas reais dos jogadores no chat (preserva vidas, telemetria, bans e logs)
     await supabase
       .from('messages')
       .delete()
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank","player_lives")');
+      .in('author_role', ['player', 'user'])
+      .not('content', 'like', '{"%');
+
+    // Apaga mensagens de bate-papo enviadas pelo Admin (preserva mensagens oficiais do Sistema)
+    await supabase
+      .from('messages')
+      .delete()
+      .eq('author_role', 'admin')
+      .neq('author_nick', 'Sistema')
+      .not('content', 'like', '{"%');
 
     // Insere mensagem de sistema informando que foi limpo
     await supabase.from('messages').insert([{
