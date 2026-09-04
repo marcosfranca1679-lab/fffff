@@ -1323,6 +1323,20 @@ async function definirVidasJogador(nick, lives) {
       }, { onConflict: 'nick' })
   );
 
+  // Se o admin zerou as vidas, expulsa o jogador do Minecraft imediatamente
+  if (safeLives <= 0) {
+    const kickCmd = {
+      id: Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+      type: 'kick',
+      target: nick,
+      command: `kick ${nick} Suas vidas acabaram! Aguarde o reset em ${current.remainingReset || '8h'}.`,
+      sender: 'Admin',
+      created_at: now
+    };
+    pendingConsoleCommands.push(kickCmd);
+    registrarConsoleLog('error', `💀 ${nick} teve suas vidas zeradas pelo Administrador e foi expulso do servidor!`, 'Admin');
+  }
+
   return current;
 }
 
