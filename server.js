@@ -1243,18 +1243,45 @@ async function salvarVidasNoBanco(nick, livesObj) {
     updated_at: now
   };
 
-  // 1. Tenta salvar na tabela dedicada player_lives
-  await safeDb(
-    supabase
+  // 1. Tenta salvar na tabela dedicada player_lives evitando duplicatas de maiúsculas/minúsculas
+  try {
+    const { data: existingRows } = await supabase
       .from('player_lives')
-      .upsert({
-        nick,
-        lives: livesObj.lives,
-        max_lives: 5,
-        last_death_at: livesObj.last_death_at || null,
-        updated_at: now
-      }, { onConflict: 'nick' })
-  );
+      .select('id, nick')
+      .ilike('nick', nick);
+
+    if (existingRows && existingRows.length > 0) {
+      const primaryId = existingRows[0].id;
+      await safeDb(
+        supabase
+          .from('player_lives')
+          .update({
+            nick,
+            lives: livesObj.lives,
+            max_lives: 5,
+            last_death_at: livesObj.last_death_at || null,
+            updated_at: now
+          })
+          .eq('id', primaryId)
+      );
+      if (existingRows.length > 1) {
+        const extraIds = existingRows.slice(1).map(r => r.id);
+        await safeDb(supabase.from('player_lives').delete().in('id', extraIds));
+      }
+    } else {
+      await safeDb(
+        supabase
+          .from('player_lives')
+          .insert([{
+            nick,
+            lives: livesObj.lives,
+            max_lives: 5,
+            last_death_at: livesObj.last_death_at || null,
+            updated_at: now
+          }])
+      );
+    }
+  } catch (_) {}
 
   // 2. Contingência garantida (tabela messages com role system_lives — nunca falha)
   try {
