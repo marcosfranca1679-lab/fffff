@@ -2183,16 +2183,42 @@ const voiceRoomPeers = new Map(); // peerId -> { nick, platform, avatar, isMuted
 function cleanupVoicePeers() {
   const now = Date.now();
   for (const [peerId, peer] of voiceRoomPeers.entries()) {
-    if (now - peer.lastSeen > 12000) { // 12 segundos sem heartbeat remove
+    if (now - peer.lastSeen > 25000) { // 25 segundos sem heartbeat remove
       voiceRoomPeers.delete(peerId);
     }
   }
 }
 
+function mergeKnownPeers(knownPeers) {
+  if (!Array.isArray(knownPeers)) return;
+  const now = Date.now();
+  knownPeers.forEach(p => {
+    if (p && p.peerId && p.nick) {
+      if (!voiceRoomPeers.has(p.peerId)) {
+        voiceRoomPeers.set(p.peerId, {
+          peerId: p.peerId,
+          nick: p.nick,
+          platform: p.platform || 'Minecraft',
+          avatar: p.avatar || `https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/64`,
+          isMuted: !!p.isMuted,
+          isDeafened: !!p.isDeafened,
+          lastSeen: now,
+          joinedAt: now
+        });
+      } else {
+        const existing = voiceRoomPeers.get(p.peerId);
+        existing.lastSeen = now;
+        if (p.isMuted !== undefined) existing.isMuted = !!p.isMuted;
+        if (p.isDeafened !== undefined) existing.isDeafened = !!p.isDeafened;
+      }
+    }
+  });
+}
+
 // Entrar ou registrar presença na sala de voz
 app.post('/api/voice/join', (req, res) => {
   cleanupVoicePeers();
-  const { peerId, nick, platform, isMuted, isDeafened } = req.body || {};
+  const { peerId, nick, platform, isMuted, isDeafened, knownPeers } = req.body || {};
   if (!peerId || !nick) {
     return res.status(400).json({ error: 'peerId e nick são obrigatórios.' });
   }
@@ -2209,6 +2235,8 @@ app.post('/api/voice/join', (req, res) => {
     joinedAt: voiceRoomPeers.has(peerId) ? voiceRoomPeers.get(peerId).joinedAt : now
   });
 
+  mergeKnownPeers(knownPeers);
+
   const activePeers = Array.from(voiceRoomPeers.values());
   res.json({ success: true, count: activePeers.length, peers: activePeers });
 });
@@ -2223,13 +2251,19 @@ app.get('/api/voice/peers', (req, res) => {
 // Heartbeat periódico (mantém o peer vivo e sincroniza status de mute)
 app.post('/api/voice/heartbeat', (req, res) => {
   cleanupVoicePeers();
-  const { peerId, isMuted, isDeafened } = req.body || {};
-  if (peerId && voiceRoomPeers.has(peerId)) {
-    const peer = voiceRoomPeers.get(peerId);
-    peer.lastSeen = Date.now();
-    if (isMuted !== undefined) peer.isMuted = !!isMuted;
-    if (isDeafened !== undefined) peer.isDeafened = !!isDeafened;
+  const { peerId, isMuted, isDeafened, knownPeers } = req.body || {};
+  if (peerId) {
+    const now = Date.now();
+    if (voiceRoomPeers.has(peerId)) {
+      const peer = voiceRoomPeers.get(peerId);
+      peer.lastSeen = now;
+      if (isMuted !== undefined) peer.isMuted = !!isMuted;
+      if (isDeafened !== undefined) peer.isDeafened = !!isDeafened;
+    }
   }
+
+  mergeKnownPeers(knownPeers);
+
   const activePeers = Array.from(voiceRoomPeers.values());
   res.json({ success: true, count: activePeers.length, peers: activePeers });
 });
