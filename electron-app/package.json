@@ -12,7 +12,7 @@
     "productName": "5DAY MC",
     "copyright": "5DAY MC",
     "win": {
-      "icon": "assets/icon.png",
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
