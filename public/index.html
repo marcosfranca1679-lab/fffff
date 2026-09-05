@@ -3413,6 +3413,13 @@
         // Responde a chamadas recebidas de outros jogadores na sala
         myVoicePeer.on('call', (incomingCall) => {
           console.log('[Voice] Recebendo chamada WebRTC de:', incomingCall.peer);
+          
+          // Se já havia uma chamada antiga travada com este peer, fecha antes de atender a nova
+          if (activeCallsMap.has(incomingCall.peer)) {
+            try { activeCallsMap.get(incomingCall.peer).close(); } catch (_) {}
+            activeCallsMap.delete(incomingCall.peer);
+          }
+
           incomingCall.answer(localVoiceStream);
 
           // Registra o novo participante instantaneamente na tela de quem já estava na sala!
@@ -3640,13 +3647,18 @@
       // 3. Atualiza visual do palco (exibe todos os membros ativos sem sumir nem piscar)
       renderizarGridParticipantes(activePeers);
 
-      // 4. Conecta via WebRTC P2P com novos peers na sala
+      // 4. Conecta via WebRTC P2P com novos peers na sala usando regra determinística (evita colisão de chamada dupla)
       activePeers.forEach(p => {
         if (p.peerId !== myVoicePeerId && !activeCallsMap.has(p.peerId)) {
-          console.log('[Voice] Iniciando chamada WebRTC P2P para:', p.peerId);
-          const call = myVoicePeer.call(p.peerId, localVoiceStream);
-          if (call) {
-            tratarStreamRemoto(p.peerId, call);
+          // Apenas um dos lados inicia a chamada (quem tiver peerId lexicograficamente maior)
+          // O outro lado aguarda o evento 'call' e responde com incomingCall.answer(localVoiceStream)
+          // Isso garante conexão bidirecional perfeita sem cancelamento mútuo!
+          if (myVoicePeerId > p.peerId) {
+            console.log('[Voice] Iniciando chamada WebRTC P2P (Caller) para:', p.peerId);
+            const call = myVoicePeer.call(p.peerId, localVoiceStream);
+            if (call) {
+              tratarStreamRemoto(p.peerId, call);
+            }
           }
         }
       });
