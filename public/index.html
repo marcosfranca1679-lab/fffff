@@ -3386,6 +3386,14 @@
     function limparPeerRemoto(remotePeerId) {
       activeCallsMap.delete(remotePeerId);
       remoteAnalysersMap.delete(remotePeerId);
+
+      localPeersRegistryMap.delete(remotePeerId);
+      for (const [pId, item] of localPeersRegistryMap.entries()) {
+        if (pId === remotePeerId || (item.peerData && item.peerData.peerId === remotePeerId)) {
+          localPeersRegistryMap.delete(pId);
+        }
+      }
+
       const audioEl = remoteAudioElementsMap.get(remotePeerId);
       if (audioEl) {
         try {
@@ -3394,6 +3402,8 @@
         } catch (_) {}
         remoteAudioElementsMap.delete(remotePeerId);
       }
+
+      renderizarGridParticipantes(obterListaPeersMesh());
     }
 
     const localPeersRegistryMap = new Map(); // peerId -> { peerData, lastSeenLocally }
@@ -3682,7 +3692,7 @@
         fetch('/api/voice/leave', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ peerId: myVoicePeerId })
+          body: JSON.stringify({ peerId: myVoicePeerId, nick: currentUser ? currentUser.nick : '' })
         }).catch(() => {});
       }
 
@@ -3768,7 +3778,7 @@
     window.addEventListener('beforeunload', () => {
       if (myVoicePeerId) {
         try {
-          navigator.sendBeacon('/api/voice/leave', JSON.stringify({ peerId: myVoicePeerId }));
+          navigator.sendBeacon('/api/voice/leave', JSON.stringify({ peerId: myVoicePeerId, nick: currentUser ? currentUser.nick : '' }));
         } catch (_) {}
       }
     });
@@ -3776,7 +3786,7 @@
     window.addEventListener('pagehide', () => {
       if (myVoicePeerId) {
         try {
-          navigator.sendBeacon('/api/voice/leave', JSON.stringify({ peerId: myVoicePeerId }));
+          navigator.sendBeacon('/api/voice/leave', JSON.stringify({ peerId: myVoicePeerId, nick: currentUser ? currentUser.nick : '' }));
         } catch (_) {}
       }
     });
