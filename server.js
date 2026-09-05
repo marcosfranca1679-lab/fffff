@@ -2182,9 +2182,28 @@ const voiceRoomPeers = new Map(); // peerId -> { nick, platform, avatar, isMuted
 
 function cleanupVoicePeers() {
   const now = Date.now();
+
+  // 1. Remove peers sem heartbeat por mais de 10 segundos
   for (const [peerId, peer] of voiceRoomPeers.entries()) {
-    if (now - peer.lastSeen > 25000) { // 25 segundos sem heartbeat remove
+    if (now - peer.lastSeen > 10000) {
       voiceRoomPeers.delete(peerId);
+    }
+  }
+
+  // 2. Garante desduplicação por nickname na lista ativa
+  const byNick = new Map();
+  for (const [peerId, peer] of voiceRoomPeers.entries()) {
+    const nickLower = String(peer.nick || '').toLowerCase();
+    if (!byNick.has(nickLower) || peer.lastSeen > byNick.get(nickLower).lastSeen) {
+      byNick.set(nickLower, { peerId, peer });
+    }
+  }
+
+  // Deleta do mapa qualquer peerId antigo que foi sobrescrito por uma sessão mais recente do mesmo nick
+  const activeIds = new Set(Array.from(byNick.values()).map(x => x.peerId));
+  for (const [pId] of voiceRoomPeers.entries()) {
+    if (!activeIds.has(pId)) {
+      voiceRoomPeers.delete(pId);
     }
   }
 }
