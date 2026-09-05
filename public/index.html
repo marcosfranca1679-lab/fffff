@@ -1525,7 +1525,18 @@
       const initial = (u.nick || 'J').substring(0, 1).toUpperCase();
       const avBadge = document.getElementById('user-avatar-badge');
       if (avBadge) avBadge.textContent = initial;
-      
+
+      // Se já está logado, esconde botões de login e mostra card logado na home
+      const guestCard = document.getElementById('home-guest-card');
+      const loggedCard = document.getElementById('home-logged-card');
+      if (guestCard) guestCard.classList.add('hidden');
+      if (loggedCard) {
+        loggedCard.classList.remove('hidden');
+        const homeNick = document.getElementById('home-nick');
+        const homeAvatar = document.getElementById('home-avatar');
+        if (homeNick) homeNick.textContent = u.nick || 'Jogador';
+        if (homeAvatar) homeAvatar.textContent = initial;
+      }
       document.getElementById('drawer-user-nick').textContent = u.nick;
       document.getElementById('drawer-user-role').textContent = isUserAdmin ? '👑 Administrador' : (u.platform || 'Jogador');
       
