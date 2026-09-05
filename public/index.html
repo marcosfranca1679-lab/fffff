@@ -3276,6 +3276,15 @@
         myVoicePeer.on('call', (incomingCall) => {
           console.log('[Voice] Recebendo chamada WebRTC de:', incomingCall.peer);
           incomingCall.answer(localVoiceStream);
+
+          // Registra o novo participante instantaneamente na tela de quem já estava na sala!
+          const remoteInfo = extrairInfoDoPeerId(incomingCall.peer);
+          localPeersRegistryMap.set(incomingCall.peer, {
+            peerData: remoteInfo,
+            lastSeenLocally: Date.now()
+          });
+          renderizarGridParticipantes(obterListaPeersMesh());
+
           tratarStreamRemoto(incomingCall.peer, incomingCall);
         });
 
@@ -3296,6 +3305,22 @@
           `;
         }
       }
+    }
+
+    function extrairInfoDoPeerId(remotePeerId) {
+      const parts = String(remotePeerId || '').split('_');
+      let nick = 'Jogador';
+      if (parts.length >= 2 && parts[0] === '5day') {
+        nick = parts[1] || 'Jogador';
+      }
+      return {
+        peerId: remotePeerId,
+        nick: nick,
+        platform: 'Minecraft',
+        avatar: `https://mc-heads.net/avatar/${encodeURIComponent(nick)}/64`,
+        isMuted: false,
+        isDeafened: false
+      };
     }
 
     function tratarStreamRemoto(remotePeerId, callObj) {
@@ -3452,15 +3477,13 @@
       // 3. Atualiza visual do palco (exibe todos os membros ativos sem sumir nem piscar)
       renderizarGridParticipantes(activePeers);
 
-      // 4. Conecta via WebRTC P2P com novos peers (se o nosso ID for lexicograficamente maior)
+      // 4. Conecta via WebRTC P2P com novos peers na sala
       activePeers.forEach(p => {
         if (p.peerId !== myVoicePeerId && !activeCallsMap.has(p.peerId)) {
-          if (myVoicePeer && myVoicePeerId > p.peerId) {
-            console.log('[Voice] Iniciando chamada WebRTC P2P para:', p.peerId);
-            const call = myVoicePeer.call(p.peerId, localVoiceStream);
-            if (call) {
-              tratarStreamRemoto(p.peerId, call);
-            }
+          console.log('[Voice] Iniciando chamada WebRTC P2P para:', p.peerId);
+          const call = myVoicePeer.call(p.peerId, localVoiceStream);
+          if (call) {
+            tratarStreamRemoto(p.peerId, call);
           }
         }
       });
