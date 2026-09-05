@@ -1331,49 +1331,56 @@
     });
 
     function iniciarAutoRefresh() {
-      // 1. Chat: apenas quando o usuário está no canal #chat-geral
+      // 1. Chat: apenas quando o usuário está ativamente no canal #chat-geral
       setInterval(() => {
         if (!document.hidden && currentChannel === 'chat') {
           carregarChat();
         }
-      }, 4000);
+      }, 7000);
 
-      // 2. Bans: apenas quando o usuário está no mural de bans
+      // 2. Bans: apenas quando o usuário está visualizando o mural de bans
       setInterval(() => {
         if (!document.hidden && currentChannel === 'bans') {
           carregarBans();
         }
-      }, 8000);
+      }, 18000);
 
       // 3. Ranking: apenas quando o usuário está na aba de ranking
       setInterval(() => {
         if (!document.hidden && currentChannel === 'ranking-horas') {
           carregarRankingHoras(true);
         }
-      }, 8000);
+      }, 25000);
 
-      // 4. Admin: apenas se for admin e estiver em abas administrativas
+      // 4. Admin Whitelist & Vidas: apenas se for admin e estiver na aba admin
       setInterval(() => {
-        if (!document.hidden && isUserAdmin) {
-          if (currentChannel === 'admin') {
+        if (!document.hidden && isUserAdmin && currentChannel === 'admin') {
+          if (adminModulo === 'online') {
             carregarAdminData();
+          } else if (adminModulo === 'banimentos') {
             const bansList = document.getElementById('admin-bans-list');
             if (bansList && !bansList.classList.contains('hidden')) carregarAdminBans();
             const ipBansList = document.getElementById('admin-ip-bans-list');
             if (ipBansList && !ipBansList.classList.contains('hidden')) carregarAdminIpBans();
-            if (adminModulo === 'vidas') carregarAdminVidas();
-          } else if (currentChannel === 'console') {
-            carregarConsoleLogs(true);
+          } else if (adminModulo === 'vidas') {
+            carregarAdminVidas();
           }
         }
-      }, 4000);
+      }, 8000);
 
-      // 5. Sessão do usuário: renovação silenciosa estendida para 30s
+      // 5. Console do Servidor: apenas se for admin e estiver com a tela do console aberta
       setInterval(() => {
-        if (!document.hidden) {
+        if (!document.hidden && isUserAdmin && currentChannel === 'console') {
+          carregarConsoleLogs(true);
+        }
+      }, 5000);
+
+      // 6. Sessão do usuário: renovação suave a cada 60s
+      setInterval(() => {
+        if (!document.hidden && currentUser) {
           atualizarMeuStatusSilencioso();
         }
-      }, 30000);
+      }, 60000);
     }
 
     // ── Submenu Lateral ──────────────────────────────────────────────────────
