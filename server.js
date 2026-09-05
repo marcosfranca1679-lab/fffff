@@ -846,10 +846,19 @@ app.post('/api/admin/unban/:nick', requireAdmin, async (req, res) => {
     const now = new Date().toISOString();
     const { error } = await supabase
       .from('players')
-      .update({ status: 'pending', ban_reason: null, updated_at: now })
+      .update({ status: 'approved', ban_reason: null, updated_at: now })
       .ilike('nick', nick);
 
     if (error) throw error;
+
+    // Limpa ban de IP associado ao nick se houver
+    safeDb(supabase.from('messages').delete().eq('author_role', 'ip_ban').ilike('author_platform', nick));
+    for (const [ip, item] of bannedIpsCache.entries()) {
+      if (item.associatedNick && item.associatedNick.toLowerCase() === nick.toLowerCase()) {
+        bannedIpsCache.delete(ip);
+        safeDb(supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', ip));
+      }
+    }
 
     // Registra permanentemente o desbanimento no histórico do jogador
     try {
@@ -866,7 +875,7 @@ app.post('/api/admin/unban/:nick', requireAdmin, async (req, res) => {
       }]);
     } catch (_) {}
 
-    res.json({ success: true, message: `✅ ${nick} foi desbanido!` });
+    res.json({ success: true, message: `✅ ${nick} foi desbanido e liberado na Whitelist!` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -921,9 +930,15 @@ app.post('/api/admin/add', requireAdmin, async (req, res) => {
     if (!validarNick(nick)) return res.status(400).json({ error: 'Nick inválido.' });
 
     const now = new Date().toISOString();
+
+    // Remove qualquer duplicata existente antes (case-insensitive) para evitar conflitos de maiúsculas/minúsculas
+    await safeDb(
+      supabase.from('players').delete().ilike('nick', nick)
+    );
+
     const { error } = await supabase
       .from('players')
-      .upsert({ nick, status: 'approved', platform, updated_at: now }, { onConflict: 'nick' });
+      .insert([{ nick, status: 'approved', platform, updated_at: now, requested_at: now }]);
 
     if (error) throw error;
     res.json({ success: true, message: `✅ ${nick} adicionado e aprovado!` });
@@ -1809,11 +1824,14 @@ app.get('/api/check/:nick', async (req, res) => {
       }
     }
 
-    const { data: player, error } = await supabase
+    const { data: players, error } = await supabase
       .from('players')
       .select('status, ban_reason')
       .ilike('nick', nick)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    const player = (players && players.length > 0) ? players[0] : null;
 
     if (error || !player) {
       return res.json({ allowed: false, banned: false, notFound: true, nick });
