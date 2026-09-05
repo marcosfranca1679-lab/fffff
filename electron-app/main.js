@@ -10,7 +10,7 @@ function createWindow() {
     minWidth: 420,
     minHeight: 600,
     title: '5DAY MC',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    icon: path.join(__dirname, 'assets', 'icon.ico'),
     backgroundColor: '#0f0f23',
     autoHideMenuBar: true,
     show: false,
