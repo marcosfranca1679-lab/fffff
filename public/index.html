@@ -3199,7 +3199,7 @@
         return;
       }
 
-      const btnConnect = document.getElementById('btn-voice-connect');
+      const btnConnect = document.getElementById('btn-voice-connect-main') || document.getElementById('btn-voice-connect');
       if (btnConnect) {
         btnConnect.disabled = true;
         btnConnect.innerHTML = `<span class="animate-spin inline-block mr-1">⏳</span> Conectando...`;
@@ -3244,9 +3244,13 @@
         myVoicePeer.on('open', async (id) => {
           console.log('[Voice] Conectado ao broker WebRTC com ID:', id);
           
-          // Registra presença no backend (em memória, zero Supabase!)
+          tocarSomVoz('join');
+          atualizarInterfaceVozConectada(true);
+          iniciarDetecaoFalaVoz();
+
+          // Registra presença no backend e obtém peers já conectados imediatamente
           try {
-            await fetch('/api/voice/join', {
+            const res = await fetch('/api/voice/join', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -3257,17 +3261,20 @@
                 isDeafened: isVoiceDeafened
               })
             });
-          } catch (_) {}
+            const data = await res.json();
+            if (data.peers) {
+              sincronizarParticipantesVoz(data.peers);
+            }
+          } catch (err) {
+            console.error('[Voice] Erro ao registrar join:', err);
+          }
 
-          tocarSomVoz('join');
-          atualizarInterfaceVozConectada(true);
           iniciarHeartbeatVoz();
-          iniciarDetecaoFalaVoz();
         });
 
         // Responde a chamadas recebidas de outros jogadores na sala
         myVoicePeer.on('call', (incomingCall) => {
-          console.log('[Voice] Recebendo chamada de:', incomingCall.peer);
+          console.log('[Voice] Recebendo chamada WebRTC de:', incomingCall.peer);
           incomingCall.answer(localVoiceStream);
           tratarStreamRemoto(incomingCall.peer, incomingCall);
         });
@@ -3284,8 +3291,8 @@
         if (btnConnect) {
           btnConnect.disabled = false;
           btnConnect.innerHTML = `
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
-            <span>Entrar na Call</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+            <span>Conectar à Chamada</span>
           `;
         }
       }
@@ -3309,7 +3316,7 @@
         }
         audioEl.srcObject = remoteStream;
         audioEl.muted = isVoiceDeafened;
-        audioEl.play().catch(() => {});
+        audioEl.play().catch(err => console.warn('[Voice] Autoplay blocked, waiting user gesture:', err));
 
         // Conecta analisador de áudio para acender o anel verde quando o outro jogador falar!
         try {
@@ -3336,21 +3343,18 @@
       remoteAnalysersMap.delete(remotePeerId);
       const audioEl = remoteAudioElementsMap.get(remotePeerId);
       if (audioEl) {
-        audioEl.srcObject = null;
-        audioEl.remove();
+        try {
+          audioEl.srcObject = null;
+          audioEl.remove();
+        } catch (_) {}
         remoteAudioElementsMap.delete(remotePeerId);
-      }
-      const elAvatar = document.getElementById('voice-avatar-' + remotePeerId);
-      if (elAvatar && elAvatar.parentElement) {
-        elAvatar.parentElement.remove();
       }
     }
 
     function iniciarHeartbeatVoz() {
       if (voiceHeartbeatTimer) clearInterval(voiceHeartbeatTimer);
       
-      // Envia heartbeat a cada 3.5 segundos
-      voiceHeartbeatTimer = setInterval(async () => {
+      const executarHeartbeat = async () => {
         if (!myVoicePeerId || !localVoiceStream) return;
         try {
           const res = await fetch('/api/voice/heartbeat', {
@@ -3367,17 +3371,25 @@
             sincronizarParticipantesVoz(data.peers);
           }
         } catch (_) {}
-      }, 3500);
+      };
+
+      // Executa imediatamente uma vez
+      executarHeartbeat();
+      // Repete a cada 2.5 segundos para resposta rápida
+      voiceHeartbeatTimer = setInterval(executarHeartbeat, 2500);
     }
 
     function sincronizarParticipantesVoz(peers) {
       currentVoicePeersList = peers || [];
 
-      // Conecta com peers novos se nosso peerId for lexicograficamente maior (evita chamadas duplicadas simultâneas)
+      // 1. Atualiza visual do palco primeiro (exibe todos na sala)
+      renderizarGridParticipantes(peers);
+
+      // 2. Conecta via WebRTC com peers se o nosso ID for maior (evita chamadas duplicadas)
       peers.forEach(p => {
         if (p.peerId !== myVoicePeerId && !activeCallsMap.has(p.peerId)) {
           if (myVoicePeer && myVoicePeerId > p.peerId) {
-            console.log('[Voice] Ligando ativamente para novo peer:', p.peerId);
+            console.log('[Voice] Iniciando chamada WebRTC para:', p.peerId);
             const call = myVoicePeer.call(p.peerId, localVoiceStream);
             if (call) {
               tratarStreamRemoto(p.peerId, call);
@@ -3386,15 +3398,13 @@
         }
       });
 
-      // Remove peers que já saíram
+      // 3. Limpa conexões encerradas
       const currentActiveSet = new Set(peers.map(p => p.peerId));
       for (const [pId] of activeCallsMap.entries()) {
         if (!currentActiveSet.has(pId)) {
           limparPeerRemoto(pId);
         }
       }
-
-      renderizarGridParticipantes(peers);
     }
 
     function renderizarGridParticipantes(peers) {
