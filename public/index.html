@@ -3302,7 +3302,7 @@
       activeCallsMap.set(remotePeerId, callObj);
 
       callObj.on('stream', (remoteStream) => {
-        console.log('[Voice] Recebido stream de áudio do peer:', remotePeerId);
+        console.log('[Voice] Stream de áudio WebRTC recebido do peer:', remotePeerId);
         
         let audioEl = remoteAudioElementsMap.get(remotePeerId);
         if (!audioEl) {
@@ -3310,30 +3310,50 @@
           audioEl.id = 'audio-remote-' + remotePeerId;
           audioEl.autoplay = true;
           audioEl.playsInline = true;
+          audioEl.volume = 1.0;
           const container = document.getElementById('remote-audio-container');
           if (container) container.appendChild(audioEl);
           remoteAudioElementsMap.set(remotePeerId, audioEl);
         }
         audioEl.srcObject = remoteStream;
         audioEl.muted = isVoiceDeafened;
-        audioEl.play().catch(err => console.warn('[Voice] Autoplay blocked, waiting user gesture:', err));
 
-        // Conecta analisador de áudio para acender o anel verde quando o outro jogador falar!
+        const attemptPlay = () => {
+          audioEl.play().then(() => {
+            console.log('[Voice] Áudio remoto reproduzindo com sucesso para:', remotePeerId);
+          }).catch(err => {
+            console.warn('[Voice] Autoplay de áudio bloqueado pelo navegador:', err);
+          });
+        };
+        attemptPlay();
+
+        // Conecta analisador WebAudio através de silentGain -> destination
+        // para prevenir bug do Chrome que silencia áudios remotos de WebRTC ao usar createMediaStreamSource
         try {
-          if (voiceAudioCtx && voiceAudioCtx.state === 'running') {
+          if (voiceAudioCtx) {
+            if (voiceAudioCtx.state === 'suspended') voiceAudioCtx.resume();
             const remoteSource = voiceAudioCtx.createMediaStreamSource(remoteStream);
             const remoteAnalyser = voiceAudioCtx.createAnalyser();
             remoteAnalyser.fftSize = 256;
+            
+            const silentGain = voiceAudioCtx.createGain();
+            silentGain.gain.value = 0; // Ganho zero para não duplicar som
             remoteSource.connect(remoteAnalyser);
+            remoteAnalyser.connect(silentGain);
+            silentGain.connect(voiceAudioCtx.destination);
+            
             remoteAnalysersMap.set(remotePeerId, remoteAnalyser);
           }
-        } catch (_) {}
+        } catch (e) {
+          console.warn('[Voice] Aviso no analisador de voz:', e);
+        }
       });
 
       callObj.on('close', () => {
         limparPeerRemoto(remotePeerId);
       });
-      callObj.on('error', () => {
+      callObj.on('error', (err) => {
+        console.warn('[Voice] Erro na chamada com', remotePeerId, err);
         limparPeerRemoto(remotePeerId);
       });
     }
@@ -3419,27 +3439,50 @@
       if (floatBadge) floatBadge.textContent = `${count} conectado${count !== 1 ? 's' : ''}`;
 
       if (!grid) return;
-      grid.innerHTML = peers.map(p => {
+
+      const activePeerIds = new Set(peers.map(p => p.peerId));
+
+      // 1. Remove elementos de peers que saíram (sem piscamento nos que continuam)
+      Array.from(grid.children).forEach(child => {
+        const pId = child.getAttribute('data-peer-id');
+        if (pId && !activePeerIds.has(pId)) {
+          child.remove();
+        }
+      });
+
+      // 2. Adiciona ou atualiza cards de cada participante sem recriar nós do DOM desnecessariamente
+      peers.forEach(p => {
         const isMe = p.peerId === myVoicePeerId;
         const nick = escapeHtml(p.nick || 'Jogador');
         const avatarUrl = p.avatar || `https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/64`;
         const muted = isMe ? isVoiceMuted : p.isMuted;
         const deafened = isMe ? isVoiceDeafened : p.isDeafened;
 
-        return `
-          <div class="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08] min-w-[130px] flex-shrink-0 transition hover:bg-white/[0.08]">
-            <div class="relative flex-shrink-0">
-              <img id="voice-avatar-${p.peerId}" src="${avatarUrl}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'" alt="${nick}" class="w-9 h-9 rounded-full object-cover border-2 border-transparent transition-all duration-150 shadow" />
-              ${muted ? `<span class="absolute -bottom-1 -right-1 w-4 h-4 bg-rose-600 rounded-full flex items-center justify-center text-[9px] text-white shadow">❌</span>` : ''}
-              ${deafened ? `<span class="absolute -top-1 -right-1 w-4 h-4 bg-purple-700 rounded-full flex items-center justify-center text-[9px] text-white shadow">🎧</span>` : ''}
-            </div>
-            <div class="min-w-0">
-              <div class="text-xs font-bold text-white truncate max-w-[85px]">${nick} ${isMe ? '<span class="text-[9px] text-emerald-400 font-normal">(Você)</span>' : ''}</div>
-              <div class="text-[9px] text-slate-400 truncate">${escapeHtml(p.platform || 'Minecraft')}</div>
-            </div>
+        let card = document.getElementById('voice-card-' + p.peerId);
+        if (!card) {
+          card = document.createElement('div');
+          card.id = 'voice-card-' + p.peerId;
+          card.setAttribute('data-peer-id', p.peerId);
+          card.className = 'flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08] min-w-[130px] flex-shrink-0 transition hover:bg-white/[0.08]';
+          grid.appendChild(card);
+        }
+
+        const cardContent = `
+          <div class="relative flex-shrink-0">
+            <img id="voice-avatar-${p.peerId}" src="${avatarUrl}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'" alt="${nick}" class="w-9 h-9 rounded-full object-cover border-2 border-transparent transition-all duration-150 shadow" />
+            <span id="voice-muted-badge-${p.peerId}" class="${muted ? '' : 'hidden'} absolute -bottom-1 -right-1 w-4 h-4 bg-rose-600 rounded-full flex items-center justify-center text-[9px] text-white shadow">❌</span>
+            <span id="voice-deafened-badge-${p.peerId}" class="${deafened ? '' : 'hidden'} absolute -top-1 -right-1 w-4 h-4 bg-purple-700 rounded-full flex items-center justify-center text-[9px] text-white shadow">🎧</span>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-white truncate max-w-[85px]">${nick} ${isMe ? '<span class="text-[9px] text-emerald-400 font-normal">(Você)</span>' : ''}</div>
+            <div class="text-[9px] text-slate-400 truncate">${escapeHtml(p.platform || 'Minecraft')}</div>
           </div>
         `;
-      }).join('');
+
+        if (card.innerHTML !== cardContent) {
+          card.innerHTML = cardContent;
+        }
+      });
     }
 
     // Detecção de fala estilo Discord (RMS Volume Analysis)
