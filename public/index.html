@@ -3462,11 +3462,13 @@
     }
 
     function tratarStreamRemoto(remotePeerId, callObj) {
+      if (!callObj) return;
       activeCallsMap.set(remotePeerId, callObj);
 
       callObj.on('stream', (remoteStream) => {
-        console.log('[Voice] Stream de áudio WebRTC recebido do peer:', remotePeerId);
+        console.log('[Voice] Stream de áudio WebRTC recebido do peer:', remotePeerId, remoteStream);
         
+        // 1. Elemento de Áudio HTML5 dedicado
         let audioEl = remoteAudioElementsMap.get(remotePeerId);
         if (!audioEl) {
           audioEl = document.createElement('audio');
@@ -3478,29 +3480,42 @@
           if (container) container.appendChild(audioEl);
           remoteAudioElementsMap.set(remotePeerId, audioEl);
         }
-        audioEl.srcObject = remoteStream;
+
+        if (audioEl.srcObject !== remoteStream) {
+          audioEl.srcObject = remoteStream;
+        }
         audioEl.muted = isVoiceDeafened;
 
         const attemptPlay = () => {
-          audioEl.play().then(() => {
-            console.log('[Voice] Áudio remoto reproduzindo com sucesso para:', remotePeerId);
-          }).catch(err => {
-            console.warn('[Voice] Autoplay de áudio bloqueado pelo navegador:', err);
-          });
+          if (audioEl) {
+            audioEl.play().catch(err => {
+              console.warn('[Voice] Autoplay bloqueado pelo navegador, aguardando clique:', err);
+              const resumeOnInteraction = () => {
+                if (audioEl) audioEl.play().catch(() => {});
+                if (voiceAudioCtx && voiceAudioCtx.state === 'suspended') voiceAudioCtx.resume().catch(() => {});
+                window.removeEventListener('click', resumeOnInteraction);
+                window.removeEventListener('keydown', resumeOnInteraction);
+              };
+              window.addEventListener('click', resumeOnInteraction);
+              window.addEventListener('keydown', resumeOnInteraction);
+            });
+          }
         };
         attemptPlay();
 
-        // Conecta analisador WebAudio através de silentGain -> destination
-        // para prevenir bug do Chrome que silencia áudios remotos de WebRTC ao usar createMediaStreamSource
+        // 2. Analisador WebAudio para anel de fala (speaking-ring)
         try {
           if (voiceAudioCtx) {
-            if (voiceAudioCtx.state === 'suspended') voiceAudioCtx.resume();
+            if (voiceAudioCtx.state === 'suspended') {
+              voiceAudioCtx.resume().catch(() => {});
+            }
             const remoteSource = voiceAudioCtx.createMediaStreamSource(remoteStream);
             const remoteAnalyser = voiceAudioCtx.createAnalyser();
             remoteAnalyser.fftSize = 256;
             
+            // Conecta ao analisador sem silenciar ou interferir no audioEl
             const silentGain = voiceAudioCtx.createGain();
-            silentGain.gain.value = 0; // Ganho zero para não duplicar som
+            silentGain.gain.value = 0;
             remoteSource.connect(remoteAnalyser);
             remoteAnalyser.connect(silentGain);
             silentGain.connect(voiceAudioCtx.destination);
@@ -3508,7 +3523,7 @@
             remoteAnalysersMap.set(remotePeerId, remoteAnalyser);
           }
         } catch (e) {
-          console.warn('[Voice] Aviso no analisador de voz:', e);
+          console.warn('[Voice] Analisador remoto:', e);
         }
       });
 
@@ -3713,7 +3728,7 @@
 
           const myAvatarEl = document.getElementById('voice-avatar-' + myVoicePeerId);
           const myAvatarBox = document.getElementById('voice-bar-my-avatar') || document.getElementById('voice-my-avatar-box');
-          const isSpeaking = avg > 14;
+          const isSpeaking = avg > 7;
 
           if (myAvatarEl) myAvatarEl.classList.toggle('speaking-ring', isSpeaking);
           if (myAvatarBox) myAvatarBox.classList.toggle('speaking-ring', isSpeaking);
@@ -3725,7 +3740,7 @@
           let sum = 0;
           for (let i = 0; i < buffer.length; i++) sum += buffer[i];
           const avg = sum / buffer.length;
-          const isSpeaking = avg > 14 && !isVoiceDeafened;
+          const isSpeaking = avg > 7 && !isVoiceDeafened;
 
           const avatarEl = document.getElementById('voice-avatar-' + peerId);
           if (avatarEl) {
