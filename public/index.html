@@ -529,93 +529,96 @@
           </button>
         </form>
       </div>
+    </section>
 
-      <!-- ════════════════════════════════════════════════════════════════════════
-           PAINEL DE VOZ ESTILO DISCORD (EMBAIXO DO CHAT GERAL)
-      ════════════════════════════════════════════════════════════════════════ -->
-      <div id="discord-voice-panel" class="border-t border-purple-500/20 bg-slate-950/95 backdrop-blur-2xl flex-shrink-0 p-2.5 md:p-3 transition-all duration-300">
-        
-        <!-- ESTADO 1: DESCONECTADO (BANNER ELEGANTE ESTILO DISCORD) -->
-        <div id="voice-disconnected-banner" class="flex items-center justify-between gap-3 bg-purple-950/40 hover:bg-purple-950/60 border border-purple-500/30 rounded-2xl p-2.5 md:p-3 transition shadow-lg">
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-lg text-white shadow-md flex-shrink-0 border-t border-white/30">
-              🔊
-            </div>
-            <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-xs md:text-sm font-black text-white truncate">Canal de Voz: Geral</span>
-                <span id="voice-header-badge" class="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30">WebRTC P2P</span>
-              </div>
-              <p id="voice-status-subtitle" class="text-[11px] text-slate-400 truncate">Clique para entrar na chamada de voz da comunidade</p>
-            </div>
+    <!-- ── 2.5. SUBDIVISÃO: CANAL DE VOZ (#call-geral) ────────────────────── -->
+    <section id="view-call" class="hidden flex-1 flex flex-col h-full overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-4">
+      
+      <!-- Topo do Canal de Voz -->
+      <div class="glass-card rounded-2xl p-4 shadow-lg border border-purple-500/30 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xl text-white shadow-md border-t border-white/30">
+            🔊
           </div>
-          <button onclick="conectarChamadaVoz()" id="btn-voice-connect" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs shadow-md hover:scale-105 active:scale-95 transition flex items-center gap-1.5 flex-shrink-0">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
-            <span>Entrar na Call</span>
-          </button>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm md:text-base font-black text-white">Canal de Voz: call-geral</h2>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">WebRTC HD</span>
+            </div>
+            <p class="text-xs text-slate-400">Canal de voz oficial do 5DAY MC • Estilo Discord</p>
+          </div>
         </div>
+        <div id="view-call-status-badge" class="px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-xs font-bold">
+          0 na call
+        </div>
+      </div>
 
-        <!-- ESTADO 2: CONECTADO (PALCO DISCORD COM AVATARES, ANEL VERDE & CONTROLES) -->
-        <div id="voice-connected-container" class="hidden space-y-2.5">
-          <!-- Topo do Canal de Voz -->
-          <div class="flex items-center justify-between border-b border-white/[0.08] pb-2">
+      <!-- ESTADO 1: DESCONECTADO (CARD DE ENTRADA ESTILO DISCORD) -->
+      <div id="view-call-disconnected" class="flex-1 flex flex-col items-center justify-center text-center p-6 glass-card rounded-2xl border border-white/10 space-y-4 my-auto">
+        <div class="w-20 h-20 rounded-3xl bg-purple-950/70 border-2 border-purple-500/40 flex items-center justify-center text-4xl shadow-[0_0_35px_rgba(168,85,247,0.35)] animate-float">
+          🎙️
+        </div>
+        <div class="max-w-md space-y-1">
+          <h3 class="text-lg md:text-xl font-black text-white">Entrar na Chamada de Voz</h3>
+          <p class="text-xs md:text-sm text-slate-300">Conecte-se para conversar ao vivo por áudio com os outros jogadores do servidor.</p>
+        </div>
+        <button onclick="conectarChamadaVoz()" id="btn-voice-connect-main" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-sm shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+          <span>Conectar à Chamada</span>
+        </button>
+      </div>
+
+      <!-- ESTADO 2: CONECTADO (PALCO DISCORD COMPLETO) -->
+      <div id="view-call-connected" class="hidden flex-1 flex flex-col space-y-4">
+        <!-- Palco dos Participantes (Avatares Grandes com Anel de Fala Dinâmico) -->
+        <div class="glass-card rounded-2xl p-4 md:p-6 flex-1 border border-white/10 flex flex-col">
+          <div class="flex items-center justify-between border-b border-white/[0.08] pb-3 mb-4">
             <div class="flex items-center gap-2">
               <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]"></span>
-              <span class="text-xs font-black text-white tracking-wide">VOZ CONECTADA • #geral</span>
-              <span id="voice-participant-count-badge" class="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">1 na call</span>
+              <span class="text-xs font-black text-white tracking-wider uppercase">Palco de Voz</span>
             </div>
-            <div class="flex items-center gap-2">
-              <span class="text-[10px] text-emerald-400 font-mono font-bold flex items-center gap-1">
-                <svg class="w-3 h-3 text-emerald-400" fill="currentColor" viewBox="0 0 20 20"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path></svg>
-                RTC HD
-              </span>
-              <button onclick="desconectarChamadaVoz()" class="w-7 h-7 rounded-lg bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 hover:text-white flex items-center justify-center transition" title="Desconectar da Chamada">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-              </button>
-            </div>
+            <span id="voice-stage-count" class="text-xs text-purple-300 font-bold">1 jogador conectado</span>
           </div>
 
-          <!-- Grid dos Participantes da Chamada (Avatares com Anel Verde de Fala Discord) -->
-          <div id="voice-participants-grid" class="flex flex-wrap items-center gap-2.5 max-h-36 overflow-y-auto p-1">
-            <!-- Renderizado dinamicamente via JS -->
-          </div>
-
-          <!-- Barra de Controles Discord (Microfone, Deafen, Desconectar) -->
-          <div class="flex items-center justify-between bg-black/50 border border-white/[0.08] rounded-xl p-2">
-            <!-- Usuário Local -->
-            <div class="flex items-center gap-2 min-w-0">
-              <div id="voice-my-avatar-box" class="w-8 h-8 rounded-full border-2 border-purple-400/50 bg-purple-950 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0 transition-all duration-150">
-                <span id="voice-my-avatar-text">?</span>
-              </div>
-              <div class="min-w-0">
-                <div id="voice-my-nick" class="text-xs font-extrabold text-white truncate">Jogador</div>
-                <div id="voice-my-status" class="text-[10px] text-emerald-400 font-semibold truncate">Voz Conectada</div>
-              </div>
-            </div>
-
-            <!-- Botões de Ação estilo Discord -->
-            <div class="flex items-center gap-1.5 flex-shrink-0">
-              <!-- Mute Mic -->
-              <button id="btn-voice-mute" onclick="alternarMuteVoz()" class="w-9 h-9 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white flex items-center justify-center transition active:scale-95" title="Mutar / Desmutar Microfone">
-                <svg id="icon-mic-on" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-                <svg id="icon-mic-off" class="hidden w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
-              </button>
-
-              <!-- Deafen -->
-              <button id="btn-voice-deafen" onclick="alternarDeafenVoz()" class="w-9 h-9 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white flex items-center justify-center transition active:scale-95" title="Silenciar / Ouvir Sala">
-                <svg id="icon-deafen-off" class="w-4 h-4 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
-                <svg id="icon-deafen-on" class="hidden w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728B9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-              </button>
-
-              <!-- Desconectar -->
-              <button onclick="desconectarChamadaVoz()" class="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-md hover:scale-105 active:scale-95 transition flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 4V3z"></path></svg>
-                <span>Sair</span>
-              </button>
-            </div>
+          <!-- Grid dos Jogadores no Palco -->
+          <div id="voice-stage-grid" class="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 items-center content-start overflow-y-auto p-1">
+            <!-- Inserido dinamicamente via JS -->
           </div>
         </div>
 
+        <!-- Barra de Controles Inferior Estilo Discord -->
+        <div class="glass-card rounded-2xl p-3 border border-purple-500/30 flex items-center justify-between bg-slate-950/90 shadow-2xl">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div id="voice-bar-my-avatar" class="w-9 h-9 rounded-full border-2 border-purple-400 bg-purple-950 flex items-center justify-center text-xs font-bold text-white overflow-hidden flex-shrink-0">
+              ?
+            </div>
+            <div class="min-w-0">
+              <div id="voice-bar-my-nick" class="text-xs font-extrabold text-white truncate">Jogador</div>
+              <div id="voice-bar-my-status" class="text-[10px] text-emerald-400 font-semibold truncate">Conectado / Microfone Ativo</div>
+            </div>
+          </div>
+
+          <!-- Ações -->
+          <div class="flex items-center gap-2">
+            <!-- Mute Mic -->
+            <button id="btn-call-mute" onclick="alternarMuteVoz()" class="w-10 h-10 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white flex items-center justify-center transition active:scale-95" title="Mutar Microfone">
+              <svg id="icon-call-mic-on" class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+              <svg id="icon-call-mic-off" class="hidden w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+            </button>
+
+            <!-- Deafen -->
+            <button id="btn-call-deafen" onclick="alternarDeafenVoz()" class="w-10 h-10 rounded-xl bg-white/[0.08] hover:bg-white/[0.15] text-white flex items-center justify-center transition active:scale-95" title="Silenciar Áudio">
+              <svg id="icon-call-deafen-off" class="w-5 h-5 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+              <svg id="icon-call-deafen-on" class="hidden w-5 h-5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728B9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+            </button>
+
+            <!-- Sair -->
+            <button onclick="desconectarChamadaVoz()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-black shadow-lg hover:scale-105 active:scale-95 transition flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 4V3z"></path></svg>
+              <span>Desconectar</span>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1291,7 +1294,8 @@
         title: 'COMUNIDADE',
         icon: '💬',
         channels: [
-          { id: 'chat', name: 'chat-geral', tag: 'Geral', desc: 'Chat da comunidade em tempo real' }
+          { id: 'chat', name: 'chat-geral', tag: 'Geral', desc: 'Chat da comunidade em tempo real' },
+          { id: 'call', name: 'call-geral', tag: '🔊 Voz', desc: 'Canal de voz WebRTC estilo Discord' }
         ]
       },
       admin: {
@@ -1415,7 +1419,7 @@
 
     function selecionarCanal(canalId, categoria) {
       // Canais que exigem login
-      const canaisProtegidos = ['chat', 'admin', 'console'];
+      const canaisProtegidos = ['chat', 'admin', 'console', 'call'];
       if (canaisProtegidos.includes(canalId) && !currentUser) {
         mostrarFeedback('🔒 Faça login para acessar este canal.', 'red');
         abrirModalAuth('login');
@@ -1426,7 +1430,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas'].forEach(c => {
+      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas', 'call'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -1441,7 +1445,8 @@
         chat:  'chat-geral',
         admin: 'gerenciar-whitelist',
         console: 'console-servidor',
-        'ranking-horas': 'horas-jogadas'
+        'ranking-horas': 'horas-jogadas',
+        call:  'call-geral'
       };
 
       if (titles[canalId]) {
@@ -3393,12 +3398,14 @@
     }
 
     function renderizarGridParticipantes(peers) {
-      const grid = document.getElementById('voice-participants-grid');
-      const badge = document.getElementById('voice-participant-count-badge');
+      const grid = document.getElementById('voice-stage-grid') || document.getElementById('voice-participants-grid');
+      const badge = document.getElementById('voice-stage-count');
+      const headerBadge = document.getElementById('view-call-status-badge');
       const floatBadge = document.getElementById('floating-voice-members');
       
       const count = peers.length;
-      if (badge) badge.textContent = `${count} na call`;
+      if (badge) badge.textContent = `${count} jogador${count !== 1 ? 'es' : ''} conectado${count !== 1 ? 's' : ''}`;
+      if (headerBadge) headerBadge.textContent = `${count} na call`;
       if (floatBadge) floatBadge.textContent = `${count} conectado${count !== 1 ? 's' : ''}`;
 
       if (!grid) return;
@@ -3410,9 +3417,9 @@
         const deafened = isMe ? isVoiceDeafened : p.isDeafened;
 
         return `
-          <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white/[0.05] border border-white/[0.08] min-w-[130px] flex-shrink-0 transition">
-            <div class="relative">
-              <img id="voice-avatar-${p.peerId}" src="${avatarUrl}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'" alt="${nick}" class="w-8 h-8 rounded-full object-cover border-2 border-transparent transition-all duration-150" />
+          <div class="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08] min-w-[130px] flex-shrink-0 transition hover:bg-white/[0.08]">
+            <div class="relative flex-shrink-0">
+              <img id="voice-avatar-${p.peerId}" src="${avatarUrl}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'" alt="${nick}" class="w-9 h-9 rounded-full object-cover border-2 border-transparent transition-all duration-150 shadow" />
               ${muted ? `<span class="absolute -bottom-1 -right-1 w-4 h-4 bg-rose-600 rounded-full flex items-center justify-center text-[9px] text-white shadow">❌</span>` : ''}
               ${deafened ? `<span class="absolute -top-1 -right-1 w-4 h-4 bg-purple-700 rounded-full flex items-center justify-center text-[9px] text-white shadow">🎧</span>` : ''}
             </div>
@@ -3440,7 +3447,7 @@
           const avg = sum / buffer.length;
 
           const myAvatarEl = document.getElementById('voice-avatar-' + myVoicePeerId);
-          const myAvatarBox = document.getElementById('voice-my-avatar-box');
+          const myAvatarBox = document.getElementById('voice-bar-my-avatar') || document.getElementById('voice-my-avatar-box');
           const isSpeaking = avg > 14;
 
           if (myAvatarEl) myAvatarEl.classList.toggle('speaking-ring', isSpeaking);
@@ -3480,11 +3487,16 @@
       const iconOff = document.getElementById('icon-mic-off');
       if (iconOn) iconOn.classList.toggle('hidden', isVoiceMuted);
       if (iconOff) iconOff.classList.toggle('hidden', !isVoiceMuted);
+
+      const iconCallOn = document.getElementById('icon-call-mic-on');
+      const iconCallOff = document.getElementById('icon-call-mic-off');
+      if (iconCallOn) iconCallOn.classList.toggle('hidden', isVoiceMuted);
+      if (iconCallOff) iconCallOff.classList.toggle('hidden', !isVoiceMuted);
       
       const floatMic = document.getElementById('floating-mic-icon');
       if (floatMic) floatMic.textContent = isVoiceMuted ? '❌' : '🎙️';
 
-      const statusEl = document.getElementById('voice-my-status');
+      const statusEl = document.getElementById('voice-bar-my-status') || document.getElementById('voice-my-status');
       if (statusEl) {
         statusEl.textContent = isVoiceMuted ? 'Microfone Mutado' : 'Microfone Ativo';
         statusEl.className = isVoiceMuted ? 'text-[10px] text-rose-400 font-semibold truncate' : 'text-[10px] text-emerald-400 font-semibold truncate';
@@ -3517,6 +3529,11 @@
       const iconOn = document.getElementById('icon-deafen-on');
       if (iconOff) iconOff.classList.toggle('hidden', isVoiceDeafened);
       if (iconOn) iconOn.classList.toggle('hidden', !isVoiceDeafened);
+
+      const iconCallOff = document.getElementById('icon-call-deafen-off');
+      const iconCallOn = document.getElementById('icon-call-deafen-on');
+      if (iconCallOff) iconCallOff.classList.toggle('hidden', isVoiceDeafened);
+      if (iconCallOn) iconCallOn.classList.toggle('hidden', !isVoiceDeafened);
 
       const floatDeaf = document.getElementById('floating-deafen-icon');
       if (floatDeaf) floatDeaf.textContent = isVoiceDeafened ? '🔇' : '🎧';
@@ -3582,15 +3599,15 @@
     }
 
     function atualizarInterfaceVozConectada(conectado) {
-      const disconnectedBanner = document.getElementById('voice-disconnected-banner');
-      const connectedContainer = document.getElementById('voice-connected-container');
+      const disconnectedBanner = document.getElementById('view-call-disconnected') || document.getElementById('voice-disconnected-banner');
+      const connectedContainer = document.getElementById('view-call-connected') || document.getElementById('voice-connected-container');
 
       if (disconnectedBanner) disconnectedBanner.classList.toggle('hidden', conectado);
       if (connectedContainer) connectedContainer.classList.toggle('hidden', !conectado);
 
       if (conectado && currentUser) {
-        const myNickEl = document.getElementById('voice-my-nick');
-        const myAvBox = document.getElementById('voice-my-avatar-box');
+        const myNickEl = document.getElementById('voice-bar-my-nick') || document.getElementById('voice-my-nick');
+        const myAvBox = document.getElementById('voice-bar-my-avatar') || document.getElementById('voice-my-avatar-box');
         
         if (myNickEl) myNickEl.textContent = currentUser.nick;
         if (myAvBox) {
