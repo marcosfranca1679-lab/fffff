@@ -37,10 +37,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String TELEM_URL = "https://fffff-autoforge.vercel.app/api/telemetry/";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // 200 ticks = 10s (checagem de ban)
-    private static final long CHECK_INTERVAL_TICKS = 200L;
-    // 40 ticks = 2s (telemetria AO VIVO contínua)
-    private static final long TELEM_INTERVAL_TICKS = 40L;
+    // 400 ticks = 20s (checagem de ban)
+    private static final long CHECK_INTERVAL_TICKS = 400L;
+    // 200 ticks = 10s (telemetria AO VIVO inteligente)
+    private static final long TELEM_INTERVAL_TICKS = 200L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -50,6 +50,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     private HttpClient httpClient;
     private Logger log;
+    private volatile long lastCommandCheckTime = 0L;
 
     @Override
     public void onEnable() {
@@ -59,7 +60,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .build();
         getServer().getPluginManager().registerEvents(this, this);
 
-        // ── Task: checagem de ban & IP ban a cada 10s ────────────────────────
+        // ── Task: checagem de ban & IP ban a cada 20s ────────────────────────
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -87,7 +88,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
 
-        // ── Task: telemetria AO VIVO a cada 2s ───────────────────────────────
+        // ── Task: telemetria AO VIVO a cada 10s ───────────────────────────────
         getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -97,10 +98,18 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        // ── Task: Comandos remotos do Console & Mensagens In-Game (1s) ───────
+        // ── Task: Comandos remotos do Console & Mensagens In-Game (Inteligente & Econômico) ──
+        // Se não houver jogadores no servidor, checa em repouso a cada 20 segundos.
+        // Se houver jogadores online, checa a cada 5 segundos (redução de mais de 85% de tráfego na Vercel).
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            checkRemoteCommands();
-        }, 20L, 20L);
+            boolean hasPlayers = !getServer().getOnlinePlayers().isEmpty();
+            long now = System.currentTimeMillis();
+            long requiredInterval = hasPlayers ? 5000L : 20000L;
+            if (now - lastCommandCheckTime >= requiredInterval) {
+                lastCommandCheckTime = now;
+                checkRemoteCommands();
+            }
+        }, 40L, 40L);
 
         log.info("Mapa Bermuda Whitelist, Console & Comandos v2.0 - ATIVA!");
     }
@@ -356,10 +365,48 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (body != null && body.contains("\"commands\":[")) {
                 processCommandsJson(body);
             }
+
+            // Se foi evento de morte, envia mensagem de vida perdida ao jogador
+            if (json.contains("\"event\":\"death\"") && body != null && body.contains("\"deathLogged\":true")) {
+                String livesStr = extractJsonField(body, "livesRemaining");
+                boolean isEliminated = body.contains("\"isEliminated\":true");
+                String remainingReset = extractJsonField(body, "remainingReset");
+
+                int livesLeft = -1;
+                if (livesStr != null) {
+                    try { livesLeft = Integer.parseInt(livesStr); } catch (NumberFormatException ignored2) {}
+                }
+
+                final int finalLives = livesLeft;
+                final boolean finalEliminated = isEliminated;
+                final String finalReset = remainingReset != null ? remainingReset : "–";
+
+                getServer().getScheduler().runTask(this, () -> {
+                    Player p = getServer().getPlayerExact(nick);
+                    if (p == null || !p.isOnline()) return;
+
+                    if (finalEliminated) {
+                        p.sendMessage(Component.text()
+                            .append(Component.text("\u2764 ", net.kyori.adventure.text.format.NamedTextColor.DARK_RED))
+                            .append(Component.text("Suas 5 vidas acabaram! Você não pode mais jogar.", net.kyori.adventure.text.format.NamedTextColor.RED, net.kyori.adventure.text.format.TextDecoration.BOLD))
+                            .append(Component.newline())
+                            .append(Component.text("O próximo reset é em: ", net.kyori.adventure.text.format.NamedTextColor.GRAY))
+                            .append(Component.text(finalReset, net.kyori.adventure.text.format.NamedTextColor.GOLD, net.kyori.adventure.text.format.TextDecoration.BOLD))
+                            .build());
+                    } else if (finalLives >= 0) {
+                        StringBuilder hearts = new StringBuilder();
+                        for (int i = 0; i < 5; i++) hearts.append(i < finalLives ? "\u2764" : "\u2661");
+                        String color = finalLives <= 1 ? "\u00a7c" : finalLives <= 3 ? "\u00a76" : "\u00a7a";
+                        p.sendMessage(Component.text(
+                            "\u00a7c\u2764 Você perdeu 1 vida! " + color + "Vidas: [" + hearts + "] " + finalLives + "/5",
+                            net.kyori.adventure.text.format.NamedTextColor.WHITE));
+                    }
+                });
+            }
         } catch (Exception ignored) {}
     }
 
-    // ── Checagem periódica de comandos remotos do console (a cada 1s) ────────
+    // ── Checagem periódica de comandos remotos do console ────────
     private void checkRemoteCommands() {
         try {
             String url = API_URL.replace("/api/check/", "/api/plugin/commands?secret=" + PLUGIN_SECRET);
@@ -373,21 +420,25 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body();
             if (body != null && body.contains("\"commands\":[")) {
-                processCommandsJson(body);
+                boolean hasExecuted = processCommandsJson(body);
+                if (hasExecuted) {
+                    lastCommandCheckTime = 0L; // Processa próximos comandos imediatamente
+                }
             }
         } catch (Exception ignored) {}
     }
 
     // ── Execução de comandos recebidos do console web & broadcast in-game ─────
-    private void processCommandsJson(String json) {
-        if (json == null || !json.contains("\"commands\":[")) return;
+    private boolean processCommandsJson(String json) {
+        if (json == null || !json.contains("\"commands\":[")) return false;
         int startArr = json.indexOf("\"commands\":[");
-        if (startArr == -1) return;
+        if (startArr == -1) return false;
         int endArr = json.indexOf("]", startArr);
-        if (endArr == -1) return;
+        if (endArr == -1) return false;
         String arrContent = json.substring(startArr + 12, endArr).trim();
-        if (arrContent.isEmpty() || arrContent.equals("[]")) return;
+        if (arrContent.isEmpty() || arrContent.equals("[]")) return false;
 
+        boolean executedAny = false;
         int idx = 0;
         while ((idx = arrContent.indexOf("{", idx)) != -1) {
             int close = arrContent.indexOf("}", idx);
@@ -401,9 +452,23 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             String sender = extractJsonField("{" + obj + "}", "sender");
             if (sender == null || sender.isBlank()) sender = "Admin";
 
-            if ("broadcast".equalsIgnoreCase(type) || message != null) {
+            if ("kick".equalsIgnoreCase(type)) {
+                final String target = extractJsonField("{" + obj + "}", "target");
+                if (target != null && !target.isBlank()) {
+                    executedAny = true;
+                    getServer().getScheduler().runTask(this, () -> {
+                        Player p = getServer().getPlayerExact(target);
+                        if (p == null) p = getServer().getPlayer(target);
+                        if (p != null && p.isOnline()) {
+                            log.info("[Lives] Expulsando jogador sem vidas: " + p.getName());
+                            p.kick(buildNoLivesMessage(p.getName(), "em breve"));
+                        }
+                    });
+                }
+            } else if ("broadcast".equalsIgnoreCase(type) || message != null) {
                 final String broadcastMsg = message != null ? message : command;
                 final String finalSender = sender;
+                executedAny = true;
                 getServer().getScheduler().runTask(this, () -> {
                     Component comp = Component.text()
                         .append(Component.text("[ADMIN] ", NamedTextColor.GOLD, TextDecoration.BOLD))
@@ -419,6 +484,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 });
             } else if (command != null && !command.isBlank()) {
                 final String cmdToRun = command.startsWith("/") ? command.substring(1) : command;
+                executedAny = true;
                 getServer().getScheduler().runTask(this, () -> {
                     log.info("[Console/Exec] Executando comando: /" + cmdToRun);
                     try {
@@ -429,6 +495,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 });
             }
         }
+        return executedAny;
     }
 
     // ── Envia chat dos jogadores in-game para o console do admin ──────────────
@@ -559,9 +626,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 + "?ip=" + URLEncoder.encode(clientIp, StandardCharsets.UTF_8);
             String body = callApi(url);
 
-            boolean banned   = body.contains("\"banned\":true");
-            boolean ipBanned = body.contains("\"ipBanned\":true");
-            boolean allowed  = body.contains("\"allowed\":true");
+            boolean banned     = body.contains("\"banned\":true");
+            boolean ipBanned   = body.contains("\"ipBanned\":true");
+            boolean allowed    = body.contains("\"allowed\":true");
+            boolean outOfLives = body.contains("\"outOfLives\":true");
 
             if (banned) {
                 if (ipBanned) {
@@ -570,6 +638,11 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                     log.info("[Whitelist] 🔨 '" + cleanName + "' BANIDO! Bloqueando...");
                 }
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessage(cleanName, body));
+            } else if (outOfLives) {
+                String remainingReset = extractJsonField(body, "remainingReset");
+                if (remainingReset == null || remainingReset.isBlank()) remainingReset = "em breve";
+                log.info("[Whitelist] 💀 '" + cleanName + "' sem vidas. Bloqueando entrada...");
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, buildNoLivesMessage(cleanName, remainingReset));
             } else if (!allowed) {
                 log.info("[Whitelist] ❌ '" + cleanName + "' NAO aprovado. Expulsando...");
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
@@ -583,5 +656,19 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 Component.text("Erro ao verificar whitelist. Tente novamente.", NamedTextColor.RED)
             );
         }
+    }
+
+    private Component buildNoLivesMessage(String cleanName, String resetIn) {
+        return Component.text()
+            .append(Component.text("SUAS VIDAS ACABARAM!\n\n", NamedTextColor.DARK_RED, TextDecoration.BOLD))
+            .append(Component.text("Nick: ", NamedTextColor.GRAY))
+            .append(Component.text(cleanName + "\n\n", NamedTextColor.WHITE, TextDecoration.BOLD))
+            .append(Component.text("Voce usou todas as suas 5 vidas.\n", NamedTextColor.RED))
+            .append(Component.text("Aguarde o proximo reset para voltar a jogar.\n\n", NamedTextColor.YELLOW))
+            .append(Component.text("Proximo reset em: ", NamedTextColor.GRAY))
+            .append(Component.text(resetIn + "\n\n", NamedTextColor.GOLD, TextDecoration.BOLD))
+            .append(Component.text("Mais informacoes no site:\n", NamedTextColor.GRAY))
+            .append(Component.text("fffff-autoforge.vercel.app", NamedTextColor.AQUA))
+            .build();
     }
 }
