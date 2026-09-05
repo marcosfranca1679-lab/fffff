@@ -3763,6 +3763,23 @@
         } catch (_) {}
       }, 7000);
     }
+
+    // Garante remoção do sinal de voz se o usuário fechar a aba ou recarregar a página
+    window.addEventListener('beforeunload', () => {
+      if (myVoicePeerId) {
+        try {
+          navigator.sendBeacon('/api/voice/leave', JSON.stringify({ peerId: myVoicePeerId }));
+        } catch (_) {}
+      }
+    });
+
+    window.addEventListener('pagehide', () => {
+      if (myVoicePeerId) {
+        try {
+          navigator.sendBeacon('/api/voice/leave', JSON.stringify({ peerId: myVoicePeerId }));
+        } catch (_) {}
+      }
+    });
   </script>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
