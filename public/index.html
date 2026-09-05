@@ -3511,23 +3511,23 @@
         attemptPlay();
 
         // 2. Analisador WebAudio para anel de fala (speaking-ring)
+        // Usa createMediaElementSource(audioEl) ao invés de createMediaStreamSource(remoteStream)
+        // para evitar bug do Chrome que silencia o audioEl quando o mesmo stream é consumido por dois destinos
         try {
-          if (voiceAudioCtx) {
+          if (voiceAudioCtx && !audioEl._analyserConnected) {
             if (voiceAudioCtx.state === 'suspended') {
               voiceAudioCtx.resume().catch(() => {});
             }
-            const remoteSource = voiceAudioCtx.createMediaStreamSource(remoteStream);
+            const remoteSource = voiceAudioCtx.createMediaElementSource(audioEl);
             const remoteAnalyser = voiceAudioCtx.createAnalyser();
             remoteAnalyser.fftSize = 256;
             
-            // Conecta ao analisador sem silenciar ou interferir no audioEl
-            const silentGain = voiceAudioCtx.createGain();
-            silentGain.gain.value = 0;
+            // createMediaElementSource precisa conectar ao destination para o áudio continuar tocando
             remoteSource.connect(remoteAnalyser);
-            remoteAnalyser.connect(silentGain);
-            silentGain.connect(voiceAudioCtx.destination);
+            remoteAnalyser.connect(voiceAudioCtx.destination);
             
             remoteAnalysersMap.set(remotePeerId, remoteAnalyser);
+            audioEl._analyserConnected = true;
           }
         } catch (e) {
           console.warn('[Voice] Analisador remoto:', e);
