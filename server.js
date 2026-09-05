@@ -1816,7 +1816,7 @@ app.get('/api/check/:nick', async (req, res) => {
       .maybeSingle();
 
     if (error || !player) {
-      return res.json({ allowed: false, banned: false, nick });
+      return res.json({ allowed: false, banned: false, notFound: true, nick });
     }
 
     if (player.status === 'banned') {
@@ -1843,7 +1843,7 @@ app.get('/api/check/:nick', async (req, res) => {
     }
 
     const allowed = player.status === 'approved';
-    if (!allowed) return res.json({ allowed: false, banned: false, nick });
+    if (!allowed) return res.json({ allowed: false, banned: false, notFound: true, nick });
 
     // Verifica vidas: se jogador aprovado mas sem vidas, bloqueia entrada
     const livesData = await obterVidasJogador(nick);
@@ -1863,7 +1863,7 @@ app.get('/api/check/:nick', async (req, res) => {
 
     res.json({ allowed: true, banned: false, lives: livesData ? livesData.lives : 5, nick });
   } catch (err) {
-    res.json({ allowed: false, banned: false, nick: req.params.nick });
+    res.json({ allowed: false, banned: false, apiError: true, nick: req.params.nick });
   }
 });
 
