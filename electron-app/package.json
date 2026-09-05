@@ -14,13 +14,18 @@
     "win": {
       "target": [
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": ["x64"]
         }
       ]
     },
-    "portable": {
-      "artifactName": "5DAY-MC-Setup.exe"
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "5DAY MC",
+      "artifactName": "5DAY-MC-Installer.exe"
     }
   },
   "devDependencies": {
