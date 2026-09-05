@@ -3402,14 +3402,14 @@
     function sincronizarParticipantesVoz(peers) {
       currentVoicePeersList = peers || [];
 
-      // 1. Atualiza visual do palco primeiro (exibe todos na sala)
+      // 1. Atualiza visual do palco primeiro (exibe todos na sala sem piscar)
       renderizarGridParticipantes(peers);
 
       // 2. Conecta via WebRTC com peers se o nosso ID for maior (evita chamadas duplicadas)
       peers.forEach(p => {
         if (p.peerId !== myVoicePeerId && !activeCallsMap.has(p.peerId)) {
           if (myVoicePeer && myVoicePeerId > p.peerId) {
-            console.log('[Voice] Iniciando chamada WebRTC para:', p.peerId);
+            console.log('[Voice] Iniciando chamada WebRTC P2P para:', p.peerId);
             const call = myVoicePeer.call(p.peerId, localVoiceStream);
             if (call) {
               tratarStreamRemoto(p.peerId, call);
@@ -3417,14 +3417,8 @@
           }
         }
       });
-
-      // 3. Limpa conexões encerradas
-      const currentActiveSet = new Set(peers.map(p => p.peerId));
-      for (const [pId] of activeCallsMap.entries()) {
-        if (!currentActiveSet.has(pId)) {
-          limparPeerRemoto(pId);
-        }
-      }
+      // Nota: As conexões WebRTC P2P ativas permanecem vivas de forma independente!
+      // Não desconectamos chamadas P2P por pequenas oscilações de rede no heartbeat do backend.
     }
 
     function renderizarGridParticipantes(peers) {
@@ -3442,7 +3436,7 @@
 
       const activePeerIds = new Set(peers.map(p => p.peerId));
 
-      // 1. Remove elementos de peers que saíram (sem piscamento nos que continuam)
+      // 1. Remove elementos de peers que realmente saíram da sala
       Array.from(grid.children).forEach(child => {
         const pId = child.getAttribute('data-peer-id');
         if (pId && !activePeerIds.has(pId)) {
@@ -3450,7 +3444,7 @@
         }
       });
 
-      // 2. Adiciona ou atualiza cards de cada participante sem recriar nós do DOM desnecessariamente
+      // 2. Adiciona novos membros ou apenas atualiza os badges sem reconstruir o HTML existente (zero piscamento)
       peers.forEach(p => {
         const isMe = p.peerId === myVoicePeerId;
         const nick = escapeHtml(p.nick || 'Jogador');
@@ -3464,24 +3458,26 @@
           card.id = 'voice-card-' + p.peerId;
           card.setAttribute('data-peer-id', p.peerId);
           card.className = 'flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08] min-w-[130px] flex-shrink-0 transition hover:bg-white/[0.08]';
+          card.innerHTML = `
+            <div class="relative flex-shrink-0">
+              <img id="voice-avatar-${p.peerId}" src="${avatarUrl}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'" alt="${nick}" class="w-9 h-9 rounded-full object-cover border-2 border-transparent transition-all duration-150 shadow" />
+              <span id="voice-muted-badge-${p.peerId}" class="hidden absolute -bottom-1 -right-1 w-4 h-4 bg-rose-600 rounded-full flex items-center justify-center text-[9px] text-white shadow">❌</span>
+              <span id="voice-deafened-badge-${p.peerId}" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-purple-700 rounded-full flex items-center justify-center text-[9px] text-white shadow">🎧</span>
+            </div>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-white truncate max-w-[85px]">${nick} ${isMe ? '<span class="text-[9px] text-emerald-400 font-normal">(Você)</span>' : ''}</div>
+              <div class="text-[9px] text-slate-400 truncate">${escapeHtml(p.platform || 'Minecraft')}</div>
+            </div>
+          `;
           grid.appendChild(card);
         }
 
-        const cardContent = `
-          <div class="relative flex-shrink-0">
-            <img id="voice-avatar-${p.peerId}" src="${avatarUrl}" onerror="this.src='https://mc-heads.net/avatar/Steve/64'" alt="${nick}" class="w-9 h-9 rounded-full object-cover border-2 border-transparent transition-all duration-150 shadow" />
-            <span id="voice-muted-badge-${p.peerId}" class="${muted ? '' : 'hidden'} absolute -bottom-1 -right-1 w-4 h-4 bg-rose-600 rounded-full flex items-center justify-center text-[9px] text-white shadow">❌</span>
-            <span id="voice-deafened-badge-${p.peerId}" class="${deafened ? '' : 'hidden'} absolute -top-1 -right-1 w-4 h-4 bg-purple-700 rounded-full flex items-center justify-center text-[9px] text-white shadow">🎧</span>
-          </div>
-          <div class="min-w-0">
-            <div class="text-xs font-bold text-white truncate max-w-[85px]">${nick} ${isMe ? '<span class="text-[9px] text-emerald-400 font-normal">(Você)</span>' : ''}</div>
-            <div class="text-[9px] text-slate-400 truncate">${escapeHtml(p.platform || 'Minecraft')}</div>
-          </div>
-        `;
+        // Atualiza individualmente apenas os elementos de status Mute/Deafen (não recria a tag <img>)
+        const mutedBadge = document.getElementById('voice-muted-badge-' + p.peerId);
+        if (mutedBadge) mutedBadge.classList.toggle('hidden', !muted);
 
-        if (card.innerHTML !== cardContent) {
-          card.innerHTML = cardContent;
-        }
+        const deafenedBadge = document.getElementById('voice-deafened-badge-' + p.peerId);
+        if (deafenedBadge) deafenedBadge.classList.toggle('hidden', !deafened);
       });
     }
 
