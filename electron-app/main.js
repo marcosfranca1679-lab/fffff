@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, Menu, shell } = require('electron');
+const { app, BrowserWindow, session, shell } = require('electron');
 const path = require('path');
 
 let mainWindow;
@@ -11,6 +11,7 @@ function createWindow() {
     minHeight: 600,
     title: '5DAY MC',
     backgroundColor: '#0f0f23',
+    autoHideMenuBar: true,
     show: false,
     webPreferences: {
       nodeIntegration: false,
@@ -53,19 +54,6 @@ function createWindow() {
     return { action: 'allow' };
   });
 }
-
-// ── Menu mínimo ────────────────────────────────────────────────────────────────
-Menu.setApplicationMenu(Menu.buildFromTemplate([
-  {
-    label: 'App',
-    submenu: [
-      { label: 'Recarregar', accelerator: 'F5', click: () => mainWindow?.webContents.reload() },
-      { label: 'Forçar recarregar', accelerator: 'Ctrl+Shift+R', click: () => mainWindow?.webContents.reloadIgnoringCache() },
-      { type: 'separator' },
-      { label: 'Sair', accelerator: 'Alt+F4', click: () => app.quit() },
-    ],
-  },
-]));
 
 app.whenReady().then(createWindow);
 
