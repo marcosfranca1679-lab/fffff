@@ -1,0 +1,37 @@
+name: Build 5DAY MC - Windows App
+
+on:
+  push:
+    paths:
+      - 'electron-app/**'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: electron-app/package.json
+
+      - name: Install dependencies
+        working-directory: electron-app
+        run: npm install
+
+      - name: Build portable .exe
+        working-directory: electron-app
+        run: npm run build
+
+      - name: Upload .exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5DAY-MC-Windows
+          path: electron-app/dist/*.exe
+          retention-days: 30
