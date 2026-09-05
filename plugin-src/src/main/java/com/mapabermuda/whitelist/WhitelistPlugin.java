@@ -630,6 +630,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             boolean ipBanned   = body.contains("\"ipBanned\":true");
             boolean allowed    = body.contains("\"allowed\":true");
             boolean outOfLives = body.contains("\"outOfLives\":true");
+            boolean notFound   = body.contains("\"notFound\":true");
 
             if (banned) {
                 if (ipBanned) {
@@ -644,17 +645,25 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 log.info("[Whitelist] 💀 '" + cleanName + "' sem vidas. Bloqueando entrada...");
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, buildNoLivesMessage(cleanName, remainingReset));
             } else if (!allowed) {
-                log.info("[Whitelist] ❌ '" + cleanName + "' NAO aprovado. Expulsando...");
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
+                if (notFound) {
+                    log.info("[Whitelist] ❌ '" + cleanName + "' NAO esta na whitelist. Expulsando...");
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
+                } else {
+                    // allowed=false mas sem notFound — estado ambíguo (ex: pending ou erro DB)
+                    // Tratamos como "não aprovado ainda"
+                    log.info("[Whitelist] ⏳ '" + cleanName + "' pendente/nao aprovado. Expulsando...");
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
+                }
             } else {
                 log.info("[Whitelist] ✅ '" + cleanName + "' aprovado! Acesso liberado.");
             }
 
         } catch (Exception e) {
-            log.warning("[Whitelist] Erro na API para '" + cleanName + "': " + e.getMessage());
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                Component.text("Erro ao verificar whitelist. Tente novamente.", NamedTextColor.RED)
-            );
+            log.warning("[Whitelist] ⚠️ Erro na API para '" + cleanName + "': " + e.getMessage());
+            // FAIL-OPEN: em caso de falha de rede/timeout da Vercel, deixa o jogador entrar
+            // Isso evita que jogadores aprovados sejam chutados por cold start da API
+            log.warning("[Whitelist] 🔓 Permitindo entrada de '" + cleanName + "' por falha de API (fail-open).");
+            // Não chama event.disallow() — padrão é permitir entrada
         }
     }
 
