@@ -2179,6 +2179,19 @@ app.get('/api/ranking/playtime', async (req, res) => {
 //  SISTEMA DE VOZ EM TEMPO REAL ESTILO DISCORD (WEBRTC — 100% SEM SUPABASE)
 // ════════════════════════════════════════════════════════════════════════════
 const voiceRoomPeers = new Map(); // peerId -> { nick, platform, avatar, isMuted, isDeafened, lastSeen, joinedAt }
+const recentlyLeftPeers = new Map(); // peerId or nick_lower -> timestamp
+
+function isPeerRecentlyLeft(peerId, nick) {
+  const now = Date.now();
+  for (const [key, leftAt] of recentlyLeftPeers.entries()) {
+    if (now - leftAt > 30000) {
+      recentlyLeftPeers.delete(key);
+    }
+  }
+  if (peerId && recentlyLeftPeers.has(peerId)) return true;
+  if (nick && recentlyLeftPeers.has('nick_' + String(nick).toLowerCase())) return true;
+  return false;
+}
 
 function cleanupVoicePeers() {
   const now = Date.now();
@@ -2223,6 +2236,10 @@ function mergeKnownPeers(knownPeers) {
   const now = Date.now();
   knownPeers.forEach(p => {
     if (p && p.peerId && p.nick) {
+      if (isPeerRecentlyLeft(p.peerId, p.nick)) {
+        return; // IGNORA membros que saíram da sala
+      }
+
       // Se já existe uma entrada com esse nick mas peerId diferente, ignora a antiga
       let existsNick = false;
       for (const [, existing] of voiceRoomPeers.entries()) {
@@ -2261,6 +2278,10 @@ app.post('/api/voice/join', (req, res) => {
   if (!peerId || !nick) {
     return res.status(400).json({ error: 'peerId e nick são obrigatórios.' });
   }
+
+  // Remove dos recém saídos caso esteja reentrando
+  if (peerId) recentlyLeftPeers.delete(peerId);
+  if (nick) recentlyLeftPeers.delete('nick_' + String(nick).toLowerCase());
 
   // Remove qualquer sessão antiga deste mesmo nickname
   cleanupDuplicateNicks(peerId, nick);
@@ -2314,9 +2335,19 @@ app.post('/api/voice/heartbeat', (req, res) => {
 
 // Sair da chamada de voz
 app.post('/api/voice/leave', (req, res) => {
-  const { peerId } = req.body || {};
+  const { peerId, nick } = req.body || {};
+  const now = Date.now();
   if (peerId) {
+    recentlyLeftPeers.set(peerId, now);
+    const peer = voiceRoomPeers.get(peerId);
+    if (peer && peer.nick) {
+      recentlyLeftPeers.set('nick_' + String(peer.nick).toLowerCase(), now);
+    }
     voiceRoomPeers.delete(peerId);
+  }
+  if (nick) {
+    recentlyLeftPeers.set('nick_' + String(nick).toLowerCase(), now);
+    cleanupDuplicateNicks(null, nick);
   }
   cleanupVoicePeers();
   res.json({ success: true });
