@@ -1332,33 +1332,49 @@
     });
 
     function iniciarAutoRefresh() {
-      setInterval(() => carregarChat(), 2500);
-      setInterval(() => carregarBans(), 3000);
+      // 1. Chat: apenas quando o usuário está no canal #chat-geral
       setInterval(() => {
-        if (currentChannel === 'ranking-horas') {
+        if (!document.hidden && currentChannel === 'chat') {
+          carregarChat();
+        }
+      }, 4000);
+
+      // 2. Bans: apenas quando o usuário está no mural de bans
+      setInterval(() => {
+        if (!document.hidden && currentChannel === 'bans') {
+          carregarBans();
+        }
+      }, 8000);
+
+      // 3. Ranking: apenas quando o usuário está na aba de ranking
+      setInterval(() => {
+        if (!document.hidden && currentChannel === 'ranking-horas') {
           carregarRankingHoras(true);
         }
-      }, 3000);
+      }, 8000);
+
+      // 4. Admin: apenas se for admin e estiver em abas administrativas
       setInterval(() => {
-        if (isUserAdmin) {
-          carregarAdminData();
-          const bansList = document.getElementById('admin-bans-list');
-          if (bansList && !bansList.classList.contains('hidden')) {
-            carregarAdminBans();
-          }
-          const ipBansList = document.getElementById('admin-ip-bans-list');
-          if (ipBansList && !ipBansList.classList.contains('hidden')) {
-            carregarAdminIpBans();
-          }
-          if (adminModulo === 'vidas' && currentChannel === 'admin') {
-            carregarAdminVidas();
-          }
-          if (currentChannel === 'console') {
+        if (!document.hidden && isUserAdmin) {
+          if (currentChannel === 'admin') {
+            carregarAdminData();
+            const bansList = document.getElementById('admin-bans-list');
+            if (bansList && !bansList.classList.contains('hidden')) carregarAdminBans();
+            const ipBansList = document.getElementById('admin-ip-bans-list');
+            if (ipBansList && !ipBansList.classList.contains('hidden')) carregarAdminIpBans();
+            if (adminModulo === 'vidas') carregarAdminVidas();
+          } else if (currentChannel === 'console') {
             carregarConsoleLogs(true);
           }
         }
-      }, 2500);
-      setInterval(() => atualizarMeuStatusSilencioso(), 5000);
+      }, 4000);
+
+      // 5. Sessão do usuário: renovação silenciosa estendida para 30s
+      setInterval(() => {
+        if (!document.hidden) {
+          atualizarMeuStatusSilencioso();
+        }
+      }, 30000);
     }
 
     // ── Submenu Lateral ──────────────────────────────────────────────────────
@@ -3438,7 +3454,7 @@
       if (voiceHeartbeatTimer) clearInterval(voiceHeartbeatTimer);
       
       const executarHeartbeat = async () => {
-        if (!myVoicePeerId || !localVoiceStream) return;
+        if (document.hidden || !myVoicePeerId || !localVoiceStream) return;
         try {
           const knownPeers = obterListaPeersMesh();
           const res = await fetch('/api/voice/heartbeat', {
@@ -3461,8 +3477,8 @@
 
       // Executa imediatamente uma vez
       executarHeartbeat();
-      // Repete a cada 2.5 segundos para resposta rápida
-      voiceHeartbeatTimer = setInterval(executarHeartbeat, 2500);
+      // Repete a cada 4.5 segundos para economia extrema de invocação no Vercel
+      voiceHeartbeatTimer = setInterval(executarHeartbeat, 4500);
     }
 
     function sincronizarParticipantesVoz(incomingPeers) {
@@ -3757,7 +3773,7 @@
 
     function iniciarMonitoramentoSalaVozPublico() {
       setInterval(async () => {
-        if (localVoiceStream !== null) return;
+        if (document.hidden || localVoiceStream !== null) return;
         try {
           const res = await fetch('/api/voice/peers');
           const data = await res.json();
@@ -3771,7 +3787,7 @@
             }
           }
         } catch (_) {}
-      }, 7000);
+      }, 18000);
     }
 
     // Garante remoção do sinal de voz se o usuário fechar a aba ou recarregar a página
