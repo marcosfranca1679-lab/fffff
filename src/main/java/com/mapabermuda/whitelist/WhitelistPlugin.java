@@ -37,10 +37,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String TELEM_URL = "https://fffff-autoforge.vercel.app/api/telemetry/";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // 200 ticks = 10s (checagem de ban)
-    private static final long CHECK_INTERVAL_TICKS = 200L;
-    // 40 ticks = 2s (telemetria AO VIVO contínua)
-    private static final long TELEM_INTERVAL_TICKS = 40L;
+    // 400 ticks = 20s (checagem de ban)
+    private static final long CHECK_INTERVAL_TICKS = 400L;
+    // 200 ticks = 10s (telemetria AO VIVO inteligente)
+    private static final long TELEM_INTERVAL_TICKS = 200L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -50,6 +50,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     private HttpClient httpClient;
     private Logger log;
+    private volatile long lastCommandCheckTime = 0L;
 
     @Override
     public void onEnable() {
@@ -59,7 +60,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .build();
         getServer().getPluginManager().registerEvents(this, this);
 
-        // ── Task: checagem de ban & IP ban a cada 10s ────────────────────────
+        // ── Task: checagem de ban & IP ban a cada 20s ────────────────────────
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -87,7 +88,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
 
-        // ── Task: telemetria AO VIVO a cada 2s ───────────────────────────────
+        // ── Task: telemetria AO VIVO a cada 10s ───────────────────────────────
         getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -97,10 +98,18 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        // ── Task: Comandos remotos do Console & Mensagens In-Game (1s) ───────
+        // ── Task: Comandos remotos do Console & Mensagens In-Game (Inteligente & Econômico) ──
+        // Se não houver jogadores no servidor, checa em repouso a cada 20 segundos.
+        // Se houver jogadores online, checa a cada 5 segundos (redução de mais de 85% de tráfego na Vercel).
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            checkRemoteCommands();
-        }, 20L, 20L);
+            boolean hasPlayers = !getServer().getOnlinePlayers().isEmpty();
+            long now = System.currentTimeMillis();
+            long requiredInterval = hasPlayers ? 5000L : 20000L;
+            if (now - lastCommandCheckTime >= requiredInterval) {
+                lastCommandCheckTime = now;
+                checkRemoteCommands();
+            }
+        }, 40L, 40L);
 
         log.info("Mapa Bermuda Whitelist, Console & Comandos v2.0 - ATIVA!");
     }
@@ -397,7 +406,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         } catch (Exception ignored) {}
     }
 
-    // ── Checagem periódica de comandos remotos do console (a cada 1s) ────────
+    // ── Checagem periódica de comandos remotos do console ────────
     private void checkRemoteCommands() {
         try {
             String url = API_URL.replace("/api/check/", "/api/plugin/commands?secret=" + PLUGIN_SECRET);
@@ -411,21 +420,25 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body();
             if (body != null && body.contains("\"commands\":[")) {
-                processCommandsJson(body);
+                boolean hasExecuted = processCommandsJson(body);
+                if (hasExecuted) {
+                    lastCommandCheckTime = 0L; // Processa próximos comandos imediatamente
+                }
             }
         } catch (Exception ignored) {}
     }
 
     // ── Execução de comandos recebidos do console web & broadcast in-game ─────
-    private void processCommandsJson(String json) {
-        if (json == null || !json.contains("\"commands\":[")) return;
+    private boolean processCommandsJson(String json) {
+        if (json == null || !json.contains("\"commands\":[")) return false;
         int startArr = json.indexOf("\"commands\":[");
-        if (startArr == -1) return;
+        if (startArr == -1) return false;
         int endArr = json.indexOf("]", startArr);
-        if (endArr == -1) return;
+        if (endArr == -1) return false;
         String arrContent = json.substring(startArr + 12, endArr).trim();
-        if (arrContent.isEmpty() || arrContent.equals("[]")) return;
+        if (arrContent.isEmpty() || arrContent.equals("[]")) return false;
 
+        boolean executedAny = false;
         int idx = 0;
         while ((idx = arrContent.indexOf("{", idx)) != -1) {
             int close = arrContent.indexOf("}", idx);
@@ -442,6 +455,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if ("kick".equalsIgnoreCase(type)) {
                 final String target = extractJsonField("{" + obj + "}", "target");
                 if (target != null && !target.isBlank()) {
+                    executedAny = true;
                     getServer().getScheduler().runTask(this, () -> {
                         Player p = getServer().getPlayerExact(target);
                         if (p == null) p = getServer().getPlayer(target);
@@ -454,6 +468,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             } else if ("broadcast".equalsIgnoreCase(type) || message != null) {
                 final String broadcastMsg = message != null ? message : command;
                 final String finalSender = sender;
+                executedAny = true;
                 getServer().getScheduler().runTask(this, () -> {
                     Component comp = Component.text()
                         .append(Component.text("[ADMIN] ", NamedTextColor.GOLD, TextDecoration.BOLD))
@@ -469,6 +484,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 });
             } else if (command != null && !command.isBlank()) {
                 final String cmdToRun = command.startsWith("/") ? command.substring(1) : command;
+                executedAny = true;
                 getServer().getScheduler().runTask(this, () -> {
                     log.info("[Console/Exec] Executando comando: /" + cmdToRun);
                     try {
@@ -479,6 +495,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 });
             }
         }
+        return executedAny;
     }
 
     // ── Envia chat dos jogadores in-game para o console do admin ──────────────
