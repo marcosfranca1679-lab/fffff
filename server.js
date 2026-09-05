@@ -2189,27 +2189,47 @@ function cleanupVoicePeers() {
   }
 }
 
+function cleanupDuplicateNicks(activePeerId, nick) {
+  if (!nick) return;
+  const targetNick = String(nick).toLowerCase();
+  for (const [pId, peer] of voiceRoomPeers.entries()) {
+    if (peer.nick && String(peer.nick).toLowerCase() === targetNick && pId !== activePeerId) {
+      voiceRoomPeers.delete(pId);
+    }
+  }
+}
+
 function mergeKnownPeers(knownPeers) {
   if (!Array.isArray(knownPeers)) return;
   const now = Date.now();
   knownPeers.forEach(p => {
     if (p && p.peerId && p.nick) {
-      if (!voiceRoomPeers.has(p.peerId)) {
-        voiceRoomPeers.set(p.peerId, {
-          peerId: p.peerId,
-          nick: p.nick,
-          platform: p.platform || 'Minecraft',
-          avatar: p.avatar || `https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/64`,
-          isMuted: !!p.isMuted,
-          isDeafened: !!p.isDeafened,
-          lastSeen: now,
-          joinedAt: now
-        });
-      } else {
-        const existing = voiceRoomPeers.get(p.peerId);
-        existing.lastSeen = now;
-        if (p.isMuted !== undefined) existing.isMuted = !!p.isMuted;
-        if (p.isDeafened !== undefined) existing.isDeafened = !!p.isDeafened;
+      // Se já existe uma entrada com esse nick mas peerId diferente, ignora a antiga
+      let existsNick = false;
+      for (const [, existing] of voiceRoomPeers.entries()) {
+        if (existing.nick && String(existing.nick).toLowerCase() === String(p.nick).toLowerCase() && existing.peerId !== p.peerId) {
+          existsNick = true;
+          break;
+        }
+      }
+      if (!existsNick) {
+        if (!voiceRoomPeers.has(p.peerId)) {
+          voiceRoomPeers.set(p.peerId, {
+            peerId: p.peerId,
+            nick: p.nick,
+            platform: p.platform || 'Minecraft',
+            avatar: p.avatar || `https://mc-heads.net/avatar/${encodeURIComponent(p.nick)}/64`,
+            isMuted: !!p.isMuted,
+            isDeafened: !!p.isDeafened,
+            lastSeen: now,
+            joinedAt: now
+          });
+        } else {
+          const existing = voiceRoomPeers.get(p.peerId);
+          existing.lastSeen = now;
+          if (p.isMuted !== undefined) existing.isMuted = !!p.isMuted;
+          if (p.isDeafened !== undefined) existing.isDeafened = !!p.isDeafened;
+        }
       }
     }
   });
@@ -2222,6 +2242,9 @@ app.post('/api/voice/join', (req, res) => {
   if (!peerId || !nick) {
     return res.status(400).json({ error: 'peerId e nick são obrigatórios.' });
   }
+
+  // Remove qualquer sessão antiga deste mesmo nickname
+  cleanupDuplicateNicks(peerId, nick);
 
   const now = Date.now();
   voiceRoomPeers.set(peerId, {
@@ -2251,8 +2274,10 @@ app.get('/api/voice/peers', (req, res) => {
 // Heartbeat periódico (mantém o peer vivo e sincroniza status de mute)
 app.post('/api/voice/heartbeat', (req, res) => {
   cleanupVoicePeers();
-  const { peerId, isMuted, isDeafened, knownPeers } = req.body || {};
+  const { peerId, isMuted, isDeafened, knownPeers, nick } = req.body || {};
   if (peerId) {
+    if (nick) cleanupDuplicateNicks(peerId, nick);
+
     const now = Date.now();
     if (voiceRoomPeers.has(peerId)) {
       const peer = voiceRoomPeers.get(peerId);
