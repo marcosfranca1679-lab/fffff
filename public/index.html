@@ -3371,19 +3371,36 @@
       }
     }
 
+    const localPeersRegistryMap = new Map(); // peerId -> { peerData, lastSeenLocally }
+
+    function obterListaPeersMesh() {
+      const now = Date.now();
+      const list = [];
+      for (const [pId, item] of localPeersRegistryMap.entries()) {
+        if (now - item.lastSeenLocally < 20000) { // 20 segundos de persistência local
+          list.push(item.peerData);
+        } else {
+          localPeersRegistryMap.delete(pId);
+        }
+      }
+      return list;
+    }
+
     function iniciarHeartbeatVoz() {
       if (voiceHeartbeatTimer) clearInterval(voiceHeartbeatTimer);
       
       const executarHeartbeat = async () => {
         if (!myVoicePeerId || !localVoiceStream) return;
         try {
+          const knownPeers = obterListaPeersMesh();
           const res = await fetch('/api/voice/heartbeat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               peerId: myVoicePeerId,
               isMuted: isVoiceMuted,
-              isDeafened: isVoiceDeafened
+              isDeafened: isVoiceDeafened,
+              knownPeers: knownPeers
             })
           });
           const data = await res.json();
@@ -3399,14 +3416,30 @@
       voiceHeartbeatTimer = setInterval(executarHeartbeat, 2500);
     }
 
-    function sincronizarParticipantesVoz(peers) {
-      currentVoicePeersList = peers || [];
+    function sincronizarParticipantesVoz(incomingPeers) {
+      const now = Date.now();
 
-      // 1. Atualiza visual do palco primeiro (exibe todos na sala sem piscar)
-      renderizarGridParticipantes(peers);
+      // 1. Atualiza/Mescla registros recebidos do servidor com os salvos localmente
+      if (Array.isArray(incomingPeers)) {
+        incomingPeers.forEach(p => {
+          if (p && p.peerId) {
+            localPeersRegistryMap.set(p.peerId, {
+              peerData: p,
+              lastSeenLocally: now
+            });
+          }
+        });
+      }
 
-      // 2. Conecta via WebRTC com peers se o nosso ID for maior (evita chamadas duplicadas)
-      peers.forEach(p => {
+      // 2. Obtém a lista mesclada e limpa apenas membros com timeout de 20s
+      const activePeers = obterListaPeersMesh();
+      currentVoicePeersList = activePeers;
+
+      // 3. Atualiza visual do palco (exibe todos os membros ativos sem sumir nem piscar)
+      renderizarGridParticipantes(activePeers);
+
+      // 4. Conecta via WebRTC P2P com novos peers (se o nosso ID for lexicograficamente maior)
+      activePeers.forEach(p => {
         if (p.peerId !== myVoicePeerId && !activeCallsMap.has(p.peerId)) {
           if (myVoicePeer && myVoicePeerId > p.peerId) {
             console.log('[Voice] Iniciando chamada WebRTC P2P para:', p.peerId);
@@ -3417,8 +3450,6 @@
           }
         }
       });
-      // Nota: As conexões WebRTC P2P ativas permanecem vivas de forma independente!
-      // Não desconectamos chamadas P2P por pequenas oscilações de rede no heartbeat do backend.
     }
 
     function renderizarGridParticipantes(peers) {
@@ -3636,6 +3667,7 @@
       }
       remoteAudioElementsMap.clear();
       remoteAnalysersMap.clear();
+      localPeersRegistryMap.clear();
 
       if (myVoicePeer) {
         try { myVoicePeer.destroy(); } catch (_) {}
