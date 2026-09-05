@@ -1,0 +1,30 @@
+{
+  "name": "5day-mc",
+  "version": "1.0.0",
+  "description": "5DAY MC - App Oficial para Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --publish never"
+  },
+  "build": {
+    "appId": "com.5daymc.app",
+    "productName": "5DAY MC",
+    "copyright": "5DAY MC",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "5DAY-MC-Setup.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  }
+}
