@@ -3375,15 +3375,28 @@
 
     function obterListaPeersMesh() {
       const now = Date.now();
-      const list = [];
+      const byNickMap = new Map(); // lowerNick -> item
+
       for (const [pId, item] of localPeersRegistryMap.entries()) {
-        if (now - item.lastSeenLocally < 20000) { // 20 segundos de persistência local
-          list.push(item.peerData);
+        if (now - item.lastSeenLocally < 20000) {
+          const nickKey = String(item.peerData?.nick || '').toLowerCase();
+          if (!byNickMap.has(nickKey) || item.lastSeenLocally > byNickMap.get(nickKey).lastSeenLocally) {
+            byNickMap.set(nickKey, item);
+          }
         } else {
           localPeersRegistryMap.delete(pId);
         }
       }
-      return list;
+
+      // Limpa entradas duplicadas com mesmo nickname do registro local
+      for (const [pId, item] of localPeersRegistryMap.entries()) {
+        const nickKey = String(item.peerData?.nick || '').toLowerCase();
+        if (byNickMap.has(nickKey) && byNickMap.get(nickKey).peerData.peerId !== pId) {
+          localPeersRegistryMap.delete(pId);
+        }
+      }
+
+      return Array.from(byNickMap.values()).map(item => item.peerData);
     }
 
     function iniciarHeartbeatVoz() {
@@ -3398,6 +3411,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               peerId: myVoicePeerId,
+              nick: currentUser ? currentUser.nick : '',
               isMuted: isVoiceMuted,
               isDeafened: isVoiceDeafened,
               knownPeers: knownPeers
