@@ -1383,6 +1383,25 @@
               <span class="text-[10px] text-slate-400 block mt-1.5">Clique no logo 3D desejado para representar a honra do seu reino.</span>
             </div>
 
+            <!-- Seletor de Cor da TAG do Reino -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Cor da TAG do Reino *
+                </label>
+                <span id="reino-selected-color-preview" class="font-extrabold text-xs flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border transition-all duration-200" style="background:rgba(245,158,11,0.15); border-color:rgba(245,158,11,0.4); color:#f59e0b;">
+                  <span id="reino-selected-color-dot" class="w-2.5 h-2.5 rounded-full inline-block" style="background:#f59e0b; box-shadow:0 0 8px #f59e0b;"></span>
+                  <span id="reino-selected-color-label">Ouro Real</span>
+                </span>
+              </div>
+              <input type="hidden" id="reino-input-cor" value="#f59e0b" />
+
+              <div id="reino-cores-grid" class="grid grid-cols-4 sm:grid-cols-8 gap-2">
+                <!-- Inserido dinamicamente via JS com 8 cores RPG -->
+              </div>
+              <span class="text-[10px] text-slate-400 block mt-1.5">Essa cor dará o brilho, borda e fundo da TAG nos chats e rankings.</span>
+            </div>
+
             <div>
               <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">Descrição do Reino *</label>
               <textarea id="reino-input-desc" rows="3" maxlength="300" placeholder="Conte os objetivos, história e estilo de jogo da sua guilda..."
@@ -2366,7 +2385,8 @@
       const initial = (u.nick || 'J').substring(0, 1).toUpperCase();
       const kTag = data.kingdom_tag || null;
       const kLogo = data.kingdom_logo || (data.kingdom ? data.kingdom.logo : null) || '👑';
-      const tagHtml = kTag ? `<span class="tag-kingdom" style="font-size:10px;margin-left:5px"><span>${escapeHtml(kLogo)}</span>[${escapeHtml(kTag)}]</span>` : '';
+      const kCor = data.kingdom_color || (data.kingdom ? data.kingdom.cor : null) || '#f59e0b';
+      const tagHtml = kTag ? renderTagReino(kTag, kLogo, kCor, 'font-size:10px;margin-left:5px') : '';
       const avBadge = document.getElementById('user-avatar-badge');
       if (avBadge) avBadge.textContent = initial;
 
@@ -2460,7 +2480,7 @@
             const avatarColor = isMsgAdmin ? 'bg-gradient-to-tr from-rose-600 to-pink-600' : 'bg-gradient-to-tr from-purple-600 to-indigo-600';
 
             const tagBadge = m.kingdom_tag 
-              ? `<span class="tag-kingdom" title="Reino [${escapeHtml(m.kingdom_tag)}]"><span>${escapeHtml(m.kingdom_logo || '👑')}</span>[${escapeHtml(m.kingdom_tag)}]</span>`
+              ? renderTagReino(m.kingdom_tag, m.kingdom_logo, m.kingdom_color)
               : '';
 
             return `
@@ -3104,7 +3124,7 @@
               
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  ${o.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px"><span>${escapeHtml(o.kingdom_logo || '👑')}</span>[${escapeHtml(o.kingdom_tag)}]</span>` : ''}
+                  ${o.kingdom_tag ? renderTagReino(o.kingdom_tag, o.kingdom_logo, o.kingdom_color, 'font-size:9px') : ''}
                   <span class="font-extrabold text-xs sm:text-sm text-white truncate">${safeNick}</span>
                   <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
@@ -3188,7 +3208,7 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</span>
-                  ${p.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px"><span>${escapeHtml(p.kingdom_logo || '👑')}</span>[${escapeHtml(p.kingdom_tag)}]</span>` : ''}
+                  ${p.kingdom_tag ? renderTagReino(p.kingdom_tag, p.kingdom_logo, p.kingdom_color, 'font-size:9px') : ''}
                   ${p.isOnline ? '<span class="bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-1 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> JOGANDO AGORA</span>' : ''}
                 </div>
                 <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
@@ -4438,7 +4458,7 @@
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="tag-kingdom"><span>${escapeHtml(k.logo || '👑')}</span>[${escapeHtml(k.tag || 'TAG')}]</span>
+                  ${renderTagReino(k.tag || 'TAG', k.logo, k.cor)}
                   <span class="font-extrabold text-xs md:text-sm text-white truncate">${escapeHtml(k.nome || 'Reino')}</span>
                 </div>
                 <div class="text-[10px] text-slate-300 mt-0.5">
@@ -4495,7 +4515,27 @@
       { id: 'fogo', emoji: '🔥', name: 'Fênix Ardente', desc: 'Glória', color: 'from-orange-500/25 to-rose-600/25', border: 'border-orange-400/50' }
     ];
 
+    const REINO_CORES_TAG = [
+      { id: 'ouro', hex: '#f59e0b', name: 'Ouro Real' },
+      { id: 'ametista', hex: '#a855f7', name: 'Ametista Mística' },
+      { id: 'esmeralda', hex: '#10b981', name: 'Esmeralda Nether' },
+      { id: 'rubi', hex: '#ef4444', name: 'Rubi Sangue' },
+      { id: 'diamante', hex: '#06b6d4', name: 'Diamante Glacial' },
+      { id: 'fogo', hex: '#f97316', name: 'Fogo Ardente' },
+      { id: 'celestial', hex: '#ec4899', name: 'Rosa Divino' },
+      { id: 'lapis', hex: '#3b82f6', name: 'Lápis Lazúli' }
+    ];
+
     let reinoSelectedLogo = '👑';
+    let reinoSelectedColor = '#f59e0b';
+
+    function renderTagReino(tag, logo = '👑', cor = '#f59e0b', extraStyle = '') {
+      if (!tag) return '';
+      const safeTag = escapeHtml(tag);
+      const safeLogo = escapeHtml(logo || '👑');
+      const c = cor || '#f59e0b';
+      return `<span class="tag-kingdom" style="border-color:${c}77; background:linear-gradient(135deg, ${c}22 0%, ${c}44 100%); color:${c}; box-shadow:0 0 8px ${c}33; ${extraStyle}"><span>${safeLogo}</span>[${safeTag}]</span>`;
+    }
 
     function renderLogosReinoSelector() {
       const grid = document.getElementById('reino-logos-grid');
@@ -4512,6 +4552,22 @@
       }).join('');
     }
 
+    function renderCoresReinoSelector() {
+      const grid = document.getElementById('reino-cores-grid');
+      if (!grid) return;
+      grid.innerHTML = REINO_CORES_TAG.map(item => {
+        const isSelected = item.hex.toLowerCase() === (reinoSelectedColor || '').toLowerCase();
+        return `
+          <button type="button" onclick="selecionarCorReino('${item.hex}', '${item.name}')"
+            class="group relative flex flex-col items-center justify-center p-2 rounded-xl border ${isSelected ? 'scale-105 ring-2 shadow-lg' : 'hover:scale-102'} transition-all duration-150"
+            style="background: ${item.hex}18; border-color: ${isSelected ? item.hex : item.hex + '40'}; ${isSelected ? 'box-shadow: 0 0 14px ' + item.hex + '55;' : ''}">
+            <span class="w-5 h-5 rounded-full inline-block shadow-md transition-transform group-hover:scale-110" style="background: ${item.hex}; box-shadow: 0 0 8px ${item.hex}99;"></span>
+            <span class="text-[9px] font-bold text-slate-300 group-hover:text-white truncate mt-1.5 w-full text-center">${item.name}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
     function selecionarLogoReino(emoji, name) {
       reinoSelectedLogo = emoji;
       const input = document.getElementById('reino-input-logo');
@@ -4523,14 +4579,44 @@
       const prevLogo = document.getElementById('preview-logo-span');
       if (prevLogo) prevLogo.textContent = emoji;
       renderLogosReinoSelector();
+      atualizarPreviewTag();
+    }
+
+    function selecionarCorReino(hex, name) {
+      reinoSelectedColor = hex;
+      const input = document.getElementById('reino-input-cor');
+      if (input) input.value = hex;
+      const label = document.getElementById('reino-selected-color-label');
+      if (label) label.textContent = name;
+      const dot = document.getElementById('reino-selected-color-dot');
+      if (dot) {
+        dot.style.backgroundColor = hex;
+        dot.style.boxShadow = `0 0 8px ${hex}`;
+      }
+      const prevWrapper = document.getElementById('reino-selected-color-preview');
+      if (prevWrapper) {
+        prevWrapper.style.backgroundColor = `${hex}20`;
+        prevWrapper.style.borderColor = `${hex}50`;
+        prevWrapper.style.color = hex;
+      }
+      renderCoresReinoSelector();
+      atualizarPreviewTag();
     }
 
     function atualizarPreviewTag(val) {
       const previewText = document.getElementById('preview-tag-text');
       const prevLogo = document.getElementById('preview-logo-span');
+      const prevBadge = document.getElementById('preview-tag-badge');
       if (prevLogo) prevLogo.textContent = reinoSelectedLogo;
-      if (previewText) {
+      if (previewText && typeof val === 'string') {
         previewText.textContent = val ? `[${val}]` : '[TAG]';
+      }
+      if (prevBadge) {
+        const c = reinoSelectedColor || '#f59e0b';
+        prevBadge.style.borderColor = `${c}88`;
+        prevBadge.style.background = `linear-gradient(135deg, ${c}25 0%, ${c}45 100%)`;
+        prevBadge.style.color = c;
+        prevBadge.style.boxShadow = `0 0 10px ${c}44`;
       }
     }
 
@@ -4541,6 +4627,8 @@
       }
 
       renderLogosReinoSelector();
+      renderCoresReinoSelector();
+      atualizarPreviewTag();
 
       const statusPermissaoTxt = document.getElementById('reino-status-permissao-txt');
       const bloqueioAviso = document.getElementById('reino-bloqueio-aviso');
@@ -4585,6 +4673,7 @@
       const tag = (document.getElementById('reino-input-tag')?.value || '').trim().toUpperCase();
       const desc = (document.getElementById('reino-input-desc')?.value || '').trim();
       const logo = (document.getElementById('reino-input-logo')?.value || reinoSelectedLogo || '👑').trim();
+      const cor = (document.getElementById('reino-input-cor')?.value || reinoSelectedColor || '#f59e0b').trim();
 
       if (!nome || !tag || !desc) {
         mostrarFeedback('Preencha todos os campos obrigatórios.', 'red');
@@ -4602,7 +4691,7 @@
       try {
         const res = await apiFetch('/api/kingdoms/create', {
           method: 'POST',
-          body: JSON.stringify({ nome, tag, descricao: desc, logo })
+          body: JSON.stringify({ nome, tag, descricao: desc, logo, cor })
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -4632,7 +4721,7 @@
       const btnDissolver = document.getElementById('btn-dissolver-reino');
 
       if (nomeEl) nomeEl.textContent = reino.nome || 'Meu Reino';
-      if (tagEl) tagEl.innerHTML = `<span>${escapeHtml(reino.logo || '👑')}</span>[${escapeHtml(reino.tag || 'TAG')}]`;
+      if (tagEl) tagEl.innerHTML = renderTagReino(reino.tag || 'TAG', reino.logo, reino.cor);
       if (descEl) descEl.textContent = reino.descricao || 'Sem descrição cadastrada.';
       if (liderEl) liderEl.textContent = reino.owner_nick || '–';
       if (pontosEl) pontosEl.textContent = reino.pontos || 0;
@@ -5001,7 +5090,7 @@
             <div class="flex flex-col items-center">
               <div class="text-sm font-bold text-slate-300 mb-1">🥈 #2</div>
               <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-slate-400/40 bg-black/40">
-                <span class="tag-kingdom mb-1"><span>${second.logo || '👑'}</span>[${escapeHtml(second.tag)}]</span>
+                ${renderTagReino(second.tag, second.logo, second.cor, 'margin-bottom:4px;')}
                 <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nome)}</div>
                 <div class="text-xs font-mono font-bold text-cyan-300 mt-0.5">${second.totalPoints} pts</div>
                 <div class="text-[10px] text-slate-400 mt-0.5">${second.kills} kills &middot; ${second.hoursPlayed}h</div>
@@ -5018,7 +5107,7 @@
             <div class="flex flex-col items-center">
               <div class="text-base font-bold text-amber-300 mb-1">👑 #1</div>
               <div class="glass-card w-full rounded-2xl p-3 md:p-4 text-center border-2 border-amber-400/70 bg-gradient-to-b from-amber-950/30 to-black/60 shadow-xl">
-                <span class="tag-kingdom mb-1 text-xs px-2 py-0.5"><span>${first.logo || '👑'}</span>[${escapeHtml(first.tag)}]</span>
+                ${renderTagReino(first.tag, first.logo, first.cor, 'margin-bottom:4px; font-size:12px; padding:2px 8px;')}
                 <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1">${escapeHtml(first.nome)}</div>
                 <div class="text-sm md:text-base font-mono font-black text-amber-200 mt-0.5">${first.totalPoints} pts</div>
                 <div class="text-[11px] text-slate-300 mt-0.5">${first.kills} kills &middot; ${first.hoursPlayed}h &middot; ${first.membersCount} membros</div>
@@ -5033,7 +5122,7 @@
             <div class="flex flex-col items-center">
               <div class="text-sm font-bold text-amber-600 mb-1">🥉 #3</div>
               <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-amber-700/40 bg-black/40">
-                <span class="tag-kingdom mb-1"><span>${third.logo || '👑'}</span>[${escapeHtml(third.tag)}]</span>
+                ${renderTagReino(third.tag, third.logo, third.cor, 'margin-bottom:4px;')}
                 <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nome)}</div>
                 <div class="text-xs font-mono font-bold text-amber-400 mt-0.5">${third.totalPoints} pts</div>
                 <div class="text-[10px] text-slate-400 mt-0.5">${third.kills} kills &middot; ${third.hoursPlayed}h</div>
@@ -5062,7 +5151,7 @@
                 <div class="w-6 text-center font-mono flex-shrink-0">${rankBadge}</div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="tag-kingdom"><span>${k.logo || '👑'}</span>[${escapeHtml(k.tag)}]</span>
+                    ${renderTagReino(k.tag, k.logo, k.cor)}
                     <span class="font-bold text-xs md:text-sm text-white truncate">${escapeHtml(k.nome)}</span>
                   </div>
                   <div class="text-[10px] text-slate-400 mt-0.5">
