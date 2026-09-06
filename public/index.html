@@ -6,6 +6,7 @@
   <title>5DAY MC — Servidor Oficial 1.21+ • Bedrock & Java</title>
   <link rel="icon" type="image/jpeg" href="/logo.jpg" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@700;900&display=swap" rel="stylesheet" />
   <style>
     html, body {
@@ -1958,8 +1959,64 @@
       await verificarSessao();
       carregarBans();
       carregarRankingHorasSilencioso();
+      iniciarSupabaseRealtime();
       iniciarAutoRefresh();
     });
+
+    // ── Supabase Realtime (WebSockets: Entrega instantânea em 10ms com 0 chamadas no Vercel) ──
+    let realtimeSb = null;
+    let realtimeChatSub = null;
+    let realtimeKingdomSub = null;
+
+    function iniciarSupabaseRealtime() {
+      if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+        return;
+      }
+      try {
+        if (!realtimeSb) {
+          realtimeSb = window.supabase.createClient(
+            'https://mcaichwewoejuywyojxd.supabase.co',
+            'sb_publishable_DEgpPbwXix73lKFCZA1pMw_fLX758VQ'
+          );
+        }
+
+        // 1. Canal WebSocket para Chat da Comunidade (#chat-geral)
+        if (!realtimeChatSub) {
+          realtimeChatSub = realtimeSb
+            .channel('realtime-community-chat')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+              const m = payload.new;
+              if (!m) return;
+              const r = m.author_role;
+              if (r === 'console_log' || r === 'playtime_rank' || r === 'telemetry' || r === 'death_log' || r === 'session_log' || r === 'ban_log' || r === 'ip_ban' || r === 'player_lives') return;
+              const c = (m.content || '').trim();
+              if (c.startsWith('{"lives":') || c.startsWith('{"event":')) return;
+
+              // Mensagem nova chegou via WebSocket instantâneo (0ms de atraso, 0 Vercel requests)!
+              if (currentChannel === 'chat') {
+                carregarChat();
+              }
+            })
+            .subscribe();
+        }
+
+        // 2. Canal WebSocket para Chat de Reinos (#reinos)
+        if (!realtimeKingdomSub) {
+          realtimeKingdomSub = realtimeSb
+            .channel('realtime-kingdom-chat')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kingdom_messages' }, payload => {
+              const m = payload.new;
+              if (!m) return;
+              if (meuReinoAtual && m.kingdom_id === meuReinoAtual.id && currentChannel === 'reinos') {
+                carregarMensagensReinoSilencioso();
+              }
+            })
+            .subscribe();
+        }
+      } catch (err) {
+        console.warn('Supabase Realtime fallback to polling:', err);
+      }
+    }
 
     // ── Detector Inteligente de Atividade (Economia Vercel) ──────────────
     let isUserActive = true;
@@ -1987,12 +2044,12 @@
     registrarAtividadeUsuario();
 
     function iniciarAutoRefresh() {
-      // 1. Chat da Comunidade: verifica mensagens a cada 3.5 segundos enquanto estiver no chat (sem travar por inatividade)
+      // 1. Chat da Comunidade: contingência suave a cada 10s (com Realtime WebSockets ativo entregando instantaneamente)
       setInterval(() => {
         if (!document.hidden && currentChannel === 'chat') {
           carregarChat();
         }
-      }, 3500);
+      }, 10000);
 
       // 2. Bans: apenas quando visualizando o mural de bans
       setInterval(() => {
@@ -2011,7 +2068,7 @@
         }
       }, 60000);
 
-      // 3.5. Reino Privado: mensagens a cada 3.5s se estiver na aba do reino
+      // 3.5. Reino Privado: contingência suave a cada 10s se estiver na aba do reino
       //      + verifica convites silenciosamente a cada ~60s em outras abas
       let _inviteCheckTick = 0;
       setInterval(() => {
@@ -2019,13 +2076,13 @@
           carregarMensagensReinoSilencioso();
         }
         _inviteCheckTick++;
-        if (_inviteCheckTick >= 17 && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
+        if (_inviteCheckTick >= 6 && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
           _inviteCheckTick = 0;
           apiFetch('/api/kingdoms/status').then(r => r.json()).then(d => {
             if (d && d.success) atualizarBadgeConvites((d.myInvites || []).length);
           }).catch(() => {});
         }
-      }, 3500);
+      }, 10000);
 
       // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin
       setInterval(() => {
