@@ -8,6 +8,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@700;900&display=swap" rel="stylesheet" />
   <style>
+    html, body {
+      overscroll-behavior-y: contain;
+      -webkit-overscroll-behavior-y: contain;
+      overscroll-behavior: contain;
+    }
     body {
       font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
       -webkit-tap-highlight-color: transparent;
@@ -1464,6 +1469,9 @@
       abrirSubmenu(currentCategory);
     }
 
+    window.appNavigationHistory = window.appNavigationHistory || [];
+    window._isGoingBack = false;
+
     function selecionarCanal(canalId, categoria) {
       // Canais que exigem login
       const canaisProtegidos = ['chat', 'admin', 'console'];
@@ -1471,6 +1479,11 @@
         mostrarFeedback('🔒 Faça login para acessar este canal.', 'red');
         abrirModalAuth('login');
         return;
+      }
+
+      if (!window._isGoingBack && currentChannel && currentChannel !== canalId) {
+        window.appNavigationHistory.push({ canalId: currentChannel, categoria: currentCategory });
+        if (window.appNavigationHistory.length > 40) window.appNavigationHistory.shift();
       }
 
       currentChannel = canalId;
@@ -1523,6 +1536,39 @@
       if (canalId === 'console' && isUserAdmin) { carregarConsoleLogs(); scrollConsoleToBottom(); }
       if (canalId === 'ranking-horas') carregarRankingHoras();
     }
+
+    // Suporte ao Botão Voltar do Android App
+    window.handleAndroidBack = function() {
+      // 1. Fechar modal de autenticação se aberto
+      const authModal = document.getElementById('modal-auth');
+      if (authModal && !authModal.classList.contains('hidden')) {
+        fecharModalAuth();
+        return "handled";
+      }
+      // 2. Fechar submenu flutuante se aberto
+      const submenu = document.getElementById('floating-submenu');
+      if (submenu && !submenu.classList.contains('hidden')) {
+        fecharSubmenu();
+        return "handled";
+      }
+      // 3. Voltar para aba anterior se houver histórico
+      if (window.appNavigationHistory && window.appNavigationHistory.length > 0) {
+        const prev = window.appNavigationHistory.pop();
+        window._isGoingBack = true;
+        try {
+          selecionarCanal(prev.canalId, prev.categoria);
+        } finally {
+          window._isGoingBack = false;
+        }
+        return "handled";
+      }
+      // 4. Se estiver em outra aba diferente da home, volta para a home
+      if (currentChannel !== 'home') {
+        selecionarCanal('home', 'home');
+        return "handled";
+      }
+      return "root";
+    };
 
     // ── Sessão ───────────────────────────────────────────────────────────────
     async function verificarSessao() {
