@@ -37,10 +37,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String TELEM_URL = "https://fffff-autoforge.vercel.app/api/telemetry/";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // 400 ticks = 20s (checagem de ban)
-    private static final long CHECK_INTERVAL_TICKS = 400L;
-    // 200 ticks = 10s (telemetria AO VIVO inteligente)
-    private static final long TELEM_INTERVAL_TICKS = 200L;
+    // 1200 ticks = 60s (checagem periódica de ban de quem já está online)
+    private static final long CHECK_INTERVAL_TICKS = 1200L;
+    // 1200 ticks = 60s (telemetria AO VIVO super econômica)
+    private static final long TELEM_INTERVAL_TICKS = 1200L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -60,7 +60,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .build();
         getServer().getPluginManager().registerEvents(this, this);
 
-        // ── Task: checagem de ban & IP ban a cada 20s ────────────────────────
+        // ── Task: checagem de ban & IP ban a cada 60s ────────────────────────
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -88,7 +88,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, CHECK_INTERVAL_TICKS, CHECK_INTERVAL_TICKS);
 
-        // ── Task: telemetria AO VIVO a cada 10s ───────────────────────────────
+        // ── Task: telemetria AO VIVO a cada 60s ───────────────────────────────
         getServer().getScheduler().runTaskTimer(this, () -> {
             for (Player player : getServer().getOnlinePlayers()) {
                 String cleanName = cleanNick(player.getName());
@@ -98,18 +98,19 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        // ── Task: Comandos remotos do Console & Mensagens In-Game (Inteligente & Econômico) ──
-        // Se não houver jogadores no servidor, checa em repouso a cada 20 segundos.
-        // Se houver jogadores online, checa a cada 5 segundos (redução de mais de 85% de tráfego na Vercel).
+        // ── Task: Comandos remotos do Console & Mensagens In-Game (Ultra-Econômico) ──
+        // ZERO REQUISIÇÕES quando o servidor estiver sem jogadores (repouso absoluto).
+        // Quando houver jogadores jogando, checa comandos a cada 25 segundos.
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            boolean hasPlayers = !getServer().getOnlinePlayers().isEmpty();
+            if (getServer().getOnlinePlayers().isEmpty()) {
+                return; // 0 REQUISIÇÕES NA VERCEL quando o servidor estiver vazio!
+            }
             long now = System.currentTimeMillis();
-            long requiredInterval = hasPlayers ? 5000L : 20000L;
-            if (now - lastCommandCheckTime >= requiredInterval) {
+            if (now - lastCommandCheckTime >= 25000L) {
                 lastCommandCheckTime = now;
                 checkRemoteCommands();
             }
-        }, 40L, 40L);
+        }, 100L, 100L);
 
         log.info("Mapa Bermuda Whitelist, Console & Comandos v2.0 - ATIVA!");
     }
