@@ -2862,6 +2862,50 @@ app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
 // Inicializa cache de reinos na inicialização do servidor
 syncKingdomsCache(true).catch(() => {});
 
+// Salva o snapshot inicial de estatísticas quando um membro entra no reino
+async function salvarBaselineMembroReino(nick, kingdomId) {
+  try {
+    const clean = (nick || '').toLowerCase().trim();
+    const { data: rank } = await supabase.from('player_rankings').select('playtime_seconds').ilike('nick', clean).maybeSingle();
+    const { data: telem } = await supabase.from('messages').select('content').ilike('author_nick', clean).eq('author_role', 'telemetry').order('created_at', { ascending: false }).limit(1).maybeSingle();
+
+    let initSec = rank ? (Number(rank.playtime_seconds) || 0) : 0;
+    let initPk = 0, initMk = 0;
+    if (telem && telem.content) {
+      try {
+        const j = JSON.parse(telem.content);
+        initSec = Math.max(initSec, Number(j.playtimeSeconds) || 0);
+        initPk = Number(j.playerKills) || 0;
+        initMk = Number(j.mobKills) || 0;
+      } catch (_) {}
+    }
+
+    // Remove baseline anterior se existisse
+    await safeDb(
+      supabase.from('messages')
+        .delete()
+        .eq('author_role', 'kingdom_member_baseline')
+        .ilike('author_nick', clean)
+    );
+
+    // Registra baseline de entrada no reino
+    await supabase.from('messages').insert([{
+      author_nick: nick,
+      author_role: 'kingdom_member_baseline',
+      content: JSON.stringify({
+        kingdom_id: kingdomId,
+        initialPlaytime: initSec,
+        initialPvp: initPk,
+        initialMob: initMk,
+        joined_at: new Date().toISOString()
+      }),
+      created_at: new Date().toISOString()
+    }]);
+  } catch (err) {
+    console.error('Erro ao salvar baseline de membro:', err);
+  }
+}
+
 // GET /api/kingdoms/status — Obter status do usuário (permissão de criação, reino atual, membro)
 app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
   try {
@@ -2917,7 +2961,120 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
         .select('id, user_nick, role, joined_at')
         .eq('kingdom_id', member.kingdom_id)
         .order('joined_at', { ascending: true });
-      members = mList || [];
+
+      const isLiderOrAdmin = (member.role === 'lider' || req.isAdmin);
+
+      if (isLiderOrAdmin && mList && mList.length > 0) {
+        // Apenas o líder e admin recebem os dados detalhados do que cada membro fez enquanto esteve no reino
+        const { data: baselines } = await supabase
+          .from('messages')
+          .select('author_nick, content')
+          .eq('author_role', 'kingdom_member_baseline');
+
+        const baselineMap = new Map();
+        (baselines || []).forEach(b => {
+          try {
+            const j = JSON.parse(b.content);
+            if (j.kingdom_id === member.kingdom_id) {
+              baselineMap.set((b.author_nick || '').toLowerCase().trim(), j);
+            }
+          } catch (_) {}
+        });
+
+        const { data: rankRows } = await supabase
+          .from('player_rankings')
+          .select('nick, playtime_seconds');
+
+        const { data: dbTelemetry } = await supabase
+          .from('messages')
+          .select('author_nick, content, created_at')
+          .eq('author_role', 'telemetry')
+          .order('created_at', { ascending: false });
+
+        const playtimeMap = new Map();
+        const pvpMap = new Map();
+        const mobMap = new Map();
+        const lastSeenMap = new Map();
+
+        (rankRows || []).forEach(r => {
+          const k = (r.nick || '').toLowerCase().trim();
+          const sec = Number(r.playtime_seconds) || 0;
+          playtimeMap.set(k, Math.max(playtimeMap.get(k) || 0, sec));
+        });
+
+        (dbTelemetry || []).forEach(t => {
+          const k = (t.author_nick || '').toLowerCase().trim();
+          try {
+            const j = JSON.parse(t.content);
+            const sec = Number(j.playtimeSeconds) || 0;
+            if (sec > 0) playtimeMap.set(k, Math.max(playtimeMap.get(k) || 0, sec));
+            const pk = Number(j.playerKills) || 0;
+            if (pk > 0) pvpMap.set(k, Math.max(pvpMap.get(k) || 0, pk));
+            const mk = Number(j.mobKills) || 0;
+            if (mk > 0) mobMap.set(k, Math.max(mobMap.get(k) || 0, mk));
+            if (!lastSeenMap.has(k) && t.created_at) {
+              lastSeenMap.set(k, new Date(t.created_at).getTime());
+            }
+          } catch (_) {}
+        });
+
+        const { data: msgRows } = await supabase
+          .from('kingdom_messages')
+          .select('author_nick')
+          .eq('kingdom_id', member.kingdom_id);
+
+        const msgCountMap = new Map();
+        (msgRows || []).forEach(mr => {
+          const k = (mr.author_nick || '').toLowerCase().trim();
+          msgCountMap.set(k, (msgCountMap.get(k) || 0) + 1);
+        });
+
+        const now = Date.now();
+        members = mList.map(m => {
+          const k = (m.user_nick || '').toLowerCase().trim();
+          const clean = k.replace(/^[._]/, '');
+          const curSec = Math.max(playtimeMap.get(k) || 0, playtimeMap.get(clean) || 0);
+          const curPvp = Math.max(pvpMap.get(k) || 0, pvpMap.get(clean) || 0);
+          const curMob = Math.max(mobMap.get(k) || 0, mobMap.get(clean) || 0);
+          const base = baselineMap.get(k) || baselineMap.get(clean);
+
+          // Subtrai o baseline inicial: conta exatamente o que foi feito enquanto esteve no reino
+          const kSec = base ? Math.max(0, curSec - (Number(base.initialPlaytime) || 0)) : curSec;
+          const kPvp = base ? Math.max(0, curPvp - (Number(base.initialPvp) || 0)) : curPvp;
+          const kMob = base ? Math.max(0, curMob - (Number(base.initialMob) || 0)) : curMob;
+          const kTotalKills = kPvp + kMob;
+          const kPoints = (kPvp * 50) + (kMob * 1) + Math.floor(kSec / 360);
+
+          let playtimeFormatted = '0m';
+          const hrs = Math.floor(kSec / 3600);
+          const mins = Math.floor((kSec % 3600) / 60);
+          if (hrs > 0) {
+            playtimeFormatted = `${hrs}h ${mins}m`;
+          } else {
+            playtimeFormatted = `${mins}m`;
+          }
+
+          const lastSeen = Math.max(lastSeenMap.get(k) || 0, lastSeenMap.get(clean) || 0);
+          const isOnline = (now - lastSeen < 60000);
+
+          return {
+            ...m,
+            stats: {
+              playtimeSeconds: kSec,
+              playtimeFormatted,
+              pvpKills: kPvp,
+              mobKills: kMob,
+              totalKills: kTotalKills,
+              pointsGenerated: kPoints,
+              messagesCount: msgCountMap.get(k) || 0,
+              isOnline
+            }
+          };
+        });
+      } else {
+        // Membro comum: não recebe dados de produtividade privada
+        members = mList || [];
+      }
 
       // Se for líder ou admin, busca jogadores com Whitelist aprovada para convidar
       if (member.role === 'lider' || req.isAdmin) {
@@ -3134,6 +3291,9 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       role: 'lider'
     }]);
 
+    // Salva baseline inicial do líder no reino
+    await salvarBaselineMembroReino(nick, newKingdom.id);
+
     // Mensagem de boas-vindas no chat do reino
     await supabase.from('kingdom_messages').insert([{
       kingdom_id: newKingdom.id,
@@ -3336,6 +3496,9 @@ app.post('/api/kingdoms/invites/respond', requireAuth, async (req, res) => {
 
       if (insErr) return res.status(500).json({ error: insErr.message });
 
+      // Salva baseline inicial de estatísticas deste membro no reino
+      await salvarBaselineMembroReino(nick, invite.kingdom_id);
+
       // Atualiza convite para accepted
       await supabase
         .from('kingdom_invites')
@@ -3396,21 +3559,39 @@ app.post('/api/kingdoms/members/remove', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'O Dono/Líder não pode simplesmente sair. Use a opção de dissolver o reino.' });
     }
 
+    // 1. Remove da tabela de membros do reino
     await supabase.from('kingdom_members')
       .delete()
       .eq('kingdom_id', myMember.kingdom_id)
       .ilike('user_nick', cleanTarget);
 
+    // 2. Apaga as informações e baseline gerados enquanto o jogador esteve no reino
+    // (As horas e kills globais do jogador no servidor continuam 100% preservadas e intactas!)
+    await safeDb(
+      supabase.from('messages')
+        .delete()
+        .eq('author_role', 'kingdom_member_baseline')
+        .ilike('author_nick', cleanTarget)
+    );
+
+    // 3. Mensagem no chat do reino
+    const exitMsg = isRemovingSelf
+      ? `🚪 ${cleanTarget} saiu do reino.`
+      : `⛔ ${cleanTarget} foi expulso do reino por ${nick}.`;
+
     await supabase.from('kingdom_messages').insert([{
       kingdom_id: myMember.kingdom_id,
       author_nick: 'Sistema',
       author_role: 'system',
-      content: `🚪 ${cleanTarget} saiu do reino.`
+      content: exitMsg
     }]);
 
     syncKingdomsCache(true).catch(() => {});
 
-    res.json({ success: true, message: `Membro ${cleanTarget} removido.` });
+    res.json({ 
+      success: true, 
+      message: isRemovingSelf ? 'Você saiu do reino com sucesso.' : `Membro ${cleanTarget} foi expulso do reino.` 
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3431,6 +3612,7 @@ app.delete('/api/kingdoms', requireAuth, async (req, res) => {
     }
 
     await supabase.from('kingdoms').delete().eq('id', myMember.kingdom_id);
+    await safeDb(supabase.from('messages').delete().eq('author_role', 'kingdom_member_baseline').like('content', `%"kingdom_id":"${myMember.kingdom_id}"%`));
     syncKingdomsCache(true).catch(() => {});
 
     res.json({ success: true, message: 'Reino dissolvido com sucesso.' });
