@@ -44,10 +44,23 @@ CREATE TABLE IF NOT EXISTS kingdom_messages (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- 4.5. Convites para o Reino / Clã
+CREATE TABLE IF NOT EXISTS kingdom_invites (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kingdom_id   UUID NOT NULL REFERENCES kingdoms(id) ON DELETE CASCADE,
+  invited_nick TEXT NOT NULL,
+  invited_by   TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'accepted', 'rejected'
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- 5. Índices de alta performance
 CREATE INDEX IF NOT EXISTS idx_kingdom_members_kid ON kingdom_members(kingdom_id);
 CREATE INDEX IF NOT EXISTS idx_kingdom_members_nick ON kingdom_members(user_nick);
 CREATE INDEX IF NOT EXISTS idx_kingdom_messages_kid ON kingdom_messages(kingdom_id);
+CREATE INDEX IF NOT EXISTS idx_kingdom_invites_target ON kingdom_invites(invited_nick, status);
+CREATE INDEX IF NOT EXISTS idx_kingdom_invites_kid ON kingdom_invites(kingdom_id);
 CREATE INDEX IF NOT EXISTS idx_kingdoms_pontos ON kingdoms(pontos DESC);
 
 -- 6. Desativar RLS para acesso direto do backend com service/anon key
@@ -55,11 +68,13 @@ ALTER TABLE kingdom_permissions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE kingdoms            DISABLE ROW LEVEL SECURITY;
 ALTER TABLE kingdom_members     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE kingdom_messages    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE kingdom_invites     DISABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE kingdom_permissions TO anon, authenticated, service_role;
 GRANT ALL ON TABLE kingdoms            TO anon, authenticated, service_role;
 GRANT ALL ON TABLE kingdom_members     TO anon, authenticated, service_role;
 GRANT ALL ON TABLE kingdom_messages    TO anon, authenticated, service_role;
+GRANT ALL ON TABLE kingdom_invites     TO anon, authenticated, service_role;
 
 -- 7. Políticas de contingência permissivas
 DROP POLICY IF EXISTS "Permitir tudo em kingdom_permissions" ON kingdom_permissions;
@@ -73,3 +88,7 @@ CREATE POLICY "Permitir tudo em kingdom_members" ON kingdom_members FOR ALL USIN
 
 DROP POLICY IF EXISTS "Permitir tudo em kingdom_messages" ON kingdom_messages;
 CREATE POLICY "Permitir tudo em kingdom_messages" ON kingdom_messages FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo em kingdom_invites" ON kingdom_invites;
+CREATE POLICY "Permitir tudo em kingdom_invites" ON kingdom_invites FOR ALL USING (true) WITH CHECK (true);
+
