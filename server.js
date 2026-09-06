@@ -381,7 +381,7 @@ app.get('/api/chat', async (req, res) => {
     const { data, error } = await supabase
       .from('messages')
       .select('*')
-      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank","player_lives","system_lives")')
+      .not('author_role', 'in', '("telemetry","ban_log","ip_ban","death_log","session_log","console_log","playtime_rank","player_lives","system_lives","kingdom_member_baseline")')
       .order('created_at', { ascending: false })
       .limit(60);
 
