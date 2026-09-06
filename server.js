@@ -70,7 +70,7 @@ async function syncKingdomsCache(force = false) {
   try {
     const { data: members } = await supabase
       .from('kingdom_members')
-      .select('user_nick, role, kingdoms ( id, nome, tag, logo )');
+      .select('user_nick, role, kingdoms ( * )');
     if (members) {
       kingdomTagsCache.clear();
       for (const m of members) {
@@ -78,6 +78,7 @@ async function syncKingdomsCache(force = false) {
           kingdomTagsCache.set(m.user_nick.toLowerCase().trim(), {
             tag: m.kingdoms.tag.toUpperCase(),
             logo: m.kingdoms.logo || '👑',
+            cor: m.kingdoms.cor || '#f59e0b',
             kingdomName: m.kingdoms.nome,
             kingdomId: m.kingdoms.id,
             role: m.role || 'membro'
@@ -182,6 +183,7 @@ app.get('/api/auth/me', async (req, res) => {
       banReason,
       kingdom_tag: kInfo ? kInfo.tag : null,
       kingdom_logo: kInfo ? (kInfo.logo || '👑') : null,
+      kingdom_color: kInfo ? (kInfo.cor || '#f59e0b') : null,
       kingdom: kInfo || null
     });
   }
@@ -389,7 +391,8 @@ app.get('/api/chat', async (req, res) => {
       return {
         ...m,
         kingdom_tag: kInfo ? kInfo.tag : null,
-        kingdom_logo: kInfo ? (kInfo.logo || '👑') : null
+        kingdom_logo: kInfo ? (kInfo.logo || '👑') : null,
+        kingdom_color: kInfo ? (kInfo.cor || '#f59e0b') : null
       };
     });
     res.json(msgs);
@@ -603,6 +606,7 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
       const kp = kingdomTagsCache.get((p.nick || '').toLowerCase().trim());
       p.kingdom_tag = kp ? kp.tag : null;
       p.kingdom_logo = kp ? (kp.logo || '👑') : null;
+      p.kingdom_color = kp ? (kp.cor || '#f59e0b') : null;
       if (p.status === 'banned') {
         const ban = parseBanInfo(p.ban_reason);
         if (ban.expired) {
@@ -621,10 +625,15 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
       }
     }
 
-    // Adiciona kingdom_tag e kingdom_logo também na lista de online
+    // Adiciona kingdom_tag, kingdom_logo e kingdom_color também na lista de online
     const enrichedOnline = onlineList.map(o => {
       const ko = kingdomTagsCache.get((o.nick || '').toLowerCase().trim());
-      return { ...o, kingdom_tag: ko ? ko.tag : null, kingdom_logo: ko ? (ko.logo || '👑') : null };
+      return {
+        ...o,
+        kingdom_tag: ko ? ko.tag : null,
+        kingdom_logo: ko ? (ko.logo || '👑') : null,
+        kingdom_color: ko ? (ko.cor || '#f59e0b') : null
+      };
     });
 
     res.json({
@@ -2844,7 +2853,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
     try {
       const { data: invData, error: invErr } = await supabase
         .from('kingdom_invites')
-        .select('id, kingdom_id, invited_by, created_at, kingdoms ( id, nome, tag, descricao, owner_nick )')
+        .select('id, kingdom_id, invited_by, created_at, kingdoms ( * )')
         .ilike('invited_nick', nick)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
@@ -2856,7 +2865,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
     // 3. Busca reino atual do jogador
     const { data: member } = await supabase
       .from('kingdom_members')
-      .select('role, kingdom_id, kingdoms ( id, nome, tag, descricao, owner_nick, pontos, kills, created_at )')
+      .select('role, kingdom_id, kingdoms ( * )')
       .ilike('user_nick', nick)
       .maybeSingle();
 
@@ -2940,7 +2949,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
 app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { nome, tag, descricao, logo } = req.body || {};
+    const { nome, tag, descricao, logo, cor } = req.body || {};
 
     if (!nome || !tag || !descricao) {
       return res.status(400).json({ error: 'Nome, TAG de 3 letras e descrição são obrigatórios.' });
@@ -2954,6 +2963,10 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
     const cleanNome = nome.trim().slice(0, 30);
     const cleanDesc = descricao.trim().slice(0, 300);
     const cleanLogo = (logo || '👑').trim().slice(0, 10);
+    let cleanCor = (cor || '#f59e0b').trim();
+    if (!/^#[0-9A-Fa-f]{6}$/.test(cleanCor)) {
+      cleanCor = '#f59e0b';
+    }
 
     // 1. Verifica permissão concedida pelo Admin
     let allowed = !!req.isAdmin;
@@ -2981,7 +2994,7 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Você já faz parte de um Reino. Saia do reino atual antes de criar um novo.' });
     }
 
-    // 3. Cria o reino no Supabase (com logo e fallback seguro)
+    // 3. Cria o reino no Supabase (com logo, cor e fallback seguro)
     const insertPayload = {
       nome: cleanNome,
       tag: cleanTag,
@@ -2990,7 +3003,8 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       taxa_paga: 14.99,
       pontos: 0,
       kills: 0,
-      logo: cleanLogo
+      logo: cleanLogo,
+      cor: cleanCor
     };
 
     let { data: newKingdom, error: kErr } = await supabase
@@ -2998,6 +3012,13 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       .insert([insertPayload])
       .select()
       .single();
+
+    if (kErr && (kErr.message.includes('cor') || kErr.code === '42703')) {
+      delete insertPayload.cor;
+      const retry = await supabase.from('kingdoms').insert([insertPayload]).select().single();
+      newKingdom = retry.data;
+      kErr = retry.error;
+    }
 
     if (kErr && (kErr.message.includes('logo') || kErr.code === '42703')) {
       delete insertPayload.logo;
@@ -3393,7 +3414,7 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
     // 1. Busca todos os reinos
     const { data: kingdomsList } = await supabase
       .from('kingdoms')
-      .select('id, nome, tag, owner_nick, pontos, kills, created_at');
+      .select('*');
 
     if (!kingdomsList || kingdomsList.length === 0) {
       return res.json({ success: true, ranking: [] });
@@ -3430,6 +3451,7 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
         nome: k.nome,
         tag: k.tag,
         logo: k.logo || '👑',
+        cor: k.cor || '#f59e0b',
         owner_nick: k.owner_nick,
         membersCount: members.length,
         kills,
