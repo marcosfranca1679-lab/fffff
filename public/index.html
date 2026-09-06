@@ -1330,31 +1330,56 @@
       iniciarAutoRefresh();
     });
 
+    // ── Detector Inteligente de Atividade (Economia Vercel) ──────────────
+    let isUserActive = true;
+    let userIdleTimeout = null;
+
+    function registrarAtividadeUsuario() {
+      const wasIdle = !isUserActive;
+      isUserActive = true;
+      clearTimeout(userIdleTimeout);
+      // Após 2 minutos sem interação (mouse, tecla, toque), pausa o polling
+      userIdleTimeout = setTimeout(() => {
+        isUserActive = false;
+      }, 120000);
+
+      if (wasIdle) {
+        if (currentChannel === 'chat') carregarChat();
+        else if (currentChannel === 'console' && isUserAdmin) carregarConsoleLogs(true);
+        else if (currentChannel === 'admin' && isUserAdmin) carregarAdminData();
+      }
+    }
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, registrarAtividadeUsuario, { passive: true });
+    });
+    registrarAtividadeUsuario();
+
     function iniciarAutoRefresh() {
-      // 1. Chat: apenas quando o usuário está ativamente no canal #chat-geral
+      // 1. Chat: apenas quando a aba estiver visível, usuário ativo e no #chat-geral
       setInterval(() => {
-        if (!document.hidden && currentChannel === 'chat') {
+        if (!document.hidden && isUserActive && currentChannel === 'chat') {
           carregarChat();
         }
-      }, 7000);
+      }, 10000);
 
-      // 2. Bans: apenas quando o usuário está visualizando o mural de bans
+      // 2. Bans: apenas quando visualizando o mural de bans
       setInterval(() => {
-        if (!document.hidden && currentChannel === 'bans') {
+        if (!document.hidden && isUserActive && currentChannel === 'bans') {
           carregarBans();
         }
-      }, 18000);
+      }, 30000);
 
-      // 3. Ranking: apenas quando o usuário está na aba de ranking
+      // 3. Ranking: apenas na aba de ranking
       setInterval(() => {
-        if (!document.hidden && currentChannel === 'ranking-horas') {
+        if (!document.hidden && isUserActive && currentChannel === 'ranking-horas') {
           carregarRankingHoras(true);
         }
-      }, 25000);
+      }, 60000);
 
-      // 4. Admin Whitelist & Vidas: apenas se for admin e estiver na aba admin
+      // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin
       setInterval(() => {
-        if (!document.hidden && isUserAdmin && currentChannel === 'admin') {
+        if (!document.hidden && isUserActive && isUserAdmin && currentChannel === 'admin') {
           if (adminModulo === 'online') {
             carregarAdminData();
           } else if (adminModulo === 'banimentos') {
@@ -1366,21 +1391,21 @@
             carregarAdminVidas();
           }
         }
-      }, 8000);
+      }, 12000);
 
-      // 5. Console do Servidor: apenas se for admin e estiver com a tela do console aberta
+      // 5. Console do Servidor: apenas se admin, ativo e com console aberto
       setInterval(() => {
-        if (!document.hidden && isUserAdmin && currentChannel === 'console') {
+        if (!document.hidden && isUserActive && isUserAdmin && currentChannel === 'console') {
           carregarConsoleLogs(true);
         }
-      }, 5000);
+      }, 8000);
 
-      // 6. Sessão do usuário: renovação suave a cada 60s
+      // 6. Sessão do usuário: renovação suave a cada 120s
       setInterval(() => {
-        if (!document.hidden && currentUser) {
+        if (!document.hidden && isUserActive && currentUser) {
           atualizarMeuStatusSilencioso();
         }
-      }, 60000);
+      }, 120000);
     }
 
     // ── Submenu Lateral ──────────────────────────────────────────────────────
