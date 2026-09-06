@@ -2258,6 +2258,8 @@
     function configurarInterfaceUsuario(data) {
       const u = data.user;
       const initial = (u.nick || 'J').substring(0, 1).toUpperCase();
+      const kTag = data.kingdom_tag || null;
+      const tagHtml = kTag ? `<span class="tag-kingdom" style="font-size:10px;margin-left:4px">[${escapeHtml(kTag)}]</span>` : '';
       const avBadge = document.getElementById('user-avatar-badge');
       if (avBadge) avBadge.textContent = initial;
 
@@ -2269,13 +2271,15 @@
         loggedCard.classList.remove('hidden');
         const homeNick = document.getElementById('home-nick');
         const homeAvatar = document.getElementById('home-avatar');
-        if (homeNick) homeNick.textContent = u.nick || 'Jogador';
+        if (homeNick) homeNick.innerHTML = escapeHtml(u.nick || 'Jogador') + tagHtml;
         if (homeAvatar) homeAvatar.textContent = initial;
       }
-      document.getElementById('drawer-user-nick').textContent = u.nick;
+      const drawerNickEl = document.getElementById('drawer-user-nick');
+      if (drawerNickEl) drawerNickEl.innerHTML = escapeHtml(u.nick) + tagHtml;
       document.getElementById('drawer-user-role').textContent = isUserAdmin ? '👑 Administrador' : (u.platform || 'Jogador');
-      
-      document.getElementById('profile-nick').textContent = u.nick;
+
+      const profileNickEl = document.getElementById('profile-nick');
+      if (profileNickEl) profileNickEl.innerHTML = escapeHtml(u.nick) + tagHtml;
       document.getElementById('profile-email').textContent = u.email || 'Conta de Administrador';
       document.getElementById('profile-platform-badge').textContent = u.platform || 'Minecraft';
 
@@ -2967,6 +2971,7 @@
               
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 flex-wrap">
+                  ${o.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px">[${escapeHtml(o.kingdom_tag)}]</span>` : ''}
                   <span class="font-extrabold text-xs sm:text-sm text-white truncate">${safeNick}</span>
                   <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
@@ -3050,6 +3055,7 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</span>
+                  ${p.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px">[${escapeHtml(p.kingdom_tag)}]</span>` : ''}
                   ${p.isOnline ? '<span class="bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-1 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> JOGANDO AGORA</span>' : ''}
                 </div>
                 <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
