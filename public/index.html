@@ -277,9 +277,13 @@
     <!-- 4.5. Reinos & Guildas (Castelo 3D) -->
     <div class="relative group flex flex-col items-center">
       <span id="dot-cat-reinos" class="hidden active-pill-dot"></span>
-      <button onclick="alternarSubmenu('reinos')" id="icon-cat-reinos" class="btn-3d btn-3d-cyan w-10 h-10 md:w-11 md:h-11" title="Reinos & Guildas">
-        <span class="text-lg md:text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">🏰</span>
-      </button>
+      <div class="relative">
+        <button onclick="alternarSubmenu('reinos')" id="icon-cat-reinos" class="btn-3d btn-3d-cyan w-10 h-10 md:w-11 md:h-11" title="Reinos & Guildas">
+          <span class="text-lg md:text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">🏰</span>
+        </button>
+        <!-- Badge de convites pendentes — aparece automaticamente quando tem convite -->
+        <span id="badge-convites-reino" class="hidden absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow-md border border-black/40 z-10 pointer-events-none"></span>
+      </div>
       <span class="text-[9px] md:text-[10px] font-bold text-cyan-300 drop-shadow mt-0.5">Reinos</span>
     </div>
 
@@ -1872,6 +1876,20 @@
     let adminData = { pending: [], approved: [], rejected: [], banned: [], online: [], totalOnline: 0 };
     let lastChatCount = 0;
     let isSubmenuOpen = false;
+    let pendingInvitesCount = 0; // Convites de reino pendentes — atualiza o badge 🏰 sem custo extra
+
+    // Atualiza o badge vermelho no botão 🏰 — chamado sempre que renderConvitesRecebidos roda
+    function atualizarBadgeConvites(count) {
+      pendingInvitesCount = count || 0;
+      const badge = document.getElementById('badge-convites-reino');
+      if (!badge) return;
+      if (pendingInvitesCount > 0) {
+        badge.textContent = pendingInvitesCount > 9 ? '9+' : String(pendingInvitesCount);
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
 
     const categorySubdivisions = {
       info: {
@@ -1994,9 +2012,20 @@
       }, 60000);
 
       // 3.5. Reino Privado: mensagens a cada 12s se estiver na aba do reino
+      //      + verifica convites silenciosamente a cada 60s em qualquer aba (zero custo extra)
+      let _inviteCheckTick = 0;
       setInterval(() => {
         if (!document.hidden && isUserActive && currentChannel === 'reinos' && meuReinoAtual) {
           carregarMensagensReinoSilencioso();
+        }
+        // A cada ~60s (5 ticks de 12s), verifica convites mesmo fora da aba de Reinos
+        _inviteCheckTick++;
+        if (_inviteCheckTick >= 5 && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
+          _inviteCheckTick = 0;
+          // Chamada leve: reutiliza o mesmo endpoint já existente, apenas atualiza o badge
+          apiFetch('/api/kingdoms/status').then(r => r.json()).then(d => {
+            if (d && d.success) atualizarBadgeConvites((d.myInvites || []).length);
+          }).catch(() => {});
         }
       }, 12000);
 
@@ -4287,11 +4316,13 @@
 
       if (!invites || invites.length === 0) {
         container.classList.add('hidden');
+        atualizarBadgeConvites(0); // Limpa badge quando não há convites
         return;
       }
 
       container.classList.remove('hidden');
       if (badgeEl) badgeEl.textContent = `${invites.length} convite${invites.length > 1 ? 's' : ''}`;
+      atualizarBadgeConvites(invites.length); // Atualiza badge 🏰 com quantidade de convites
 
       listaEl.innerHTML = invites.map(inv => {
         const k = inv.kingdoms || {};
