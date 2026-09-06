@@ -1,4 +1,4 @@
-name: Build Mapa Bermuda - Android APK
+name: Build 5DAY MC - Android APK
 
 on:
   push:
@@ -33,12 +33,13 @@ jobs:
 
       - name: Copy & Rename APK
         run: |
-          cp android-app/app/build/outputs/apk/release/app-release.apk MapaBermuda.apk
-          cp android-app/app/build/outputs/apk/release/app-release.apk android-app/MapaBermuda.apk
+          cp android-app/app/build/outputs/apk/release/app-release.apk 5DayMC.apk
+          cp android-app/app/build/outputs/apk/release/app-release.apk ProxyMC.apk
+          cp android-app/app/build/outputs/apk/release/app-release.apk android-app/5DayMC.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MapaBermuda-APK
-          path: MapaBermuda.apk
+          name: 5DayMC-APK
+          path: 5DayMC.apk
           retention-days: 30
