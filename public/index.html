@@ -159,6 +159,16 @@
       box-shadow: 0 2px 0 #0f172a, 0 5px 10px rgba(0, 0, 0, 0.4);
     }
 
+    /* 7. Orange — Suporte */
+    .btn-3d-orange {
+      background: linear-gradient(135deg, #fb923c 0%, #ea580c 50%, #c2410c 100%);
+      box-shadow: 0 2px 0 #7c2d12, 0 5px 10px rgba(234, 88, 12, 0.4);
+    }
+    .btn-3d-orange.active {
+      background: linear-gradient(135deg, #fbbf24 0%, #f97316 50%, #ea580c 100%);
+      box-shadow: 0 1px 0 #7c2d12, 0 3px 8px rgba(251, 146, 60, 0.5);
+    }
+
     /* Indicador ativo lateral */
     .active-pill-dot {
       position: absolute;
@@ -225,7 +235,20 @@
       <span class="text-[9px] md:text-[10px] font-bold text-purple-300 drop-shadow mt-0.5">Chat</span>
     </div>
 
-    <!-- 4. Admin (Apenas para Admin) -->
+    <!-- 4. Suporte / Denúncias -->
+    <div class="relative group flex flex-col items-center">
+      <span id="dot-cat-suporte" class="hidden active-pill-dot"></span>
+      <button onclick="alternarSubmenu('suporte')" id="icon-cat-suporte" class="btn-3d btn-3d-orange w-10 h-10 md:w-11 md:h-11" title="Suporte & Denúncias">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.15)"/>
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+          <line x1="12" y1="17" x2="12.01" y2="17" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <span class="text-[9px] md:text-[10px] font-bold text-orange-300 drop-shadow mt-0.5">Suporte</span>
+    </div>
+
+    <!-- 5. Admin (Apenas para Admin) -->
     <div id="wrapper-icon-admin" class="hidden relative group flex flex-col items-center">
       <span id="dot-cat-admin" class="hidden active-pill-dot"></span>
       <button onclick="alternarSubmenu('admin')" id="icon-cat-admin" class="btn-3d btn-3d-ruby w-10 h-10 md:w-11 md:h-11" title="Painel de Moderação">
@@ -1019,6 +1042,109 @@
 
     </section>
 
+    <!-- ── 6. SUBDIVISÃO: DENÚNCIAS / SUPORTE (#denúncias) ─────────────────── -->
+    <section id="view-denuncias" class="hidden flex-1 overflow-y-auto p-2.5 md:p-5 max-w-3xl w-full mx-auto space-y-3">
+
+      <!-- Header -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-4 shadow-lg border border-orange-500/30">
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-xs md:text-sm font-extrabold text-orange-400 flex items-center gap-1.5">
+            🎫 Denúncias & Suporte
+          </h2>
+          <button onclick="mostrarFormNovoTicket()" id="btn-novo-ticket"
+            class="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition shadow-sm flex items-center gap-1.5">
+            + Abrir Denúncia
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-400">Seus tickets são privados — só você e o admin podem ver.</p>
+      </div>
+
+      <!-- Formulário novo ticket (oculto por padrão) -->
+      <div id="form-novo-ticket" class="hidden glass-card rounded-2xl p-4 border border-orange-500/20 space-y-3">
+        <h3 class="text-xs font-extrabold text-orange-300 flex items-center gap-1.5">📋 Nova Denúncia</h3>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Título *</label>
+          <input id="ticket-titulo" type="text" maxlength="120" placeholder="Ex: Jogador usando hack no pvp"
+            class="w-full mt-1 bg-black/50 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jogador Denunciado (opcional)</label>
+          <input id="ticket-denunciado" type="text" maxlength="50" placeholder="Nick do jogador"
+            class="w-full mt-1 bg-black/50 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500" />
+        </div>
+        <div>
+          <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descrição *</label>
+          <textarea id="ticket-descricao" rows="4" maxlength="2000" placeholder="Descreva o problema com detalhes: o que aconteceu, quando, onde..."
+            class="w-full mt-1 bg-black/50 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 resize-none"></textarea>
+        </div>
+        <div id="ticket-form-erro" class="hidden text-[11px] text-red-400 font-semibold"></div>
+        <div class="flex gap-2">
+          <button onclick="enviarNovoTicket()"
+            class="flex-1 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold py-2 rounded-xl text-xs transition">
+            Enviar Denúncia
+          </button>
+          <button onclick="ocultarFormNovoTicket()"
+            class="px-4 py-2 rounded-xl text-xs font-bold bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 transition">
+            Cancelar
+          </button>
+        </div>
+      </div>
+
+      <!-- Lista de tickets -->
+      <div id="tickets-lista" class="space-y-2">
+        <div class="text-center text-slate-500 text-xs py-4">Carregando tickets...</div>
+      </div>
+
+      <!-- Visualização de ticket aberto -->
+      <div id="ticket-view" class="hidden glass-card rounded-2xl border border-orange-500/20 overflow-hidden">
+        <!-- Cabeçalho do ticket -->
+        <div class="p-3.5 border-b border-white/[0.08] flex items-start justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span id="tv-status-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">🟢 Aberto</span>
+              <span id="tv-tipo-badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30">🎫 Denúncia</span>
+            </div>
+            <h3 id="tv-titulo" class="text-sm font-extrabold text-white mt-1 truncate">Título do ticket</h3>
+            <p id="tv-denunciado" class="text-[11px] text-slate-400 hidden">Denunciado: <span id="tv-denunciado-nick" class="text-rose-400 font-bold"></span></p>
+            <p id="tv-autor" class="text-[11px] text-slate-500 mt-0.5">Por <span class="text-slate-300 font-semibold"></span></p>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button id="tv-fechar-btn" onclick="fecharTicketAdmin()" class="hidden bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] px-3 py-1.5 rounded-xl transition shadow-sm">
+              🔒 Encerrar & Apagar
+            </button>
+            <button onclick="fecharVisualizacaoTicket()"
+              class="text-slate-400 hover:text-white w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center text-xs transition">
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <!-- Descrição -->
+        <div class="p-3.5 bg-black/30 text-xs text-slate-300 leading-relaxed border-b border-white/[0.06]">
+          <div class="text-[10px] text-orange-400 font-bold uppercase tracking-wide mb-1">Descrição</div>
+          <p id="tv-descricao" class="whitespace-pre-wrap"></p>
+        </div>
+
+        <!-- Mensagens -->
+        <div id="tv-messages" class="p-3 space-y-2 max-h-72 overflow-y-auto">
+          <!-- mensagens inseridas via JS -->
+        </div>
+
+        <!-- Input de resposta -->
+        <div id="tv-reply-area" class="p-3 border-t border-white/[0.08]">
+          <div class="flex items-center gap-2">
+            <input id="tv-reply-input" type="text" maxlength="1000" placeholder="Responder no ticket..."
+              class="flex-1 bg-black/50 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 min-w-0" />
+            <button onclick="enviarMensagemTicket()"
+              class="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 to-red-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition flex-shrink-0">
+              Enviar
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
   </main>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
@@ -1394,6 +1520,13 @@
           { id: 'chat', name: 'chat-geral', tag: 'Geral', desc: 'Chat da comunidade em tempo real' }
         ]
       },
+      suporte: {
+        title: 'SUPORTE',
+        icon: '🎫',
+        channels: [
+          { id: 'denuncias', name: 'denúncias', tag: 'Tickets', desc: 'Abrir denúncia ou ver seus tickets' }
+        ]
+      },
       admin: {
         title: 'ADMINISTRAÇÃO',
         icon: '🛡️',
@@ -1581,7 +1714,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas'].forEach(c => {
+      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas', 'denuncias'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -1596,7 +1729,8 @@
         chat:  'chat-geral',
         admin: 'gerenciar-whitelist',
         console: 'console-servidor',
-        'ranking-horas': 'horas-jogadas'
+        'ranking-horas': 'horas-jogadas',
+        denuncias: 'denúncias'
       };
 
       if (titles[canalId]) {
@@ -1626,35 +1760,48 @@
       if (canalId === 'bans') carregarBans();
       if (canalId === 'console' && isUserAdmin) { carregarConsoleLogs(); scrollConsoleToBottom(); }
       if (canalId === 'ranking-horas') carregarRankingHoras();
+      if (canalId === 'denuncias') carregarTickets();
     }
 
     // Suporte ao Botão Voltar do Android App
     window.handleAndroidBack = function() {
-      // 1. Fechar modal de download android se aberto
+      // 1. Fechar visualização de ticket se aberta
+      const ticketView = document.getElementById('ticket-view');
+      if (ticketView && !ticketView.classList.contains('hidden')) {
+        fecharVisualizacaoTicket();
+        return "handled";
+      }
+      // 2. Fechar formulário de novo ticket se aberto
+      const ticketForm = document.getElementById('form-novo-ticket');
+      if (ticketForm && !ticketForm.classList.contains('hidden')) {
+        ocultarFormNovoTicket();
+        return "handled";
+      }
+      // 3. Fechar modal de download android se aberto
       const androidModal = document.getElementById('modal-download-android');
       if (androidModal && !androidModal.classList.contains('hidden')) {
         fecharModalDownloadAndroid();
         return "handled";
       }
-      // 2. Fechar modal de download windows se aberto
+      // 4. Fechar modal de download windows se aberto
       const winModal = document.getElementById('modal-download-windows');
       if (winModal && !winModal.classList.contains('hidden')) {
         fecharModalDownloadWindows();
         return "handled";
       }
-      // 3. Fechar modal de autenticação se aberto
+      // 5. Fechar modal de autenticação se aberto
       const authModal = document.getElementById('auth-modal') || document.getElementById('modal-auth');
       if (authModal && !authModal.classList.contains('hidden')) {
         fecharModalAuth();
         return "handled";
       }
-      // 4. Fechar submenu flutuante se aberto
+      // 6. Fechar submenu flutuante se aberto
       const submenu = document.getElementById('floating-submenu');
       if (submenu && !submenu.classList.contains('hidden')) {
         fecharSubmenu();
         return "handled";
       }
-      // 3. Voltar para aba anterior se houver histórico
+      // 7. Voltar para aba anterior se houver histórico
       if (window.appNavigationHistory && window.appNavigationHistory.length > 0) {
         const prev = window.appNavigationHistory.pop();
         window._isGoingBack = true;
@@ -1665,7 +1812,7 @@
         }
         return "handled";
       }
-      // 4. Se estiver em outra aba diferente da home, volta para a home
+      // 8. Se estiver em outra aba diferente da home, volta para a home
       if (currentChannel !== 'home') {
         selecionarCanal('home', 'home');
         return "handled";
@@ -3352,6 +3499,227 @@
       }[m]));
     }
 
+  </script>
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    //  SISTEMA DE TICKETS / DENÚNCIAS — JS
+    // ═══════════════════════════════════════════════════════════════
+    let ticketAtualId = null;
+
+    function mostrarFormNovoTicket() {
+      const el = document.getElementById('form-novo-ticket');
+      const btn = document.getElementById('btn-novo-ticket');
+      if (el) { el.classList.remove('hidden'); }
+      if (btn) { btn.classList.add('hidden'); }
+      fecharVisualizacaoTicket();
+    }
+
+    function ocultarFormNovoTicket() {
+      const el = document.getElementById('form-novo-ticket');
+      const btn = document.getElementById('btn-novo-ticket');
+      if (el) { el.classList.add('hidden'); }
+      if (btn) { btn.classList.remove('hidden'); }
+      const erro = document.getElementById('ticket-form-erro');
+      if (erro) { erro.classList.add('hidden'); erro.textContent = ''; }
+    }
+
+    function fecharVisualizacaoTicket() {
+      const tv = document.getElementById('ticket-view');
+      if (tv) tv.classList.add('hidden');
+      ticketAtualId = null;
+    }
+
+    async function carregarTickets() {
+      const lista = document.getElementById('tickets-lista');
+      if (!lista) return;
+      lista.innerHTML = '<div class="text-center text-slate-500 text-xs py-6">Carregando...</div>';
+      try {
+        const res = await apiFetch('/api/tickets');
+        if (!res.ok) {
+          const err = await res.json();
+          lista.innerHTML = `<div class="text-center text-red-400 text-xs py-4">${err.error || 'Erro ao carregar.'}</div>`;
+          return;
+        }
+        const data = await res.json();
+        const tickets = data.tickets || [];
+        if (!tickets.length) {
+          lista.innerHTML = '<div class="text-center text-slate-500 text-xs py-6">Nenhum ticket encontrado. Abra uma denúncia! 🎫</div>';
+          return;
+        }
+        lista.innerHTML = tickets.map(t => {
+          const isAberto = t.status === 'aberto';
+          const data = new Date(t.created_at).toLocaleDateString('pt-BR');
+          return `
+            <div onclick="abrirTicket('${t.id}')" class="glass-card rounded-xl p-3 border ${isAberto ? 'border-orange-500/30 hover:border-orange-400/60' : 'border-white/[0.06] opacity-60'} cursor-pointer transition-all duration-150 space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isAberto ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}">
+                  ${isAberto ? '🟢 Aberto' : '🔴 Encerrado'}
+                </span>
+                <span class="text-[10px] text-slate-500">${data}</span>
+                ${t.user_nick && window.currentUser && (window.currentUser.nick === 'admin' || window.isUserAdmin) ? `<span class="text-[10px] text-orange-400 font-semibold">👤 ${t.user_nick}</span>` : ''}
+              </div>
+              <div class="text-xs font-bold text-white truncate">${t.titulo}</div>
+              ${t.denunciado ? `<div class="text-[11px] text-slate-400">Denunciado: <span class="text-rose-400 font-semibold">${t.denunciado}</span></div>` : ''}
+            </div>`;
+        }).join('');
+      } catch (err) {
+        lista.innerHTML = `<div class="text-center text-red-400 text-xs py-4">Erro de conexão.</div>`;
+      }
+    }
+
+    async function abrirTicket(id) {
+      ticketAtualId = id;
+      ocultarFormNovoTicket();
+      const tv = document.getElementById('ticket-view');
+      if (tv) tv.classList.remove('hidden');
+      document.getElementById('tv-messages').innerHTML = '<div class="text-slate-500 text-xs text-center py-3">Carregando...</div>';
+      try {
+        const res = await apiFetch(`/api/tickets/${id}`);
+        if (!res.ok) { mostrarFeedback('Erro ao abrir ticket.', 'red'); return; }
+        const { ticket, messages } = await res.json();
+
+        document.getElementById('tv-titulo').textContent = ticket.titulo;
+        document.getElementById('tv-descricao').textContent = ticket.descricao;
+        document.getElementById('tv-autor').innerHTML = `Por <span class="text-slate-300 font-semibold">${ticket.user_nick}</span>`;
+
+        const isAberto = ticket.status === 'aberto';
+        const badge = document.getElementById('tv-status-badge');
+        badge.textContent = isAberto ? '🟢 Aberto' : '🔴 Encerrado';
+        badge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full ${isAberto ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}`;
+
+        const denunciadoEl = document.getElementById('tv-denunciado');
+        if (ticket.denunciado) {
+          document.getElementById('tv-denunciado-nick').textContent = ticket.denunciado;
+          denunciadoEl.classList.remove('hidden');
+        } else {
+          denunciadoEl.classList.add('hidden');
+        }
+
+        // Botão fechar — só admin
+        const btnFechar = document.getElementById('tv-fechar-btn');
+        if (window.isUserAdmin && isAberto) {
+          btnFechar.classList.remove('hidden');
+        } else {
+          btnFechar.classList.add('hidden');
+        }
+
+        // Reply area — só se ticket aberto
+        const replyArea = document.getElementById('tv-reply-area');
+        if (isAberto) {
+          replyArea.classList.remove('hidden');
+        } else {
+          replyArea.classList.add('hidden');
+        }
+
+        renderizarMensagensTicket(messages);
+      } catch (err) {
+        mostrarFeedback('Erro ao carregar ticket.', 'red');
+      }
+    }
+
+    function renderizarMensagensTicket(messages) {
+      const container = document.getElementById('tv-messages');
+      if (!messages || !messages.length) {
+        container.innerHTML = '<div class="text-slate-500 text-xs text-center py-3">Sem mensagens ainda.</div>';
+        return;
+      }
+      container.innerHTML = messages.map(m => {
+        const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const isAdmin = m.is_admin;
+        return `
+          <div class="flex ${isAdmin ? 'justify-start' : 'justify-end'}">
+            <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs ${isAdmin
+              ? 'bg-orange-500/20 border border-orange-500/30 text-white'
+              : 'bg-white/[0.08] border border-white/[0.06] text-slate-200'}">
+              <div class="font-bold text-[10px] mb-0.5 ${isAdmin ? 'text-orange-300' : 'text-slate-400'}">
+                ${isAdmin ? '🛡️ Admin' : m.autor_nick}
+              </div>
+              <div class="whitespace-pre-wrap leading-relaxed">${m.mensagem.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+              <div class="text-[9px] text-slate-500 text-right mt-0.5">${hora}</div>
+            </div>
+          </div>`;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function enviarMensagemTicket() {
+      if (!ticketAtualId) return;
+      const input = document.getElementById('tv-reply-input');
+      const msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      try {
+        const res = await apiFetch(`/api/tickets/${ticketAtualId}/messages`, {
+          method: 'POST',
+          body: JSON.stringify({ mensagem: msg })
+        });
+        const data = await res.json();
+        if (!res.ok) { mostrarFeedback(data.error || 'Erro ao enviar.', 'red'); return; }
+        await abrirTicket(ticketAtualId);
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function enviarNovoTicket() {
+      const titulo = (document.getElementById('ticket-titulo').value || '').trim();
+      const descricao = (document.getElementById('ticket-descricao').value || '').trim();
+      const denunciado = (document.getElementById('ticket-denunciado').value || '').trim();
+      const erroEl = document.getElementById('ticket-form-erro');
+      if (!titulo || !descricao) {
+        erroEl.textContent = 'Título e descrição são obrigatórios.';
+        erroEl.classList.remove('hidden');
+        return;
+      }
+      erroEl.classList.add('hidden');
+      try {
+        const res = await apiFetch('/api/tickets', {
+          method: 'POST',
+          body: JSON.stringify({ titulo, descricao, denunciado })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          erroEl.textContent = data.error || 'Erro ao enviar denúncia.';
+          erroEl.classList.remove('hidden');
+          return;
+        }
+        document.getElementById('ticket-titulo').value = '';
+        document.getElementById('ticket-descricao').value = '';
+        document.getElementById('ticket-denunciado').value = '';
+        ocultarFormNovoTicket();
+        mostrarFeedback('✅ Denúncia enviada! O admin vai responder em breve.', 'green');
+        await carregarTickets();
+        if (data.ticket) await abrirTicket(data.ticket.id);
+      } catch (err) {
+        erroEl.textContent = 'Erro de conexão.';
+        erroEl.classList.remove('hidden');
+      }
+    }
+
+    async function fecharTicketAdmin() {
+      if (!ticketAtualId) return;
+      if (!confirm('Encerrar e apagar este ticket permanentemente do banco de dados?')) return;
+      try {
+        const res = await apiFetch(`/api/tickets/${ticketAtualId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) { mostrarFeedback(data.error || 'Erro ao encerrar.', 'red'); return; }
+        mostrarFeedback(data.message || '✅ Ticket encerrado!', 'green');
+        fecharVisualizacaoTicket();
+        await carregarTickets();
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    // Enter para enviar no ticket
+    document.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('tv-reply-input');
+      if (input) {
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensagemTicket(); }
+        });
+      }
+    });
   </script>
 </body>
 </html>
