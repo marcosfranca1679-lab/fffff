@@ -2961,7 +2961,8 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       candidates,
       myInvites: myInvites || [],
       sentInvites,
-      taxaCriacao: 14.99
+      taxaCriacao: 19.99,
+      taxaMensal: 19.99
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3060,7 +3061,7 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       tag: cleanTag,
       descricao: cleanDesc,
       owner_nick: nick,
-      taxa_paga: 14.99,
+      taxa_paga: 19.99,
       pontos: 0,
       kills: 0,
       logo: cleanLogo,
