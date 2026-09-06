@@ -2829,13 +2829,19 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       if (perm && perm.allowed) isAllowedToCreate = true;
     }
 
-    // 2. Busca convites pendentes recebidos por este jogador
-    const { data: myInvites } = await supabase
-      .from('kingdom_invites')
-      .select('id, kingdom_id, invited_by, created_at, kingdoms ( id, nome, tag, descricao, owner_nick )')
-      .ilike('invited_nick', nick)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
+    // 2. Busca convites pendentes recebidos por este jogador (com fallback seguro se a tabela ainda não existir no Supabase)
+    let myInvites = [];
+    try {
+      const { data: invData, error: invErr } = await supabase
+        .from('kingdom_invites')
+        .select('id, kingdom_id, invited_by, created_at, kingdoms ( id, nome, tag, descricao, owner_nick )')
+        .ilike('invited_nick', nick)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      if (!invErr && invData) myInvites = invData;
+    } catch (_) {
+      myInvites = [];
+    }
 
     // 3. Busca reino atual do jogador
     const { data: member } = await supabase
@@ -2877,14 +2883,18 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
 
         const memberNicksSet = new Set((allMembers || []).map(m => (m.user_nick || '').toLowerCase().trim()));
 
-        // Busca convites pendentes já enviados por este reino
-        const { data: outInvites } = await supabase
-          .from('kingdom_invites')
-          .select('id, invited_nick, created_at')
-          .eq('kingdom_id', member.kingdom_id)
-          .eq('status', 'pending');
+        // Busca convites pendentes já enviados por este reino (com fallback seguro)
+        try {
+          const { data: outInvites, error: outErr } = await supabase
+            .from('kingdom_invites')
+            .select('id, invited_nick, created_at')
+            .eq('kingdom_id', member.kingdom_id)
+            .eq('status', 'pending');
+          if (!outErr && outInvites) sentInvites = outInvites;
+        } catch (_) {
+          sentInvites = [];
+        }
 
-        sentInvites = outInvites || [];
         const pendingNicksSet = new Set(sentInvites.map(i => (i.invited_nick || '').toLowerCase().trim()));
 
         // Candidatos elegíveis: aprovados na whitelist que NÃO têm reino
@@ -3083,7 +3093,14 @@ app.post('/api/kingdoms/invites/send', requireAuth, async (req, res) => {
       .select()
       .single();
 
-    if (invErr) return res.status(500).json({ error: invErr.message });
+    if (invErr) {
+      if (invErr.code === 'PGRST205' || (invErr.message && invErr.message.includes('schema cache'))) {
+        return res.status(500).json({
+          error: 'A tabela de convites (kingdom_invites) ainda não foi criada no Supabase. Execute o script SQL no SQL Editor.'
+        });
+      }
+      return res.status(500).json({ error: invErr.message });
+    }
 
     res.json({
       success: true,
