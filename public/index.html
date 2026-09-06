@@ -169,6 +169,32 @@
       box-shadow: 0 1px 0 #7c2d12, 0 3px 8px rgba(251, 146, 60, 0.5);
     }
 
+    /* 8. Cyan — Reinos & Castelos */
+    .btn-3d-cyan {
+      background: linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #0e7490 100%);
+      box-shadow: 0 3px 0 #155e75, 0 8px 16px rgba(6, 182, 212, 0.45);
+    }
+    .btn-3d-cyan.active {
+      filter: brightness(1.2);
+      box-shadow: 0 3px 0 #155e75, 0 0 22px rgba(6, 182, 212, 0.85);
+    }
+
+    /* Tag de Reino estilo MMORPG */
+    .tag-kingdom {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 5px;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(14, 116, 144, 0.35) 100%);
+      color: #67e8f9;
+      border: 1px solid rgba(6, 182, 212, 0.45);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
     /* Indicador ativo lateral */
     .active-pill-dot {
       position: absolute;
@@ -246,6 +272,15 @@
         </svg>
       </button>
       <span class="text-[9px] md:text-[10px] font-bold text-orange-300 drop-shadow mt-0.5">Suporte</span>
+    </div>
+
+    <!-- 4.5. Reinos & Guildas (Castelo 3D) -->
+    <div class="relative group flex flex-col items-center">
+      <span id="dot-cat-reinos" class="hidden active-pill-dot"></span>
+      <button onclick="alternarSubmenu('reinos')" id="icon-cat-reinos" class="btn-3d btn-3d-cyan w-10 h-10 md:w-11 md:h-11" title="Reinos & Guildas">
+        <span class="text-lg md:text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">🏰</span>
+      </button>
+      <span class="text-[9px] md:text-[10px] font-bold text-cyan-300 drop-shadow mt-0.5">Reinos</span>
     </div>
 
     <!-- 5. Admin (Apenas para Admin) -->
@@ -675,6 +710,10 @@
             class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
             <span>⚙️ Manutenção</span>
           </button>
+          <button onclick="mudarModuloAdmin('reinos')" id="admin-mod-reinos"
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>🏰 Permissões Reinos</span>
+          </button>
         </div>
 
         <!-- ── MÓDULO JOGANDO AGORA (AO VIVO) ─────────────────────── -->
@@ -941,6 +980,41 @@
             </div>
           </div>
         </div>
+
+        <!-- ── MÓDULO PERMISSÕES DE REINOS ────────────────────────── -->
+        <div id="admin-mod-content-reinos" class="hidden p-3 md:p-4 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+            <div>
+              <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>🏰 Permissões de Criação de Reino</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Libere quais jogadores podem pagar a taxa e criar seu próprio reino no servidor</div>
+            </div>
+            <button onclick="carregarAdminPermissoesReino()" class="bg-cyan-600/40 hover:bg-cyan-600/70 text-cyan-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+              🔄 Atualizar
+            </button>
+          </div>
+
+          <!-- Adicionar Permissão -->
+          <div class="bg-black/40 rounded-xl p-3 border border-white/[0.08] space-y-2">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Autorizar Novo Jogador</div>
+            <div class="flex gap-2">
+              <input id="admin-reino-nick-input" type="text" maxlength="20" placeholder="Nick exato do jogador..."
+                class="flex-1 bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
+              <button onclick="concederPermissaoReino(true)" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 shadow-sm flex-shrink-0">
+                <span>✅ Liberar Criação</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de Jogadores com Permissão -->
+          <div class="space-y-1.5">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jogadores com Registro de Permissão</div>
+            <div id="admin-reino-permissions-list" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              <div class="text-center py-6 text-slate-400 text-xs italic">Carregando permissões...</div>
+            </div>
+          </div>
+        </div>
       </div>
 
     </section>
@@ -1144,6 +1218,271 @@
             </button>
           </div>
         </div>
+      </div>
+
+    </section>
+
+    <!-- ── 7. SUBDIVISÃO: RANKING DE REINOS (#ranking-reinos) ──────────────── -->
+    <section id="view-ranking-reinos" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-3">
+      <!-- Header do Ranking de Reinos -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-4 shadow-sm border border-cyan-500/30 flex items-center justify-between gap-3 bg-gradient-to-r from-cyan-950/20 to-blue-950/20">
+        <div>
+          <h2 class="text-xs md:text-sm font-black text-cyan-300 flex items-center gap-2">
+            <span>🏰</span> Ranking de Reinos & Guildas
+          </h2>
+          <p class="text-[11px] text-slate-400">Pontuação geral baseada em Kills in-game (+50 pts) e Horas jogadas (+10 pts/h)</p>
+        </div>
+        <button onclick="carregarRankingReinos()" class="bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-cyan-200 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+          <span>Atualizar</span>
+          <span>🔄</span>
+        </button>
+      </div>
+
+      <!-- Pódio dos 3 Primeiros Reinos -->
+      <div id="kingdom-podium-container" class="grid grid-cols-3 gap-2 md:gap-3 items-end pt-1">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+
+      <!-- Tabela / Lista completa de Reinos -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-4 shadow-sm border border-white/[0.08]">
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-white/[0.06] text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+          <div class="flex items-center gap-2">
+            <span>Pos</span>
+            <span>Reino</span>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="hidden sm:inline">Kills / Horas</span>
+            <span>Pontos Totais</span>
+          </div>
+        </div>
+        <div id="kingdom-ranking-list" class="space-y-1.5">
+          <div class="text-center py-8 text-slate-400 text-xs italic">Carregando ranking de reinos...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 8. SUBDIVISÃO: REINOS & GUILDAS (#criar-reinos) ──────────────────── -->
+    <section id="view-reinos" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-3">
+      
+      <!-- Estado de Carregando -->
+      <div id="reino-loading" class="text-center py-16 text-slate-400 text-xs italic">
+        <div class="text-3xl mb-2 animate-bounce">🏰</div>
+        Carregando informações do reino...
+      </div>
+
+      <!-- ESTADO A: Jogador SEM Reino -->
+      <div id="reino-nao-membro" class="hidden space-y-4">
+        <!-- Banner Informativo -->
+        <div class="glass-card rounded-2xl p-5 border border-cyan-500/30 bg-gradient-to-br from-cyan-950/40 via-black/50 to-blue-950/30 text-center space-y-3 shadow-xl">
+          <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-3xl mx-auto shadow-lg border-t border-white/40">
+            🏰
+          </div>
+          <h2 class="text-lg md:text-xl font-black text-white tracking-wide">
+            Crie seu Próprio Reino & Guilda
+          </h2>
+          <p class="text-xs md:text-sm text-slate-300 max-w-md mx-auto leading-relaxed">
+            Reúna seus amigos, conquiste a TAG exclusiva de 3 letras ao lado do nome em todo o site e servidor, desbloqueie um canal de bate-papo privado e dispute o topo do ranking de reinos!
+          </p>
+
+          <!-- Aviso de Permissão Admin & Taxa -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg mx-auto pt-1 text-left">
+            <div class="bg-black/50 border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
+              <span class="text-2xl flex-shrink-0">👑</span>
+              <div>
+                <div class="text-xs font-bold text-white">Autorização de Admin</div>
+                <div id="reino-status-permissao-txt" class="text-[11px] text-slate-400">Verificando permissão...</div>
+              </div>
+            </div>
+            <div class="bg-black/50 border border-amber-500/30 rounded-xl p-3 flex items-center gap-3">
+              <span class="text-2xl flex-shrink-0">💰</span>
+              <div>
+                <div class="text-xs font-bold text-amber-300">Taxa de Criação</div>
+                <div class="text-[11px] text-slate-300 font-mono">Taxa simbólica: <b class="text-amber-400 font-bold">R$ 14,99</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulário de Criação -->
+        <div class="glass-card rounded-2xl p-4 md:p-6 border border-white/[0.1] space-y-4 shadow-xl">
+          <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+            <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
+              <span>✍️</span> Detalhes para Criação do Reino
+            </h3>
+            <span class="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-bold">Taxa: R$ 14,99</span>
+          </div>
+
+          <form onsubmit="submeterCriacaoReino(event)" class="space-y-3.5">
+            <div>
+              <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">Nome do Reino *</label>
+              <input id="reino-input-nome" type="text" maxlength="30" placeholder="Ex: Império Romano, Irmandade do Aço..."
+                class="w-full bg-black/60 border border-white/[0.12] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-cyan-500 transition" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                  TAG do Reino (Exatamente 3 Letras) *
+                </label>
+                <div class="relative">
+                  <input id="reino-input-tag" type="text" maxlength="3" placeholder="Ex: IMP"
+                    oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); atualizarPreviewTag(this.value)"
+                    class="w-full bg-black/60 border border-white/[0.12] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-cyan-300 font-mono font-black uppercase tracking-widest focus:outline-none focus:border-cyan-500 transition" />
+                  <div class="absolute right-3 top-2.5">
+                    <span id="preview-tag-badge" class="tag-kingdom">---</span>
+                  </div>
+                </div>
+                <span class="text-[10px] text-slate-400 block mt-1">Essa TAG aparecerá entre colchetes em quase todo o site.</span>
+              </div>
+
+              <div>
+                <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">Líder / Dono</label>
+                <input id="reino-input-lider" type="text" disabled readonly
+                  class="w-full bg-black/40 border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-xs text-slate-400 font-bold" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">Descrição do Reino *</label>
+              <textarea id="reino-input-desc" rows="3" maxlength="300" placeholder="Conte os objetivos, história e estilo de jogo da sua guilda..."
+                class="w-full bg-black/60 border border-white/[0.12] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-white focus:outline-none focus:border-cyan-500 resize-none transition"></textarea>
+            </div>
+
+            <!-- Banner se não for permitido -->
+            <div id="reino-bloqueio-aviso" class="hidden p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2">
+              <span>🔒</span>
+              <span>Apenas jogadores autorizados pelo Administrador podem criar um reino. Solicite a permissão com o suporte/admin.</span>
+            </div>
+
+            <!-- Botão de Criação -->
+            <button type="submit" id="btn-criar-reino"
+              class="w-full py-3 rounded-xl font-extrabold text-xs md:text-sm bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg hover:shadow-cyan-500/30 transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2">
+              <span>🏰</span>
+              <span id="btn-criar-reino-texto">Criar Reino (Taxa R$ 14,99)</span>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- ESTADO B: Jogador COM Reino -->
+      <div id="reino-membro" class="hidden space-y-3">
+        
+        <!-- Header / Banner do Reino -->
+        <div class="glass-card rounded-2xl p-4 md:p-5 border border-cyan-500/40 bg-gradient-to-r from-cyan-950/40 via-black/60 to-blue-950/40 shadow-xl space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.08]">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-2xl shadow-lg border-t border-white/40 flex-shrink-0">
+                🏰
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <h2 id="reino-info-nome" class="text-base md:text-lg font-black text-white truncate">Nome do Reino</h2>
+                  <span id="reino-info-tag" class="tag-kingdom text-xs font-mono font-black">[TAG]</span>
+                  <span id="reino-info-role" class="text-[10px] px-2 py-0.5 rounded-md font-bold bg-white/10 text-cyan-300">Membro</span>
+                </div>
+                <p id="reino-info-desc" class="text-xs text-slate-300 mt-0.5 line-clamp-2">Descrição...</p>
+              </div>
+            </div>
+
+            <!-- Estatísticas do Reino -->
+            <div class="flex items-center gap-2 flex-wrap">
+              <div class="bg-black/50 border border-white/[0.08] px-3 py-1.5 rounded-xl text-center">
+                <div id="reino-info-pontos" class="text-xs md:text-sm font-black text-amber-300 font-mono">0</div>
+                <div class="text-[9px] uppercase font-bold text-slate-400">Pontos</div>
+              </div>
+              <div class="bg-black/50 border border-white/[0.08] px-3 py-1.5 rounded-xl text-center">
+                <div id="reino-info-kills" class="text-xs md:text-sm font-black text-rose-400 font-mono">0</div>
+                <div class="text-[9px] uppercase font-bold text-slate-400">Kills</div>
+              </div>
+              <div class="bg-black/50 border border-white/[0.08] px-3 py-1.5 rounded-xl text-center">
+                <div id="reino-info-membros-count" class="text-xs md:text-sm font-black text-cyan-300 font-mono">0</div>
+                <div class="text-[9px] uppercase font-bold text-slate-400">Membros</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ações do Reino (Líder / Membro) -->
+          <div class="flex items-center justify-between flex-wrap gap-2 text-xs pt-1">
+            <div class="text-[11px] text-slate-400">
+              Líder: <span id="reino-info-lider" class="text-cyan-300 font-bold">Nick</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btn-dissolver-reino" onclick="dissolverReino()" class="hidden text-rose-400 hover:text-rose-300 text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-3 py-1.5 rounded-xl transition">
+                💥 Dissolver Reino
+              </button>
+              <button id="btn-sair-reino" onclick="sairDoReino()" class="text-slate-400 hover:text-slate-200 text-xs font-bold bg-white/[0.06] hover:bg-white/[0.12] px-3 py-1.5 rounded-xl transition">
+                🚪 Sair do Reino
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grid: Membros à Esquerda (ou Topo no mobile) e Chat Privado à Direita -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          
+          <!-- Coluna 1: Gestão de Membros -->
+          <div class="lg:col-span-1 glass-card rounded-2xl p-3.5 md:p-4 border border-white/[0.08] space-y-3">
+            <div class="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+              <h3 class="text-xs font-extrabold text-white flex items-center gap-1.5">
+                <span>👥</span> Membros do Reino
+              </h3>
+              <span id="reino-badge-membros" class="text-[10px] text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+            </div>
+
+            <!-- Adicionar membro (Apenas Líder ou Admin) -->
+            <div id="reino-form-add-membro" class="hidden space-y-1.5">
+              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Adicionar Jogador (Nick)</label>
+              <div class="flex gap-1.5">
+                <input id="reino-add-nick-input" type="text" maxlength="20" placeholder="Nick exato..."
+                  class="flex-1 bg-black/60 border border-white/[0.1] rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 min-w-0" />
+                <button onclick="adicionarMembroReino()"
+                  class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex-shrink-0 shadow-sm">
+                  + Add
+                </button>
+              </div>
+            </div>
+
+            <!-- Lista de Membros -->
+            <div id="reino-lista-membros" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              <!-- Renderizado via JS -->
+            </div>
+          </div>
+
+          <!-- Coluna 2: Bate-papo / Call Privada do Reino -->
+          <div class="lg:col-span-2 glass-card rounded-2xl flex flex-col border border-cyan-500/25 overflow-hidden h-[460px]">
+            <!-- Header do Chat Privado -->
+            <div class="p-3 bg-slate-950/80 border-b border-white/[0.08] flex items-center justify-between flex-shrink-0">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🔒 Chat Privado do Reino</span>
+                </span>
+              </div>
+              <button onclick="carregarMensagensReino(true)" title="Atualizar mensagens" class="text-slate-400 hover:text-white text-xs bg-white/[0.06] hover:bg-white/[0.12] p-1.5 rounded-lg transition">
+                🔄
+              </button>
+            </div>
+
+            <!-- Mensagens Privadas -->
+            <div id="reino-chat-messages" class="flex-1 overflow-y-auto p-3 space-y-2.5 bg-black/30">
+              <div class="text-center text-slate-500 text-xs py-6">Carregando bate-papo do reino...</div>
+            </div>
+
+            <!-- Formulário de Envio Privado -->
+            <div class="p-2.5 bg-slate-950/90 border-t border-white/[0.08] flex-shrink-0">
+              <form onsubmit="enviarMensagemReino(event)" class="bg-black/70 rounded-xl flex items-center px-3 py-1.5 gap-2 border border-white/[0.1] focus-within:border-cyan-500 transition">
+                <input id="reino-chat-input" type="text" maxlength="400" placeholder="Mensagem privada para seu reino..."
+                  class="bg-transparent flex-1 text-xs md:text-sm text-white focus:outline-none placeholder-slate-500 min-w-0" />
+                <button type="submit" id="btn-reino-send"
+                  class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition flex-shrink-0 shadow-sm">
+                  Enviar
+                </button>
+              </form>
+            </div>
+          </div>
+
+        </div>
+
       </div>
 
     </section>
@@ -1513,7 +1852,8 @@
         title: 'CLASSIFICAÇÃO',
         icon: '🏆',
         channels: [
-          { id: 'ranking-horas', name: 'horas-jogadas', tag: 'Top 5', desc: 'Top 5 jogadores com mais tempo jogado' }
+          { id: 'ranking-horas', name: 'horas-jogadas', tag: 'Top 5', desc: 'Top 5 jogadores com mais tempo jogado' },
+          { id: 'ranking-reinos', name: 'pontos-reinos', tag: 'Reinos', desc: 'Pontuação oficial dos Reinos e Guildas' }
         ]
       },
       comunidade: {
@@ -1528,6 +1868,13 @@
         icon: '🎫',
         channels: [
           { id: 'denuncias', name: 'denúncias', tag: 'Tickets', desc: 'Abrir denúncia ou ver seus tickets' }
+        ]
+      },
+      reinos: {
+        title: 'REINOS & GUILDAS',
+        icon: '🏰',
+        channels: [
+          { id: 'reinos', name: 'criar-reinos', tag: 'Reino', desc: 'Gerenciar meu reino, membros e chat privado' }
         ]
       },
       admin: {
@@ -1607,7 +1954,17 @@
         if (!document.hidden && isUserActive && currentChannel === 'ranking-horas') {
           carregarRankingHoras(true);
         }
+        if (!document.hidden && isUserActive && currentChannel === 'ranking-reinos') {
+          carregarRankingReinos(true);
+        }
       }, 60000);
+
+      // 3.5. Reino Privado: mensagens a cada 12s se estiver na aba do reino
+      setInterval(() => {
+        if (!document.hidden && isUserActive && currentChannel === 'reinos' && meuReinoAtual) {
+          carregarMensagensReinoSilencioso();
+        }
+      }, 12000);
 
       // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin
       setInterval(() => {
@@ -1654,7 +2011,7 @@
       const data = categorySubdivisions[categoria];
       if (!data) return;
 
-      ['info', 'ranks', 'comunidade', 'suporte', 'admin'].forEach(cat => {
+      ['info', 'ranks', 'comunidade', 'suporte', 'reinos', 'admin'].forEach(cat => {
         const btn = document.getElementById(`icon-cat-${cat}`);
         const dot = document.getElementById(`dot-cat-${cat}`);
         const isCat = cat === categoria;
@@ -1701,7 +2058,7 @@
 
     function selecionarCanal(canalId, categoria) {
       // Canais que exigem login
-      const canaisProtegidos = ['chat', 'admin', 'console'];
+      const canaisProtegidos = ['chat', 'admin', 'console', 'reinos'];
       if (canaisProtegidos.includes(canalId) && !currentUser) {
         mostrarFeedback('🔒 Faça login para acessar este canal.', 'red');
         abrirModalAuth('login');
@@ -1717,7 +2074,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas', 'denuncias'].forEach(c => {
+      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas', 'ranking-reinos', 'denuncias', 'reinos'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -1733,7 +2090,9 @@
         admin: 'gerenciar-whitelist',
         console: 'console-servidor',
         'ranking-horas': 'horas-jogadas',
-        denuncias: 'denúncias'
+        'ranking-reinos': 'pontos-reinos',
+        denuncias: 'denúncias',
+        reinos: 'criar-reinos'
       };
 
       if (titles[canalId]) {
@@ -1763,7 +2122,9 @@
       if (canalId === 'bans') carregarBans();
       if (canalId === 'console' && isUserAdmin) { carregarConsoleLogs(); scrollConsoleToBottom(); }
       if (canalId === 'ranking-horas') carregarRankingHoras();
+      if (canalId === 'ranking-reinos') carregarRankingReinos();
       if (canalId === 'denuncias') carregarTickets();
+      if (canalId === 'reinos') carregarReinoStatus();
     }
 
     // Suporte ao Botão Voltar do Android App
@@ -1939,6 +2300,10 @@
           const initial = escapeHtml(m.author_nick || 'J').substring(0, 1).toUpperCase();
           const avatarColor = isMsgAdmin ? 'bg-gradient-to-tr from-rose-600 to-pink-600' : 'bg-gradient-to-tr from-purple-600 to-indigo-600';
 
+          const tagBadge = m.kingdom_tag 
+            ? `<span class="tag-kingdom" title="Reino [${escapeHtml(m.kingdom_tag)}]">[${escapeHtml(m.kingdom_tag)}]</span>`
+            : '';
+
           return `
             <div class="flex items-start gap-2 hover:bg-white/[0.04] p-1.5 md:p-2 rounded-xl transition border border-transparent hover:border-white/[0.06]">
               <div class="w-8 h-8 rounded-xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">
@@ -1946,6 +2311,7 @@
               </div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
+                  ${tagBadge}
                   <span class="font-extrabold text-xs ${isMsgAdmin ? 'text-rose-400' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
                   ${roleBadge}
                   <span class="text-[9px] text-slate-400 ml-1 font-mono">${formatarHora(m.created_at)}</span>
@@ -2059,7 +2425,7 @@
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao'];
+      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
@@ -2077,6 +2443,7 @@
       if (modulo === 'banimentos') { carregarAdminBans(); carregarAdminIpBans(); }
       if (modulo === 'manutencao') atualizarStatsManu();
       if (modulo === 'vidas') carregarAdminVidas();
+      if (modulo === 'reinos') carregarAdminPermissoesReino();
     }
 
     // ── Sistema de Vidas (Admin) ──────────────────────────────────────────────
@@ -3814,6 +4181,615 @@
         });
       }
     });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  SISTEMA DE REINOS & GUILDAS — CLIENTE JS
+    // ══════════════════════════════════════════════════════════════════════════
+    let meuReinoAtual = null;
+    let allowedToCreateReino = false;
+    let lastReinoMessagesCount = 0;
+    let lastReinoMessagesHash = '';
+
+    function atualizarPreviewTag(val) {
+      const preview = document.getElementById('preview-tag-badge');
+      if (!preview) return;
+      const clean = (val || '').toUpperCase().trim();
+      preview.textContent = clean ? `[${clean}]` : '---';
+    }
+
+    async function carregarReinoStatus() {
+      const loading = document.getElementById('reino-loading');
+      const naoMembro = document.getElementById('reino-nao-membro');
+      const membro = document.getElementById('reino-membro');
+
+      if (loading) loading.classList.remove('hidden');
+      if (naoMembro) naoMembro.classList.add('hidden');
+      if (membro) membro.classList.add('hidden');
+
+      try {
+        const res = await apiFetch('/api/kingdoms/status');
+        const data = await res.json();
+
+        if (loading) loading.classList.add('hidden');
+
+        if (!data.success) {
+          mostrarFeedback(data.error || 'Erro ao carregar dados do reino.', 'red');
+          return;
+        }
+
+        allowedToCreateReino = !!data.allowedToCreate;
+        meuReinoAtual = data.myKingdom;
+
+        if (meuReinoAtual) {
+          // ESTADO: JOGADOR COM REINO
+          renderReinoMembro(meuReinoAtual, data.members || []);
+          if (membro) membro.classList.remove('hidden');
+          carregarMensagensReino();
+        } else {
+          // ESTADO: JOGADOR SEM REINO
+          renderReinoCriacao(allowedToCreateReino);
+          if (naoMembro) naoMembro.classList.remove('hidden');
+        }
+      } catch (err) {
+        if (loading) loading.classList.add('hidden');
+        mostrarFeedback('Erro ao conectar ao serviço de reinos.', 'red');
+      }
+    }
+
+    function renderReinoCriacao(allowed) {
+      const liderInput = document.getElementById('reino-input-lider');
+      if (liderInput && currentUser) {
+        liderInput.value = currentUser.nick || 'Jogador';
+      }
+
+      const statusPermissaoTxt = document.getElementById('reino-status-permissao-txt');
+      const bloqueioAviso = document.getElementById('reino-bloqueio-aviso');
+      const btnCriar = document.getElementById('btn-criar-reino');
+      const btnCriarTexto = document.getElementById('btn-criar-reino-texto');
+
+      if (allowed) {
+        if (statusPermissaoTxt) {
+          statusPermissaoTxt.innerHTML = '<span class="text-emerald-400 font-bold">✅ Autorizado pelo Administrador</span>';
+        }
+        if (bloqueioAviso) bloqueioAviso.classList.add('hidden');
+        if (btnCriar) {
+          btnCriar.disabled = false;
+          btnCriar.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+        if (btnCriarTexto) {
+          btnCriarTexto.textContent = 'Criar Reino (Taxa R$ 14,99)';
+        }
+      } else {
+        if (statusPermissaoTxt) {
+          statusPermissaoTxt.innerHTML = '<span class="text-rose-400 font-bold">🔒 Sem autorização do Admin</span>';
+        }
+        if (bloqueioAviso) bloqueioAviso.classList.remove('hidden');
+        if (btnCriar) {
+          btnCriar.disabled = true;
+          btnCriar.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+        if (btnCriarTexto) {
+          btnCriarTexto.textContent = '🔒 Criação Bloqueada (Permissão Obrigatória)';
+        }
+      }
+    }
+
+    async function submeterCriacaoReino(e) {
+      e.preventDefault();
+      if (!allowedToCreateReino && !isUserAdmin) {
+        mostrarFeedback('🔒 Você não tem permissão do Administrador para criar um reino.', 'red');
+        return;
+      }
+
+      const nome = (document.getElementById('reino-input-nome')?.value || '').trim();
+      const tag = (document.getElementById('reino-input-tag')?.value || '').trim().toUpperCase();
+      const desc = (document.getElementById('reino-input-desc')?.value || '').trim();
+
+      if (!nome || !tag || !desc) {
+        mostrarFeedback('Preencha todos os campos obrigatórios.', 'red');
+        return;
+      }
+
+      if (tag.length !== 3 || !/^[A-Z0-9]{3}$/.test(tag)) {
+        mostrarFeedback('A TAG do reino deve conter exatamente 3 letras ou números (Ex: IMP, LEO, REI).', 'red');
+        return;
+      }
+
+      const btn = document.getElementById('btn-criar-reino');
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/kingdoms/create', {
+          method: 'POST',
+          body: JSON.stringify({ nome, tag, descricao: desc })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback('👑 Reino criado com sucesso! TAG ativada.', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao criar reino.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao criar reino.', 'red');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function renderReinoMembro(reino, membros) {
+      const nomeEl = document.getElementById('reino-info-nome');
+      const tagEl = document.getElementById('reino-info-tag');
+      const roleEl = document.getElementById('reino-info-role');
+      const descEl = document.getElementById('reino-info-desc');
+      const liderEl = document.getElementById('reino-info-lider');
+      const pontosEl = document.getElementById('reino-info-pontos');
+      const killsEl = document.getElementById('reino-info-kills');
+      const countEl = document.getElementById('reino-info-membros-count');
+      const badgeMembros = document.getElementById('reino-badge-membros');
+      const formAdd = document.getElementById('reino-form-add-membro');
+      const btnDissolver = document.getElementById('btn-dissolver-reino');
+
+      if (nomeEl) nomeEl.textContent = reino.nome || 'Meu Reino';
+      if (tagEl) tagEl.textContent = `[${reino.tag || 'TAG'}]`;
+      if (descEl) descEl.textContent = reino.descricao || 'Sem descrição cadastrada.';
+      if (liderEl) liderEl.textContent = reino.owner_nick || '–';
+      if (pontosEl) pontosEl.textContent = reino.pontos || 0;
+      if (killsEl) killsEl.textContent = reino.kills || 0;
+      if (countEl) countEl.textContent = membros.length;
+      if (badgeMembros) badgeMembros.textContent = `${membros.length} membros`;
+
+      const isLider = reino.myRole === 'lider' || isUserAdmin;
+      if (roleEl) {
+        roleEl.textContent = isLider ? '👑 Líder' : '🛡️ Membro';
+        roleEl.className = isLider 
+          ? 'text-[10px] px-2 py-0.5 rounded-md font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30'
+          : 'text-[10px] px-2 py-0.5 rounded-md font-bold bg-white/10 text-cyan-300';
+      }
+
+      if (formAdd) {
+        formAdd.classList.toggle('hidden', !isLider);
+      }
+      if (btnDissolver) {
+        btnDissolver.classList.toggle('hidden', !isLider);
+      }
+
+      // Lista de Membros
+      const listaEl = document.getElementById('reino-lista-membros');
+      if (listaEl) {
+        if (membros.length === 0) {
+          listaEl.innerHTML = '<div class="text-slate-400 text-xs py-2 italic text-center">Nenhum membro listado.</div>';
+        } else {
+          listaEl.innerHTML = membros.map(m => {
+            const isMe = currentUser && currentUser.nick && currentUser.nick.toLowerCase() === m.user_nick.toLowerCase();
+            const isMLider = m.role === 'lider';
+            const initial = m.user_nick.substring(0, 1).toUpperCase();
+
+            let removeBtn = '';
+            if (isLider && !isMLider) {
+              removeBtn = `
+                <button onclick="removerMembroReino('${escapeHtml(m.user_nick)}')" title="Remover membro"
+                  class="text-rose-400 hover:text-rose-200 text-[10px] bg-rose-500/15 hover:bg-rose-500/30 px-2 py-1 rounded-lg transition font-bold">
+                  ✕
+                </button>
+              `;
+            }
+
+            return `
+              <div class="flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/[0.06] hover:bg-white/[0.04] transition">
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="w-7 h-7 rounded-lg ${isMLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black font-black' : 'bg-cyan-900/60 text-cyan-200 font-bold'} flex items-center justify-center text-xs flex-shrink-0">
+                    ${initial}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-xs font-bold text-white truncate flex items-center gap-1">
+                      <span>${escapeHtml(m.user_nick)}</span>
+                      ${isMe ? '<span class="text-[9px] text-cyan-400 font-normal">(você)</span>' : ''}
+                    </div>
+                    <div class="text-[9px] text-slate-400">
+                      ${isMLider ? '<span class="text-amber-300 font-bold">Líder</span>' : 'Membro'} &middot; ${formatarData(m.joined_at)}
+                    </div>
+                  </div>
+                </div>
+                ${removeBtn}
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    }
+
+    async function adicionarMembroReino() {
+      const input = document.getElementById('reino-add-nick-input');
+      const nick = (input?.value || '').trim();
+      if (!nick) return;
+
+      try {
+        const res = await apiFetch('/api/kingdoms/members/add', {
+          method: 'POST',
+          body: JSON.stringify({ targetNick: nick })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(`Membro "${nick}" adicionado ao reino!`, 'green');
+          input.value = '';
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao adicionar membro.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function removerMembroReino(nick) {
+      if (!confirm(`Tem certeza que deseja remover "${nick}" do reino?`)) return;
+      try {
+        const res = await apiFetch('/api/kingdoms/members/remove', {
+          method: 'POST',
+          body: JSON.stringify({ targetNick: nick })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || 'Membro removido.', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao remover membro.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function sairDoReino() {
+      if (!confirm('Deseja realmente sair do seu reino? Você perderá a TAG e o acesso ao chat privado.')) return;
+      if (!currentUser) return;
+      try {
+        const res = await apiFetch('/api/kingdoms/members/remove', {
+          method: 'POST',
+          body: JSON.stringify({ targetNick: currentUser.nick })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback('Você saiu do reino.', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao sair do reino.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function dissolverReino() {
+      if (!confirm('🚨 ATENÇÃO: Deseja realmente DISSOLVER este reino? Todos os membros serão removidos e a TAG apagada permanentemente!')) return;
+      try {
+        const res = await apiFetch('/api/kingdoms', { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback('Reino dissolvido com sucesso.', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao dissolver reino.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    // ── Bate-Papo / Call Privada do Reino ─────────────────────────────────────
+    async function carregarMensagensReinoSilencioso() {
+      if (!meuReinoAtual) return;
+      try {
+        const res = await apiFetch('/api/kingdoms/messages');
+        if (!res.ok) return;
+        const msgs = await res.json();
+        const hash = JSON.stringify(msgs);
+        if (hash === lastReinoMessagesHash) return;
+        lastReinoMessagesHash = hash;
+        renderMensagensReino(msgs);
+      } catch (_) {}
+    }
+
+    async function carregarMensagensReino(forceScroll = false) {
+      if (!meuReinoAtual) return;
+      try {
+        const res = await apiFetch('/api/kingdoms/messages');
+        if (!res.ok) return;
+        const msgs = await res.json();
+        lastReinoMessagesHash = JSON.stringify(msgs);
+        renderMensagensReino(msgs, forceScroll);
+      } catch (_) {}
+    }
+
+    function renderMensagensReino(msgs, forceScroll = false) {
+      const container = document.getElementById('reino-chat-messages');
+      if (!container) return;
+
+      if (!msgs || msgs.length === 0) {
+        container.innerHTML = '<div class="text-center text-slate-400 text-xs py-8 italic">Bate-papo exclusivo do seu reino. Diga olá para seus companheiros! 🛡️</div>';
+        return;
+      }
+
+      const shouldScroll = forceScroll || (container.scrollTop + container.clientHeight >= container.scrollHeight - 50) || lastReinoMessagesCount === 0;
+
+      container.innerHTML = msgs.map(m => {
+        const isSys = m.author_role === 'system';
+        if (isSys) {
+          return `
+            <div class="text-center text-[10px] text-cyan-300/80 font-mono py-1 px-2 bg-cyan-950/30 rounded-lg border border-cyan-500/20 max-w-sm mx-auto">
+              ${escapeHtml(m.content)}
+            </div>
+          `;
+        }
+
+        const isLider = m.author_role === 'lider';
+        const isMe = currentUser && currentUser.nick && currentUser.nick.toLowerCase() === m.author_nick.toLowerCase();
+        const initial = m.author_nick.substring(0, 1).toUpperCase();
+
+        return `
+          <div class="flex items-start gap-2 hover:bg-white/[0.03] p-1.5 rounded-xl transition">
+            <div class="w-7 h-7 rounded-lg ${isLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black font-black' : 'bg-cyan-800 text-cyan-200 font-bold'} flex items-center justify-center text-xs flex-shrink-0 mt-0.5 shadow-sm">
+              ${initial}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-extrabold text-xs ${isLider ? 'text-amber-300' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
+                ${isLider ? '<span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">LÍDER</span>' : ''}
+                <span class="text-[9px] text-slate-400 font-mono">${formatarHora(m.created_at)}</span>
+              </div>
+              <div class="text-xs text-slate-200 mt-0.5 break-words leading-relaxed">${escapeHtml(m.content)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lastReinoMessagesCount = msgs.length;
+      if (shouldScroll) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    async function enviarMensagemReino(e) {
+      e.preventDefault();
+      const input = document.getElementById('reino-chat-input');
+      const content = (input?.value || '').trim();
+      if (!content) return;
+
+      input.value = '';
+      try {
+        const res = await apiFetch('/api/kingdoms/messages', {
+          method: 'POST',
+          body: JSON.stringify({ content })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          await carregarMensagensReino(true);
+        } else {
+          mostrarFeedback(data.error || 'Erro ao enviar mensagem.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão com o chat do reino.', 'red');
+      }
+    }
+
+    // ── RANKING DE REINOS & GUILDAS ───────────────────────────────────────────
+    let lastKingdomRankingHash = '';
+
+    async function carregarRankingReinos(isAuto = false) {
+      try {
+        const res = await fetch('/api/ranking/kingdoms');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.success) return;
+
+        const hash = JSON.stringify(data.ranking);
+        if (isAuto && hash === lastKingdomRankingHash) return;
+        lastKingdomRankingHash = hash;
+
+        renderRankingReinos(data.ranking || []);
+      } catch (err) {
+        if (!isAuto) {
+          const list = document.getElementById('kingdom-ranking-list');
+          if (list) list.innerHTML = '<div class="text-center py-6 text-rose-400 text-xs">Erro ao carregar ranking de reinos.</div>';
+        }
+      }
+    }
+
+    function renderRankingReinos(ranking) {
+      const podiumEl = document.getElementById('kingdom-podium-container');
+      const listEl = document.getElementById('kingdom-ranking-list');
+
+      if (!ranking || ranking.length === 0) {
+        if (podiumEl) podiumEl.innerHTML = '';
+        if (listEl) listEl.innerHTML = '<div class="text-center py-10 text-slate-400 text-xs italic">Nenhum reino criado ainda no servidor. Seja o primeiro a criar um reino! 🏰</div>';
+        return;
+      }
+
+      // Pódio dos 3 Primeiros
+      if (podiumEl) {
+        const first = ranking[0] || null;
+        const second = ranking[1] || null;
+        const third = ranking[2] || null;
+
+        let podiumHtml = '';
+
+        // 2º Lugar
+        if (second) {
+          podiumHtml += `
+            <div class="flex flex-col items-center">
+              <div class="text-sm font-bold text-slate-300 mb-1">🥈 #2</div>
+              <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-slate-400/40 bg-black/40">
+                <span class="tag-kingdom mb-1">[${escapeHtml(second.tag)}]</span>
+                <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nome)}</div>
+                <div class="text-xs font-mono font-bold text-cyan-300 mt-0.5">${second.totalPoints} pts</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">${second.kills} kills &middot; ${second.hoursPlayed}h</div>
+              </div>
+            </div>
+          `;
+        } else {
+          podiumHtml += `<div class="hidden sm:block"></div>`;
+        }
+
+        // 1º Lugar (Ouro)
+        if (first) {
+          podiumHtml += `
+            <div class="flex flex-col items-center">
+              <div class="text-base font-bold text-amber-300 mb-1">👑 #1</div>
+              <div class="glass-card w-full rounded-2xl p-3 md:p-4 text-center border-2 border-amber-400/70 bg-gradient-to-b from-amber-950/30 to-black/60 shadow-xl">
+                <span class="tag-kingdom mb-1 text-xs px-2 py-0.5">[${escapeHtml(first.tag)}]</span>
+                <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1">${escapeHtml(first.nome)}</div>
+                <div class="text-sm md:text-base font-mono font-black text-amber-200 mt-0.5">${first.totalPoints} pts</div>
+                <div class="text-[11px] text-slate-300 mt-0.5">${first.kills} kills &middot; ${first.hoursPlayed}h &middot; ${first.membersCount} membros</div>
+              </div>
+            </div>
+          `;
+        }
+
+        // 3º Lugar
+        if (third) {
+          podiumHtml += `
+            <div class="flex flex-col items-center">
+              <div class="text-sm font-bold text-amber-600 mb-1">🥉 #3</div>
+              <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-amber-700/40 bg-black/40">
+                <span class="tag-kingdom mb-1">[${escapeHtml(third.tag)}]</span>
+                <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nome)}</div>
+                <div class="text-xs font-mono font-bold text-amber-400 mt-0.5">${third.totalPoints} pts</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">${third.kills} kills &middot; ${third.hoursPlayed}h</div>
+              </div>
+            </div>
+          `;
+        } else {
+          podiumHtml += `<div class="hidden sm:block"></div>`;
+        }
+
+        podiumEl.innerHTML = podiumHtml;
+      }
+
+      // Lista Completa
+      if (listEl) {
+        listEl.innerHTML = ranking.map((k, idx) => {
+          const pos = idx + 1;
+          let rankBadge = `<span class="text-xs font-bold text-slate-400">#${pos}</span>`;
+          if (pos === 1) rankBadge = '<span class="text-xs font-black text-amber-400">#1</span>';
+          else if (pos === 2) rankBadge = '<span class="text-xs font-black text-slate-300">#2</span>';
+          else if (pos === 3) rankBadge = '<span class="text-xs font-black text-amber-600">#3</span>';
+
+          return `
+            <div class="p-2.5 md:p-3 rounded-xl border border-white/[0.06] bg-white/[0.02] flex items-center justify-between gap-3 hover:bg-white/[0.05] transition">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-6 text-center font-mono flex-shrink-0">${rankBadge}</div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="tag-kingdom">[${escapeHtml(k.tag)}]</span>
+                    <span class="font-bold text-xs md:text-sm text-white truncate">${escapeHtml(k.nome)}</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">
+                    Líder: <span class="text-slate-300 font-semibold">${escapeHtml(k.owner_nick)}</span> &middot; ${k.membersCount} membros
+                  </div>
+                </div>
+              </div>
+
+              <div class="text-right flex-shrink-0">
+                <div class="font-mono font-black text-xs md:text-sm text-cyan-300">${k.totalPoints} pts</div>
+                <div class="text-[10px] text-slate-400 font-mono">${k.kills} kills &middot; ${k.hoursPlayed}h</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // ── ADMIN: Gerenciar Permissões de Criação de Reino ───────────────────────
+    async function carregarAdminPermissoesReino() {
+      if (!isUserAdmin) return;
+      const list = document.getElementById('admin-reino-permissions-list');
+      if (!list) return;
+
+      try {
+        const res = await apiFetch('/api/admin/kingdoms/permissions');
+        if (!res.ok) return;
+        const data = await res.json();
+        const perms = data.permissions || [];
+
+        if (perms.length === 0) {
+          list.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic">Nenhum jogador autorizado registrado. Digite o Nick acima para liberar a criação de reino.</div>';
+          return;
+        }
+
+        list.innerHTML = perms.map(p => `
+          <div class="flex items-center justify-between p-2.5 rounded-xl bg-black/50 border border-white/[0.08] hover:bg-white/[0.04] transition">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-7 h-7 rounded-lg ${p.allowed ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'} flex items-center justify-center text-xs font-bold flex-shrink-0">
+                ${p.allowed ? '✓' : '✕'}
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-white truncate">${escapeHtml(p.user_nick)}</div>
+                <div class="text-[10px] ${p.allowed ? 'text-emerald-400' : 'text-rose-400'} font-semibold">
+                  ${p.allowed ? '🟢 Permissão Liberada' : '🔴 Bloqueado'}
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1.5 flex-shrink-0">
+              <button onclick="alternarPermissaoReino('${escapeHtml(p.user_nick)}', ${!p.allowed})"
+                class="text-[11px] font-bold px-2.5 py-1 rounded-lg ${p.allowed ? 'bg-amber-500/15 text-amber-300 hover:bg-amber-500/30' : 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/30'} transition">
+                ${p.allowed ? 'Bloquear' : 'Permitir'}
+              </button>
+              <button onclick="deletarPermissaoReino('${escapeHtml(p.user_nick)}')"
+                class="text-rose-400 hover:text-rose-200 text-xs bg-rose-500/10 hover:bg-rose-500/20 p-1.5 rounded-lg transition" title="Excluir permissão">
+                🗑️
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (_) {}
+    }
+
+    async function concederPermissaoReino(allowed = true) {
+      const input = document.getElementById('admin-reino-nick-input');
+      const nick = (input?.value || '').trim();
+      if (!nick) return;
+
+      try {
+        const res = await apiFetch('/api/admin/kingdoms/permissions', {
+          method: 'POST',
+          body: JSON.stringify({ nick, allowed })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          mostrarFeedback(data.message || 'Permissão atualizada!', 'green');
+          input.value = '';
+          await carregarAdminPermissoesReino();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao conceder permissão.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function alternarPermissaoReino(nick, allowed) {
+      try {
+        const res = await apiFetch('/api/admin/kingdoms/permissions', {
+          method: 'POST',
+          body: JSON.stringify({ nick, allowed })
+        });
+        if (res.ok) {
+          await carregarAdminPermissoesReino();
+        }
+      } catch (_) {}
+    }
+
+    async function deletarPermissaoReino(nick) {
+      if (!confirm(`Excluir registro de permissão de "${nick}"?`)) return;
+      try {
+        const res = await apiFetch(`/api/admin/kingdoms/permissions/${encodeURIComponent(nick)}`, { method: 'DELETE' });
+        if (res.ok) {
+          mostrarFeedback('Registro removido.', 'green');
+          await carregarAdminPermissoesReino();
+        }
+      } catch (_) {}
+    }
   </script>
 </body>
 </html>
