@@ -1324,11 +1324,14 @@
 
         <!-- Formulário de Criação -->
         <div class="glass-card rounded-2xl p-4 md:p-6 border border-white/[0.1] space-y-4 shadow-xl">
-          <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+          <div class="flex items-center justify-between border-b border-white/[0.08] pb-3 flex-wrap gap-2">
             <h3 class="text-sm font-extrabold text-white flex items-center gap-2">
               <span>✍️</span> Detalhes para Criação do Reino
             </h3>
-            <span class="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-bold">Taxa: R$ 14,99</span>
+            <div class="flex items-center gap-2">
+              <span id="reino-vagas-badge" class="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold">Reinos: 0/12</span>
+              <span class="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-bold">Taxa: R$ 14,99</span>
+            </div>
           </div>
 
           <form onsubmit="submeterCriacaoReino(event)" class="space-y-3.5">
@@ -1364,11 +1367,11 @@
               </div>
             </div>
 
-            <!-- Seletor de Logo 3D Oficial do Reino -->
+            <!-- Seletor de Logo 3D Oficial do Reino (12 Logos Exclusivos) -->
             <div>
               <div class="flex items-center justify-between mb-1.5">
                 <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                  Logo / Emblema 3D do Reino *
+                  Logo / Emblema 3D do Reino (Exclusivo) *
                 </label>
                 <span class="text-cyan-300 font-extrabold text-xs flex items-center gap-1.5 bg-cyan-950/40 px-2 py-0.5 rounded-lg border border-cyan-500/30">
                   <span id="reino-selected-logo-icon" class="text-sm">👑</span>
@@ -1380,14 +1383,14 @@
               <div id="reino-logos-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2">
                 <!-- Inserido dinamicamente via JS com 12 logos 3D épicos -->
               </div>
-              <span class="text-[10px] text-slate-400 block mt-1.5">Clique no logo 3D desejado para representar a honra do seu reino.</span>
+              <span class="text-[10px] text-slate-400 block mt-1.5">Cada um dos 12 reinos possui um emblema 3D único. Logos já escolhidos ficam indisponíveis.</span>
             </div>
 
-            <!-- Seletor de Cor da TAG do Reino -->
+            <!-- Seletor de Cor da TAG do Reino (12 Cores Exclusivas) -->
             <div>
               <div class="flex items-center justify-between mb-1.5">
                 <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                  Cor da TAG do Reino *
+                  Cor da TAG do Reino (Exclusiva) *
                 </label>
                 <span id="reino-selected-color-preview" class="font-extrabold text-xs flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg border transition-all duration-200" style="background:rgba(245,158,11,0.15); border-color:rgba(245,158,11,0.4); color:#f59e0b;">
                   <span id="reino-selected-color-dot" class="w-2.5 h-2.5 rounded-full inline-block" style="background:#f59e0b; box-shadow:0 0 8px #f59e0b;"></span>
@@ -1396,10 +1399,10 @@
               </div>
               <input type="hidden" id="reino-input-cor" value="#f59e0b" />
 
-              <div id="reino-cores-grid" class="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                <!-- Inserido dinamicamente via JS com 8 cores RPG -->
+              <div id="reino-cores-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                <!-- Inserido dinamicamente via JS com 12 cores RPG -->
               </div>
-              <span class="text-[10px] text-slate-400 block mt-1.5">Essa cor dará o brilho, borda e fundo da TAG nos chats e rankings.</span>
+              <span class="text-[10px] text-slate-400 block mt-1.5">Cada reino possui uma cor exclusiva para sua TAG e brasão. Cores já escolhidas ficam indisponíveis.</span>
             </div>
 
             <div>
@@ -4412,6 +4415,11 @@
 
         allowedToCreateReino = !!data.allowedToCreate;
         meuReinoAtual = data.myKingdom;
+        reinoUsedLogos = data.usedLogos || [];
+        reinoUsedColors = (data.usedColors || []).map(c => (c || '').toLowerCase());
+        reinoTotalCount = data.totalKingdoms || 0;
+        reinoMaxCount = data.maxKingdoms || 12;
+        reinoIsLimitReached = !!data.isLimitReached || (reinoTotalCount >= reinoMaxCount);
 
         // Renderiza convites recebidos pendentes
         renderConvitesRecebidos(data.myInvites || []);
@@ -4523,11 +4531,20 @@
       { id: 'diamante', hex: '#06b6d4', name: 'Diamante Glacial' },
       { id: 'fogo', hex: '#f97316', name: 'Fogo Ardente' },
       { id: 'celestial', hex: '#ec4899', name: 'Rosa Divino' },
-      { id: 'lapis', hex: '#3b82f6', name: 'Lápis Lazúli' }
+      { id: 'lapis', hex: '#3b82f6', name: 'Lápis Lazúli' },
+      { id: 'lima', hex: '#84cc16', name: 'Lima Tóxico' },
+      { id: 'titanio', hex: '#e2e8f0', name: 'Titânio Nobre' },
+      { id: 'obsidiana', hex: '#64748b', name: 'Obsidiana' },
+      { id: 'cobre', hex: '#d97706', name: 'Bronze de Guerra' }
     ];
 
     let reinoSelectedLogo = '👑';
     let reinoSelectedColor = '#f59e0b';
+    let reinoUsedLogos = [];
+    let reinoUsedColors = [];
+    let reinoTotalCount = 0;
+    let reinoMaxCount = 12;
+    let reinoIsLimitReached = false;
 
     function renderTagReino(tag, logo = '👑', cor = '#f59e0b', extraStyle = '') {
       if (!tag) return '';
@@ -4540,8 +4557,36 @@
     function renderLogosReinoSelector() {
       const grid = document.getElementById('reino-logos-grid');
       if (!grid) return;
+
+      // Se o logo atualmente selecionado já foi pego por outro reino, auto-seleciona o primeiro disponível
+      if (reinoUsedLogos.includes(reinoSelectedLogo)) {
+        const firstAvailable = REINO_LOGOS_3D.find(item => !reinoUsedLogos.includes(item.emoji));
+        if (firstAvailable) {
+          reinoSelectedLogo = firstAvailable.emoji;
+          const input = document.getElementById('reino-input-logo');
+          if (input) input.value = firstAvailable.emoji;
+          const icon = document.getElementById('reino-selected-logo-icon');
+          if (icon) icon.textContent = firstAvailable.emoji;
+          const label = document.getElementById('reino-selected-logo-label');
+          if (label) label.textContent = firstAvailable.name;
+          const prevLogo = document.getElementById('preview-logo-span');
+          if (prevLogo) prevLogo.textContent = firstAvailable.emoji;
+        }
+      }
+
       grid.innerHTML = REINO_LOGOS_3D.map(item => {
+        const isTaken = reinoUsedLogos.includes(item.emoji);
         const isSelected = item.emoji === reinoSelectedLogo;
+
+        if (isTaken) {
+          return `
+            <div class="relative flex flex-col items-center justify-center p-2 rounded-xl border border-white/[0.04] bg-white/[0.02] opacity-35 cursor-not-allowed select-none" title="Este logo já pertence a outro reino">
+              <span class="text-2xl sm:text-3xl filter grayscale opacity-40">${item.emoji}</span>
+              <span class="text-[8px] font-bold text-rose-300 mt-1 flex items-center gap-0.5">🔒 Em uso</span>
+            </div>
+          `;
+        }
+
         return `
           <button type="button" onclick="selecionarLogoReino('${item.emoji}', '${item.name}')"
             class="group relative flex flex-col items-center justify-center p-2 rounded-xl border bg-gradient-to-b ${item.color} ${isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.4)] scale-105' : 'border-white/[0.08] hover:border-white/30 hover:scale-102'} transition-all duration-150">
@@ -4555,8 +4600,43 @@
     function renderCoresReinoSelector() {
       const grid = document.getElementById('reino-cores-grid');
       if (!grid) return;
+
+      // Se a cor atualmente selecionada já foi pega por outro reino, auto-seleciona a primeira disponível
+      if (reinoUsedColors.includes((reinoSelectedColor || '').toLowerCase())) {
+        const firstAvailable = REINO_CORES_TAG.find(item => !reinoUsedColors.includes(item.hex.toLowerCase()));
+        if (firstAvailable) {
+          reinoSelectedColor = firstAvailable.hex;
+          const input = document.getElementById('reino-input-cor');
+          if (input) input.value = firstAvailable.hex;
+          const label = document.getElementById('reino-selected-color-label');
+          if (label) label.textContent = firstAvailable.name;
+          const dot = document.getElementById('reino-selected-color-dot');
+          if (dot) {
+            dot.style.backgroundColor = firstAvailable.hex;
+            dot.style.boxShadow = `0 0 8px ${firstAvailable.hex}`;
+          }
+          const prevWrapper = document.getElementById('reino-selected-color-preview');
+          if (prevWrapper) {
+            prevWrapper.style.backgroundColor = `${firstAvailable.hex}20`;
+            prevWrapper.style.borderColor = `${firstAvailable.hex}50`;
+            prevWrapper.style.color = firstAvailable.hex;
+          }
+        }
+      }
+
       grid.innerHTML = REINO_CORES_TAG.map(item => {
+        const isTaken = reinoUsedColors.includes(item.hex.toLowerCase());
         const isSelected = item.hex.toLowerCase() === (reinoSelectedColor || '').toLowerCase();
+
+        if (isTaken) {
+          return `
+            <div class="relative flex flex-col items-center justify-center p-2 rounded-xl border border-white/[0.04] bg-white/[0.02] opacity-35 cursor-not-allowed select-none" title="Esta cor já pertence a outro reino">
+              <span class="w-5 h-5 rounded-full inline-block opacity-40 grayscale" style="background: ${item.hex};"></span>
+              <span class="text-[8px] font-bold text-rose-300 mt-1 flex items-center gap-0.5">🔒 Em uso</span>
+            </div>
+          `;
+        }
+
         return `
           <button type="button" onclick="selecionarCorReino('${item.hex}', '${item.name}')"
             class="group relative flex flex-col items-center justify-center p-2 rounded-xl border ${isSelected ? 'scale-105 ring-2 shadow-lg' : 'hover:scale-102'} transition-all duration-150"
@@ -4569,6 +4649,10 @@
     }
 
     function selecionarLogoReino(emoji, name) {
+      if (reinoUsedLogos.includes(emoji)) {
+        mostrarFeedback(`O emblema 3D "${emoji}" já pertence a outro reino!`, 'red');
+        return;
+      }
       reinoSelectedLogo = emoji;
       const input = document.getElementById('reino-input-logo');
       if (input) input.value = emoji;
@@ -4583,6 +4667,10 @@
     }
 
     function selecionarCorReino(hex, name) {
+      if (reinoUsedColors.includes(hex.toLowerCase())) {
+        mostrarFeedback('Esta cor de TAG já pertence a outro reino!', 'red');
+        return;
+      }
       reinoSelectedColor = hex;
       const input = document.getElementById('reino-input-cor');
       if (input) input.value = hex;
@@ -4626,6 +4714,14 @@
         liderInput.value = currentUser.nick || 'Jogador';
       }
 
+      const vagasBadge = document.getElementById('reino-vagas-badge');
+      if (vagasBadge) {
+        vagasBadge.textContent = `Reinos: ${reinoTotalCount}/12`;
+        vagasBadge.className = reinoIsLimitReached
+          ? 'text-[10px] text-rose-300 bg-rose-500/10 border border-rose-500/30 px-2.5 py-0.5 rounded-full font-bold'
+          : 'text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold';
+      }
+
       renderLogosReinoSelector();
       renderCoresReinoSelector();
       atualizarPreviewTag();
@@ -4634,6 +4730,25 @@
       const bloqueioAviso = document.getElementById('reino-bloqueio-aviso');
       const btnCriar = document.getElementById('btn-criar-reino');
       const btnCriarTexto = document.getElementById('btn-criar-reino-texto');
+
+      // Se atingiu o limite de 12 reinos
+      if (reinoIsLimitReached) {
+        if (statusPermissaoTxt) {
+          statusPermissaoTxt.innerHTML = '<span class="text-rose-400 font-bold">🚫 Limite de 12 Reinos Atingido</span>';
+        }
+        if (bloqueioAviso) {
+          bloqueioAviso.classList.remove('hidden');
+          bloqueioAviso.innerHTML = '<span>🚫</span> <span><strong>Limite Máximo Atingido (12/12):</strong> Todos os 12 grandes reinos do servidor já foram fundados! Junte-se a uma guilda existente para lutar por territórios.</span>';
+        }
+        if (btnCriar) {
+          btnCriar.disabled = true;
+          btnCriar.classList.add('opacity-40', 'cursor-not-allowed');
+        }
+        if (btnCriarTexto) {
+          btnCriarTexto.textContent = '🔒 Servidor Lotado (12/12 Reinos Criados)';
+        }
+        return;
+      }
 
       if (allowed) {
         if (statusPermissaoTxt) {
@@ -4651,7 +4766,10 @@
         if (statusPermissaoTxt) {
           statusPermissaoTxt.innerHTML = '<span class="text-rose-400 font-bold">🔒 Sem autorização do Admin</span>';
         }
-        if (bloqueioAviso) bloqueioAviso.classList.remove('hidden');
+        if (bloqueioAviso) {
+          bloqueioAviso.classList.remove('hidden');
+          bloqueioAviso.innerHTML = '<span>🔒</span> <span>Apenas jogadores autorizados pelo Administrador podem criar um reino. Solicite a permissão com o suporte/admin.</span>';
+        }
         if (btnCriar) {
           btnCriar.disabled = true;
           btnCriar.classList.add('opacity-40', 'cursor-not-allowed');
@@ -4664,6 +4782,12 @@
 
     async function submeterCriacaoReino(e) {
       e.preventDefault();
+
+      if (reinoIsLimitReached || reinoTotalCount >= 12) {
+        mostrarFeedback('🚫 O limite máximo de 12 reinos já foi atingido no servidor!', 'red');
+        return;
+      }
+
       if (!allowedToCreateReino && !isUserAdmin) {
         mostrarFeedback('🔒 Você não tem permissão do Administrador para criar um reino.', 'red');
         return;
@@ -4682,6 +4806,16 @@
 
       if (tag.length !== 3 || !/^[A-Z0-9]{3}$/.test(tag)) {
         mostrarFeedback('A TAG do reino deve conter exatamente 3 letras ou números (Ex: IMP, LEO, REI).', 'red');
+        return;
+      }
+
+      if (reinoUsedLogos.includes(logo)) {
+        mostrarFeedback(`O emblema 3D "${logo}" já foi escolhido por outro reino! Escolha um disponível.`, 'red');
+        return;
+      }
+
+      if (reinoUsedColors.includes(cor.toLowerCase())) {
+        mostrarFeedback('Esta cor de TAG já foi escolhida por outro reino! Escolha uma cor disponível.', 'red');
         return;
       }
 
