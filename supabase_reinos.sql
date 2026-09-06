@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS kingdoms (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nome         TEXT NOT NULL UNIQUE,
   tag          VARCHAR(3) NOT NULL UNIQUE,
+  logo         TEXT NOT NULL DEFAULT '👑',
   descricao    TEXT NOT NULL,
   owner_nick   TEXT NOT NULL UNIQUE,
   taxa_paga    NUMERIC(10, 2) NOT NULL DEFAULT 14.99,
@@ -24,6 +25,9 @@ CREATE TABLE IF NOT EXISTS kingdoms (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Garantir coluna logo caso a tabela já tenha sido criada anteriormente
+ALTER TABLE kingdoms ADD COLUMN IF NOT EXISTS logo TEXT DEFAULT '👑';
 
 -- 3. Membros do Reino (um jogador só pode estar em um reino por vez)
 CREATE TABLE IF NOT EXISTS kingdom_members (
