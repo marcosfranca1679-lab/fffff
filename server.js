@@ -2797,7 +2797,15 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       if (perm && perm.allowed) isAllowedToCreate = true;
     }
 
-    // 2. Busca reino atual do jogador
+    // 2. Busca convites pendentes recebidos por este jogador
+    const { data: myInvites } = await supabase
+      .from('kingdom_invites')
+      .select('id, kingdom_id, invited_by, created_at, kingdoms ( id, nome, tag, descricao, owner_nick )')
+      .ilike('invited_nick', nick)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    // 3. Busca reino atual do jogador
     const { data: member } = await supabase
       .from('kingdom_members')
       .select('role, kingdom_id, kingdoms ( id, nome, tag, descricao, owner_nick, pontos, kills, created_at )')
@@ -2806,6 +2814,9 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
 
     let myKingdom = null;
     let members = [];
+    let candidates = [];
+    let sentInvites = [];
+
     if (member && member.kingdoms) {
       myKingdom = {
         ...member.kingdoms,
@@ -2818,6 +2829,44 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
         .eq('kingdom_id', member.kingdom_id)
         .order('joined_at', { ascending: true });
       members = mList || [];
+
+      // Se for líder ou admin, busca jogadores com Whitelist aprovada para convidar
+      if (member.role === 'lider' || req.isAdmin) {
+        const { data: appPlayers } = await supabase
+          .from('players')
+          .select('nick, platform')
+          .eq('status', 'approved')
+          .order('nick', { ascending: true });
+
+        // Busca todos que já têm reino
+        const { data: allMembers } = await supabase
+          .from('kingdom_members')
+          .select('user_nick');
+
+        const memberNicksSet = new Set((allMembers || []).map(m => (m.user_nick || '').toLowerCase().trim()));
+
+        // Busca convites pendentes já enviados por este reino
+        const { data: outInvites } = await supabase
+          .from('kingdom_invites')
+          .select('id, invited_nick, created_at')
+          .eq('kingdom_id', member.kingdom_id)
+          .eq('status', 'pending');
+
+        sentInvites = outInvites || [];
+        const pendingNicksSet = new Set(sentInvites.map(i => (i.invited_nick || '').toLowerCase().trim()));
+
+        // Candidatos elegíveis: aprovados na whitelist que NÃO têm reino
+        candidates = (appPlayers || [])
+          .filter(p => {
+            const low = (p.nick || '').toLowerCase().trim();
+            return !memberNicksSet.has(low);
+          })
+          .map(p => ({
+            nick: p.nick,
+            platform: p.platform,
+            isInvited: pendingNicksSet.has((p.nick || '').toLowerCase().trim())
+          }));
+      }
     }
 
     res.json({
@@ -2825,6 +2874,9 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       allowedToCreate: isAllowedToCreate,
       myKingdom,
       members,
+      candidates,
+      myInvites: myInvites || [],
+      sentInvites,
       taxaCriacao: 14.99
     });
   } catch (err) {
@@ -2926,16 +2978,20 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/kingdoms/members/add — Líder adiciona membro ao seu reino
-app.post('/api/kingdoms/members/add', requireAuth, async (req, res) => {
+// POST /api/kingdoms/invites/send — Líder envia convite para jogador aprovado na whitelist
+app.post('/api/kingdoms/invites/send', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
     const { targetNick } = req.body || {};
 
     if (!targetNick || !targetNick.trim()) {
-      return res.status(400).json({ error: 'Informe o nick do jogador a ser adicionado.' });
+      return res.status(400).json({ error: 'Informe o nick do jogador a ser convidado.' });
     }
     const cleanTarget = targetNick.trim();
+
+    if (cleanTarget.toLowerCase() === nick.toLowerCase()) {
+      return res.status(400).json({ error: 'Você não pode convidar a si mesmo.' });
+    }
 
     // 1. Obtém o reino do solicitante e confirma se é o líder
     const { data: member } = await supabase
@@ -2945,10 +3001,21 @@ app.post('/api/kingdoms/members/add', requireAuth, async (req, res) => {
       .maybeSingle();
 
     if (!member || (member.role !== 'lider' && !req.isAdmin)) {
-      return res.status(403).json({ error: 'Apenas o Dono/Líder do reino pode adicionar membros.' });
+      return res.status(403).json({ error: 'Apenas o Dono/Líder do reino pode convidar membros.' });
     }
 
-    // 2. Verifica se o jogador alvo já tem reino
+    // 2. Verifica se o jogador alvo é aprovado na Whitelist
+    const { data: targetPlayer } = await supabase
+      .from('players')
+      .select('nick, status')
+      .ilike('nick', cleanTarget)
+      .maybeSingle();
+
+    if (!targetPlayer || targetPlayer.status !== 'approved') {
+      return res.status(400).json({ error: `O jogador "${cleanTarget}" não possui Whitelist aprovada.` });
+    }
+
+    // 3. Verifica se o jogador alvo já tem reino
     const { data: targetExist } = await supabase
       .from('kingdom_members')
       .select('id, kingdoms ( nome, tag )')
@@ -2956,29 +3023,165 @@ app.post('/api/kingdoms/members/add', requireAuth, async (req, res) => {
       .maybeSingle();
 
     if (targetExist) {
-      return res.status(400).json({ error: `O jogador ${cleanTarget} já faz parte de um Reino.` });
+      return res.status(400).json({ error: `O jogador "${cleanTarget}" já faz parte de um Reino.` });
     }
 
-    // 3. Adiciona
-    const { error: insErr } = await supabase.from('kingdom_members').insert([{
-      kingdom_id: member.kingdom_id,
-      user_nick: cleanTarget,
-      role: 'membro'
-    }]);
+    // 4. Verifica se já existe um convite pendente para este jogador deste reino
+    const { data: existingInvite } = await supabase
+      .from('kingdom_invites')
+      .select('id')
+      .eq('kingdom_id', member.kingdom_id)
+      .ilike('invited_nick', cleanTarget)
+      .eq('status', 'pending')
+      .maybeSingle();
 
-    if (insErr) return res.status(500).json({ error: insErr.message });
+    if (existingInvite) {
+      return res.status(400).json({ error: `Já existe um convite pendente para "${cleanTarget}".` });
+    }
 
-    // Mensagem no chat do reino
-    await supabase.from('kingdom_messages').insert([{
-      kingdom_id: member.kingdom_id,
-      author_nick: 'Sistema',
-      author_role: 'system',
-      content: `⚔️ ${cleanTarget} foi recrutado para o reino!`
-    }]);
+    // 5. Cria convite
+    const { data: newInvite, error: invErr } = await supabase
+      .from('kingdom_invites')
+      .insert([{
+        kingdom_id: member.kingdom_id,
+        invited_nick: targetPlayer.nick,
+        invited_by: nick,
+        status: 'pending'
+      }])
+      .select()
+      .single();
 
-    syncKingdomsCache(true).catch(() => {});
+    if (invErr) return res.status(500).json({ error: invErr.message });
 
-    res.json({ success: true, message: `✅ Jogador ${cleanTarget} recrutado com sucesso!` });
+    res.json({
+      success: true,
+      message: `📩 Convite enviado com sucesso para "${targetPlayer.nick}"!`,
+      invite: newInvite
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/invites/cancel — Líder cancela convite enviado
+app.post('/api/kingdoms/invites/cancel', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { inviteId } = req.body || {};
+
+    if (!inviteId) return res.status(400).json({ error: 'ID do convite obrigatório.' });
+
+    const { data: member } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!member || (member.role !== 'lider' && !req.isAdmin)) {
+      return res.status(403).json({ error: 'Apenas o líder pode cancelar convites.' });
+    }
+
+    await supabase
+      .from('kingdom_invites')
+      .delete()
+      .eq('id', inviteId)
+      .eq('kingdom_id', member.kingdom_id);
+
+    res.json({ success: true, message: 'Convite cancelado.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/invites/respond — Jogador aceita ou recusa convite
+app.post('/api/kingdoms/invites/respond', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { inviteId, action } = req.body || {}; // action: 'accept' ou 'reject'
+
+    if (!inviteId || !action) {
+      return res.status(400).json({ error: 'ID do convite e ação são obrigatórios.' });
+    }
+
+    // 1. Busca o convite
+    const { data: invite, error: iErr } = await supabase
+      .from('kingdom_invites')
+      .select('id, kingdom_id, invited_nick, status, kingdoms ( id, nome, tag )')
+      .eq('id', inviteId)
+      .ilike('invited_nick', nick)
+      .maybeSingle();
+
+    if (iErr || !invite) {
+      return res.status(404).json({ error: 'Convite não encontrado ou não pertence a você.' });
+    }
+
+    if (invite.status !== 'pending') {
+      return res.status(400).json({ error: 'Este convite já foi respondido anteriormente.' });
+    }
+
+    if (action === 'reject') {
+      // Atualiza status para rejected
+      await supabase
+        .from('kingdom_invites')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', inviteId);
+
+      return res.json({ success: true, message: `Você recusou o convite para o reino [${invite.kingdoms?.tag}] ${invite.kingdoms?.nome}.` });
+    }
+
+    if (action === 'accept') {
+      // Verifica se o jogador já pertence a algum reino
+      const { data: existingMember } = await supabase
+        .from('kingdom_members')
+        .select('id')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (existingMember) {
+        return res.status(400).json({ error: 'Você já faz parte de um Reino. Saia do atual antes de aceitar outro convite.' });
+      }
+
+      // Adiciona como membro
+      const { error: insErr } = await supabase
+        .from('kingdom_members')
+        .insert([{
+          kingdom_id: invite.kingdom_id,
+          user_nick: nick,
+          role: 'membro'
+        }]);
+
+      if (insErr) return res.status(500).json({ error: insErr.message });
+
+      // Atualiza convite para accepted
+      await supabase
+        .from('kingdom_invites')
+        .update({ status: 'accepted', updated_at: new Date().toISOString() })
+        .eq('id', inviteId);
+
+      // Cancela outros convites pendentes que este jogador possa ter recebido
+      await supabase
+        .from('kingdom_invites')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .ilike('invited_nick', nick)
+        .eq('status', 'pending');
+
+      // Mensagem no chat do reino
+      await supabase.from('kingdom_messages').insert([{
+        kingdom_id: invite.kingdom_id,
+        author_nick: 'Sistema',
+        author_role: 'system',
+        content: `⚔️ ${nick} aceitou o convite e agora faz parte do reino!`
+      }]);
+
+      syncKingdomsCache(true).catch(() => {});
+
+      return res.json({
+        success: true,
+        message: `🎉 Parabéns! Você agora é membro do reino [${invite.kingdoms?.tag}] ${invite.kingdoms?.nome}!`
+      });
+    }
+
+    res.status(400).json({ error: 'Ação inválida.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
