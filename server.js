@@ -70,13 +70,14 @@ async function syncKingdomsCache(force = false) {
   try {
     const { data: members } = await supabase
       .from('kingdom_members')
-      .select('user_nick, role, kingdoms ( id, nome, tag )');
+      .select('user_nick, role, kingdoms ( id, nome, tag, logo )');
     if (members) {
       kingdomTagsCache.clear();
       for (const m of members) {
         if (m.kingdoms && m.kingdoms.tag) {
           kingdomTagsCache.set(m.user_nick.toLowerCase().trim(), {
             tag: m.kingdoms.tag.toUpperCase(),
+            logo: m.kingdoms.logo || '👑',
             kingdomName: m.kingdoms.nome,
             kingdomId: m.kingdoms.id,
             role: m.role || 'membro'
@@ -180,6 +181,7 @@ app.get('/api/auth/me', async (req, res) => {
       whitelistStatus: status,
       banReason,
       kingdom_tag: kInfo ? kInfo.tag : null,
+      kingdom_logo: kInfo ? (kInfo.logo || '👑') : null,
       kingdom: kInfo || null
     });
   }
@@ -386,7 +388,8 @@ app.get('/api/chat', async (req, res) => {
       const kInfo = kingdomTagsCache.get(lowerNick);
       return {
         ...m,
-        kingdom_tag: kInfo ? kInfo.tag : null
+        kingdom_tag: kInfo ? kInfo.tag : null,
+        kingdom_logo: kInfo ? (kInfo.logo || '👑') : null
       };
     });
     res.json(msgs);
@@ -599,6 +602,7 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
       // Adiciona tag do reino a partir do cache (custo zero)
       const kp = kingdomTagsCache.get((p.nick || '').toLowerCase().trim());
       p.kingdom_tag = kp ? kp.tag : null;
+      p.kingdom_logo = kp ? (kp.logo || '👑') : null;
       if (p.status === 'banned') {
         const ban = parseBanInfo(p.ban_reason);
         if (ban.expired) {
@@ -617,10 +621,10 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
       }
     }
 
-    // Adiciona kingdom_tag também na lista de online
+    // Adiciona kingdom_tag e kingdom_logo também na lista de online
     const enrichedOnline = onlineList.map(o => {
       const ko = kingdomTagsCache.get((o.nick || '').toLowerCase().trim());
-      return { ...o, kingdom_tag: ko ? ko.tag : null };
+      return { ...o, kingdom_tag: ko ? ko.tag : null, kingdom_logo: ko ? (ko.logo || '👑') : null };
     });
 
     res.json({
@@ -2936,7 +2940,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
 app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { nome, tag, descricao } = req.body || {};
+    const { nome, tag, descricao, logo } = req.body || {};
 
     if (!nome || !tag || !descricao) {
       return res.status(400).json({ error: 'Nome, TAG de 3 letras e descrição são obrigatórios.' });
@@ -2949,6 +2953,7 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
 
     const cleanNome = nome.trim().slice(0, 30);
     const cleanDesc = descricao.trim().slice(0, 300);
+    const cleanLogo = (logo || '👑').trim().slice(0, 10);
 
     // 1. Verifica permissão concedida pelo Admin
     let allowed = !!req.isAdmin;
@@ -2976,20 +2981,30 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Você já faz parte de um Reino. Saia do reino atual antes de criar um novo.' });
     }
 
-    // 3. Cria o reino no Supabase
-    const { data: newKingdom, error: kErr } = await supabase
+    // 3. Cria o reino no Supabase (com logo e fallback seguro)
+    const insertPayload = {
+      nome: cleanNome,
+      tag: cleanTag,
+      descricao: cleanDesc,
+      owner_nick: nick,
+      taxa_paga: 14.99,
+      pontos: 0,
+      kills: 0,
+      logo: cleanLogo
+    };
+
+    let { data: newKingdom, error: kErr } = await supabase
       .from('kingdoms')
-      .insert([{
-        nome: cleanNome,
-        tag: cleanTag,
-        descricao: cleanDesc,
-        owner_nick: nick,
-        taxa_paga: 14.99,
-        pontos: 0,
-        kills: 0
-      }])
+      .insert([insertPayload])
       .select()
       .single();
+
+    if (kErr && (kErr.message.includes('logo') || kErr.code === '42703')) {
+      delete insertPayload.logo;
+      const retry = await supabase.from('kingdoms').insert([insertPayload]).select().single();
+      newKingdom = retry.data;
+      kErr = retry.error;
+    }
 
     if (kErr) {
       if (kErr.message.includes('unique') || kErr.code === '23505') {
@@ -3414,6 +3429,7 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
         id: k.id,
         nome: k.nome,
         tag: k.tag,
+        logo: k.logo || '👑',
         owner_nick: k.owner_nick,
         membersCount: members.length,
         kills,
