@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS kingdoms (
   nome         TEXT NOT NULL UNIQUE,
   tag          VARCHAR(3) NOT NULL UNIQUE,
   logo         TEXT NOT NULL DEFAULT '👑',
+  cor          TEXT NOT NULL DEFAULT '#f59e0b',
   descricao    TEXT NOT NULL,
   owner_nick   TEXT NOT NULL UNIQUE,
   taxa_paga    NUMERIC(10, 2) NOT NULL DEFAULT 14.99,
@@ -26,8 +27,9 @@ CREATE TABLE IF NOT EXISTS kingdoms (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Garantir coluna logo caso a tabela já tenha sido criada anteriormente
+-- Garantir colunas logo e cor caso a tabela já tenha sido criada anteriormente
 ALTER TABLE kingdoms ADD COLUMN IF NOT EXISTS logo TEXT DEFAULT '👑';
+ALTER TABLE kingdoms ADD COLUMN IF NOT EXISTS cor  TEXT DEFAULT '#f59e0b';
 
 -- 3. Membros do Reino (um jogador só pode estar em um reino por vez)
 CREATE TABLE IF NOT EXISTS kingdom_members (
