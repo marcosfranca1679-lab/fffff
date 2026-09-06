@@ -366,8 +366,9 @@ async function limparLogsMortesESessoes3Dias() {
 
 let lastChatCleanupsTime = 0;
 
-// Listar mensagens (consulta super rápida, 0 delay)
+// Listar mensagens (consulta super rápida, com cache Edge CDN Vercel)
 app.get('/api/chat', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=2, stale-while-revalidate=8');
   try {
     // Limpezas periódicas automáticas espaçadas (máximo 1x a cada 6 horas para não sobrecarregar o banco)
     const now = Date.now();
@@ -497,6 +498,7 @@ app.post('/api/admin/chat/clear', requireAdmin, async (req, res) => {
 //  MURAL DE BANIMENTOS (#mural-banidos)
 // ════════════════════════════════════════════════════════════════════════════
 app.get('/api/bans', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30');
   try {
     const { data, error } = await supabase
       .from('players')
@@ -2248,6 +2250,7 @@ function parseFormattedPlaytimeToSeconds(str) {
 }
 
 app.get('/api/ranking/playtime', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=45');
   try {
     // 1. Busca todos os registros da tabela dedicada player_rankings
     const { data: dbRanks } = await supabase
@@ -3471,6 +3474,7 @@ app.post('/api/kingdoms/messages', requireAuth, async (req, res) => {
 
 // GET /api/ranking/kingdoms — Ranking de pontos por reinos (Kills + Tempo de jogo)
 app.get('/api/ranking/kingdoms', async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=45');
   try {
     // 1. Busca todos os reinos
     const { data: kingdomsList } = await supabase
