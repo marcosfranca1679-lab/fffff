@@ -4963,21 +4963,26 @@
             }
 
             return `
-              <div class="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] hover:bg-white/[0.04] transition space-y-2">
-                <div class="flex items-center justify-between gap-2">
+              <div class="rounded-xl bg-black/40 border border-white/[0.06] hover:bg-white/[0.04] transition overflow-hidden">
+                
+                <!-- Linha do membro: avatar + info + botão expulsar -->
+                <div class="flex items-center justify-between gap-2 p-2.5">
                   <div class="flex items-center gap-2 min-w-0">
-                    <div class="w-7 h-7 rounded-lg ${isMLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black font-black' : 'bg-cyan-900/60 text-cyan-200 font-bold'} flex items-center justify-center text-xs flex-shrink-0 relative">
+                    <!-- Avatar com indicador online -->
+                    <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center text-sm font-black relative
+                      ${isMLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black' : 'bg-cyan-900/60 text-cyan-200'}">
                       ${initial}
-                      ${st?.isOnline ? '<span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-black" title="Online agora"></span>' : ''}
+                      ${st?.isOnline ? '<span class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-black"></span>' : ''}
                     </div>
+                    <!-- Nick + role + data -->
                     <div class="min-w-0">
-                      <div class="text-xs font-bold text-white truncate flex items-center gap-1.5">
-                        <span>${escapeHtml(m.user_nick)}</span>
-                        ${isMe ? '<span class="text-[9px] text-cyan-400 font-normal">(você)</span>' : ''}
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-xs font-bold text-white truncate max-w-[120px]">${escapeHtml(m.user_nick)}</span>
+                        ${isMe ? '<span class="text-[9px] text-cyan-400">(você)</span>' : ''}
                         ${st?.isOnline ? '<span class="text-[9px] text-emerald-400 font-semibold flex items-center gap-0.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>Online</span>' : ''}
                       </div>
-                      <div class="text-[9px] text-slate-400">
-                        ${isMLider ? '<span class="text-amber-300 font-bold">👑 Líder</span>' : 'Membro'} &middot; Entrou em ${formatarData(m.joined_at)}
+                      <div class="text-[9px] text-slate-400 mt-0.5">
+                        ${isMLider ? '<span class="text-amber-300 font-bold">👑 Líder</span>' : 'Membro'} · Entrou em ${formatarData(m.joined_at)}
                       </div>
                     </div>
                   </div>
@@ -4985,28 +4990,40 @@
                 </div>
 
                 ${hasStats ? `
-                  <!-- Estatísticas geradas pelo membro no Reino (Visível apenas para o Líder) -->
-                  <div class="bg-white/[0.02] p-2 rounded-lg border border-white/[0.05] space-y-1">
-                    <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                      <span class="flex items-center gap-1">📊 Atividade no Reino</span>
-                      <span class="text-emerald-400 font-black">+${st.pointsGenerated || 0} pts gerados</span>
+                  <!-- Separador -->
+                  <div class="border-t border-white/[0.05]"></div>
+
+                  <!-- Painel de atividade — visível apenas para o Líder -->
+                  <div class="p-2.5 bg-black/30 space-y-2">
+                    <!-- Título + pontos gerados -->
+                    <div class="flex items-center justify-between">
+                      <span class="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                        📊 Atividade no Reino
+                      </span>
+                      <span class="text-[10px] font-black text-emerald-400">+${st.pointsGenerated || 0} pts</span>
                     </div>
-                    <div class="grid grid-cols-4 gap-1 text-center pt-1">
-                      <div class="bg-black/40 p-1 rounded border border-white/[0.04]">
-                        <div class="text-[8px] text-slate-400 uppercase">Tempo</div>
-                        <div class="text-[10px] font-mono font-bold text-cyan-300 truncate">${escapeHtml(st.playtimeFormatted || '0m')}</div>
+
+                    <!-- Grid de stats: 2×2 no mobile, 4 colunas no md+ -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                      <!-- Tempo -->
+                      <div class="bg-cyan-950/40 border border-cyan-500/20 rounded-lg p-1.5 text-center">
+                        <div class="text-[8px] text-cyan-400/70 uppercase tracking-wider mb-0.5">⏱ Tempo</div>
+                        <div class="text-[11px] font-mono font-bold text-cyan-300 truncate">${escapeHtml(st.playtimeFormatted || '0m')}</div>
                       </div>
-                      <div class="bg-black/40 p-1 rounded border border-white/[0.04]">
-                        <div class="text-[8px] text-slate-400 uppercase">Kills PvP</div>
-                        <div class="text-[10px] font-mono font-bold text-amber-300">${st.pvpKills || 0}</div>
+                      <!-- Kills PvP -->
+                      <div class="bg-amber-950/40 border border-amber-500/20 rounded-lg p-1.5 text-center">
+                        <div class="text-[8px] text-amber-400/70 uppercase tracking-wider mb-0.5">⚔️ PvP</div>
+                        <div class="text-[11px] font-mono font-bold text-amber-300">${st.pvpKills || 0}</div>
                       </div>
-                      <div class="bg-black/40 p-1 rounded border border-white/[0.04]">
-                        <div class="text-[8px] text-slate-400 uppercase">Monstros</div>
-                        <div class="text-[10px] font-mono font-bold text-purple-300">${st.mobKills || 0}</div>
+                      <!-- Monstros -->
+                      <div class="bg-purple-950/40 border border-purple-500/20 rounded-lg p-1.5 text-center">
+                        <div class="text-[8px] text-purple-400/70 uppercase tracking-wider mb-0.5">🐉 Mobs</div>
+                        <div class="text-[11px] font-mono font-bold text-purple-300">${st.mobKills || 0}</div>
                       </div>
-                      <div class="bg-black/40 p-1 rounded border border-white/[0.04]">
-                        <div class="text-[8px] text-slate-400 uppercase">Chat</div>
-                        <div class="text-[10px] font-mono font-bold text-slate-300">${st.messagesCount || 0} msgs</div>
+                      <!-- Chat -->
+                      <div class="bg-slate-800/60 border border-slate-600/20 rounded-lg p-1.5 text-center">
+                        <div class="text-[8px] text-slate-400/70 uppercase tracking-wider mb-0.5">💬 Chat</div>
+                        <div class="text-[11px] font-mono font-bold text-slate-300">${st.messagesCount || 0}</div>
                       </div>
                     </div>
                   </div>
