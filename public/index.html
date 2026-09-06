@@ -1315,8 +1315,8 @@
             <div class="bg-black/50 border border-amber-500/30 rounded-xl p-3 flex items-center gap-3">
               <span class="text-2xl flex-shrink-0">💰</span>
               <div>
-                <div class="text-xs font-bold text-amber-300">Taxa de Criação</div>
-                <div class="text-[11px] text-slate-300 font-mono">Taxa simbólica: <b class="text-amber-400 font-bold">R$ 14,99</b></div>
+                <div class="text-xs font-bold text-amber-300">Mensalidade do Reino</div>
+                <div class="text-[11px] text-slate-300 font-mono">Taxa: <b class="text-amber-400 font-bold">R$ 19,99/mês</b></div>
               </div>
             </div>
           </div>
@@ -1330,7 +1330,7 @@
             </h3>
             <div class="flex items-center gap-2">
               <span id="reino-vagas-badge" class="text-[10px] text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full font-bold">Reinos: 0/12</span>
-              <span class="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-bold">Taxa: R$ 14,99</span>
+              <span class="text-[10px] text-cyan-300 bg-cyan-500/10 border border-cyan-500/30 px-2.5 py-0.5 rounded-full font-bold">Mensal: R$ 19,99/mês</span>
             </div>
           </div>
 
@@ -1421,7 +1421,7 @@
             <button type="submit" id="btn-criar-reino"
               class="w-full py-3 rounded-xl font-extrabold text-xs md:text-sm bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg hover:shadow-cyan-500/30 transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2">
               <span>🏰</span>
-              <span id="btn-criar-reino-texto">Criar Reino (Taxa R$ 14,99)</span>
+              <span id="btn-criar-reino-texto">Criar Reino (R$ 19,99/mês)</span>
             </button>
           </form>
         </div>
@@ -4760,7 +4760,7 @@
           btnCriar.classList.remove('opacity-40', 'cursor-not-allowed');
         }
         if (btnCriarTexto) {
-          btnCriarTexto.textContent = 'Criar Reino (Taxa R$ 14,99)';
+          btnCriarTexto.textContent = 'Criar Reino (R$ 19,99/mês)';
         }
       } else {
         if (statusPermissaoTxt) {
