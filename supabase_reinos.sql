@@ -68,6 +68,8 @@ CREATE INDEX IF NOT EXISTS idx_kingdom_messages_kid ON kingdom_messages(kingdom_
 CREATE INDEX IF NOT EXISTS idx_kingdom_invites_target ON kingdom_invites(invited_nick, status);
 CREATE INDEX IF NOT EXISTS idx_kingdom_invites_kid ON kingdom_invites(kingdom_id);
 CREATE INDEX IF NOT EXISTS idx_kingdoms_pontos ON kingdoms(pontos DESC);
+CREATE INDEX IF NOT EXISTS idx_kingdoms_logo ON kingdoms(logo);
+CREATE INDEX IF NOT EXISTS idx_kingdoms_cor  ON kingdoms(cor);
 
 -- 6. Desativar RLS para acesso direto do backend com service/anon key
 ALTER TABLE kingdom_permissions DISABLE ROW LEVEL SECURITY;
