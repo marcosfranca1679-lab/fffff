@@ -1545,8 +1545,10 @@ app.post('/api/telemetry/:nick', async (req, res) => {
         created_at: now
       }]));
 
-      // Deduz 1 vida do jogador no sistema de vidas
-      const livesData = await descontarVidaJogador(nick);
+      // Deduz 1 vida do jogador no sistema de vidas (ou sincroniza as vidas enviadas pelo plugin)
+      const livesData = (payload.lives !== undefined)
+        ? await definirVidasJogador(nick, payload.lives)
+        : await descontarVidaJogador(nick);
       const livesRemaining = livesData ? livesData.lives : null;
 
       registrarConsoleLog('error', '\uD83D\uDC80 ' + (payload.deathMessage || (nick + ' morreu')), 'Minecraft');
@@ -2042,10 +2044,28 @@ app.get('/api/plugin/sync', async (req, res) => {
       }
     }
 
-    // 2. IP Bans ativos
+    // 2. IP Bans ativos (busca do banco messages e do cache)
+    const { data: dbIpBans } = await supabase
+      .from('messages')
+      .select('author_nick, author_platform, content, created_at')
+      .eq('author_role', 'ip_ban');
+
     const ipBans = [];
+    const seenIps = new Set();
+    for (const row of (dbIpBans || [])) {
+      let parsed = {};
+      try { parsed = JSON.parse(row.content); } catch { parsed = { reason: row.content }; }
+      if (!parsed.expiresAt || Date.now() < new Date(parsed.expiresAt).getTime()) {
+        seenIps.add(row.author_nick);
+        ipBans.push({
+          ip: row.author_nick,
+          reason: parsed.reason || 'IP Bloqueado',
+          associatedNick: row.author_platform || ''
+        });
+      }
+    }
     for (const [ip, item] of bannedIpsCache.entries()) {
-      if (!item.expiresAt || Date.now() < new Date(item.expiresAt).getTime()) {
+      if (!seenIps.has(ip) && (!item.expiresAt || Date.now() < new Date(item.expiresAt).getTime())) {
         ipBans.push({
           ip,
           reason: item.reason,
@@ -2066,6 +2086,13 @@ app.get('/api/plugin/sync', async (req, res) => {
           lives: row.lives !== undefined ? row.lives : 5,
           lastDeathAt: row.last_death_at || null
         };
+      }
+    }
+
+    // Garante que todos os jogadores aprovados estejam no livesMap com pelo menos 5 vidas
+    for (const appNick of approved) {
+      if (!livesMap[appNick]) {
+        livesMap[appNick] = { lives: 5, lastDeathAt: null };
       }
     }
 
