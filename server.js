@@ -360,12 +360,18 @@ async function limparLogsMortesESessoes3Dias() {
   }
 }
 
-// Listar mensagens (executa a limpeza periódica de mensagens e logs)
+let lastChatCleanupsTime = 0;
+
+// Listar mensagens (consulta super rápida, 0 delay)
 app.get('/api/chat', async (req, res) => {
   try {
-    // Limpezas periódicas automáticas
-    limparMensagens30Dias().catch(() => {});
-    limparLogsMortesESessoes3Dias().catch(() => {});
+    // Limpezas periódicas automáticas espaçadas (máximo 1x a cada 6 horas para não sobrecarregar o banco)
+    const now = Date.now();
+    if (now - lastChatCleanupsTime > 6 * 3600 * 1000) {
+      lastChatCleanupsTime = now;
+      limparMensagens30Dias().catch(() => {});
+      limparLogsMortesESessoes3Dias().catch(() => {});
+    }
 
     const { data, error } = await supabase
       .from('messages')
