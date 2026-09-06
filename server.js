@@ -2008,6 +2008,84 @@ app.post('/api/plugin/console-logs', async (req, res) => {
   res.json({ success: true });
 });
 
+// 6. Sincronização Geral Unificada com o Plugin (Ultra-Econômico)
+app.get('/api/plugin/sync', async (req, res) => {
+  const secret = req.headers['x-plugin-secret'] || req.query.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    // 1. Whitelist e Bans da tabela players
+    const { data: players } = await supabase
+      .from('players')
+      .select('nick, status, ban_reason');
+
+    const approved = [];
+    const bans = [];
+
+    for (const p of (players || [])) {
+      if (p.status === 'approved') {
+        approved.push(p.nick.toLowerCase());
+      } else if (p.status === 'banned') {
+        const banInfo = parseBanInfo(p.ban_reason);
+        if (banInfo.expired) {
+          approved.push(p.nick.toLowerCase());
+          safeDb(supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', p.nick));
+        } else {
+          bans.push({
+            nick: p.nick.toLowerCase(),
+            reason: banInfo.reason,
+            remaining: banInfo.remaining,
+            isPermanent: banInfo.isPermanent
+          });
+        }
+      }
+    }
+
+    // 2. IP Bans ativos
+    const ipBans = [];
+    for (const [ip, item] of bannedIpsCache.entries()) {
+      if (!item.expiresAt || Date.now() < new Date(item.expiresAt).getTime()) {
+        ipBans.push({
+          ip,
+          reason: item.reason,
+          associatedNick: item.associatedNick || ''
+        });
+      }
+    }
+
+    // 3. Vidas dos jogadores (tabela player_lives)
+    const { data: livesData } = await supabase
+      .from('player_lives')
+      .select('nick, lives, last_death_at');
+
+    const livesMap = {};
+    for (const row of (livesData || [])) {
+      if (row.nick) {
+        livesMap[row.nick.toLowerCase()] = {
+          lives: row.lives !== undefined ? row.lives : 5,
+          lastDeathAt: row.last_death_at || null
+        };
+      }
+    }
+
+    // 4. Comandos de console pendentes
+    const commandsToRun = pendingConsoleCommands.splice(0);
+
+    res.json({
+      success: true,
+      timestamp: Date.now(),
+      approved,
+      bans,
+      ipBans,
+      lives: livesMap,
+      commands: commandsToRun
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── ROTA PÚBLICA DE RANKING (TOP 5 HORAS JOGADAS) ───────────────────────────
 function formatPlaytimeFromSeconds(totalSec) {
   if (!totalSec || totalSec <= 0) return '0m';
