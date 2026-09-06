@@ -1987,12 +1987,12 @@
     registrarAtividadeUsuario();
 
     function iniciarAutoRefresh() {
-      // 1. Chat: apenas quando a aba estiver visível, usuário ativo e no #chat-geral
+      // 1. Chat da Comunidade: verifica mensagens a cada 3.5 segundos enquanto estiver no chat (sem travar por inatividade)
       setInterval(() => {
-        if (!document.hidden && isUserActive && currentChannel === 'chat') {
+        if (!document.hidden && currentChannel === 'chat') {
           carregarChat();
         }
-      }, 10000);
+      }, 3500);
 
       // 2. Bans: apenas quando visualizando o mural de bans
       setInterval(() => {
@@ -2011,23 +2011,21 @@
         }
       }, 60000);
 
-      // 3.5. Reino Privado: mensagens a cada 12s se estiver na aba do reino
-      //      + verifica convites silenciosamente a cada 60s em qualquer aba (zero custo extra)
+      // 3.5. Reino Privado: mensagens a cada 3.5s se estiver na aba do reino
+      //      + verifica convites silenciosamente a cada ~60s em outras abas
       let _inviteCheckTick = 0;
       setInterval(() => {
-        if (!document.hidden && isUserActive && currentChannel === 'reinos' && meuReinoAtual) {
+        if (!document.hidden && currentChannel === 'reinos' && meuReinoAtual) {
           carregarMensagensReinoSilencioso();
         }
-        // A cada ~60s (5 ticks de 12s), verifica convites mesmo fora da aba de Reinos
         _inviteCheckTick++;
-        if (_inviteCheckTick >= 5 && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
+        if (_inviteCheckTick >= 17 && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
           _inviteCheckTick = 0;
-          // Chamada leve: reutiliza o mesmo endpoint já existente, apenas atualiza o badge
           apiFetch('/api/kingdoms/status').then(r => r.json()).then(d => {
             if (d && d.success) atualizarBadgeConvites((d.myInvites || []).length);
           }).catch(() => {});
         }
-      }, 12000);
+      }, 3500);
 
       // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin
       setInterval(() => {
@@ -2180,7 +2178,7 @@
         }
       }
 
-      if (canalId === 'chat') scrollChatToBottom();
+      if (canalId === 'chat') { carregarChat(true); }
       if (canalId === 'admin' && isUserAdmin) { carregarAdminData(); mudarModuloAdmin(adminModulo || 'whitelist'); }
       if (canalId === 'bans') carregarBans();
       if (canalId === 'console' && isUserAdmin) { carregarConsoleLogs(); scrollConsoleToBottom(); }
@@ -2341,11 +2339,16 @@
     }
 
     // ── Chat da Comunidade (#chat-geral) ─────────────────────────────────────
-    async function carregarChat() {
+    let lastChatLatestKey = '';
+
+    // ── Chat da Comunidade (#chat-geral) ─────────────────────────────────────
+    async function carregarChat(forceScroll = false) {
       try {
         const res = await apiFetch('/api/chat');
+        if (!res.ok) return;
         const allMsgs = await res.json();
         const container = document.getElementById('chat-messages');
+        if (!container) return;
 
         // Filtra estritamente apenas mensagens do chat geral (exclui console, telemetria, ranks, logs e vidas)
         const msgs = (allMsgs || []).filter(m => {
@@ -2356,67 +2359,88 @@
           return true;
         });
 
-        const shouldScroll = (container.scrollTop + container.clientHeight >= container.scrollHeight - 60) || lastChatCount === 0;
+        // Identifica se há novas mensagens pela chave da última mensagem
+        const lastMsg = msgs[msgs.length - 1];
+        const latestKey = lastMsg ? `${lastMsg.id || ''}_${lastMsg.created_at || ''}_${msgs.length}` : '';
+        const hasNewMsg = latestKey !== lastChatLatestKey;
 
-        container.innerHTML = msgs.map(m => {
-          const isMsgAdmin = m.author_role === 'admin';
-          const roleBadge = isMsgAdmin 
-            ? '<span class="bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] px-1.5 py-0.5 rounded-md font-extrabold ml-1">ADMIN</span>'
-            : `<span class="bg-white/[0.08] text-slate-300 text-[9px] px-1.5 py-0.5 rounded-md ml-1 font-medium">${escapeHtml(m.author_platform || 'Player')}</span>`;
+        // Se o usuário está lendo no final do chat (margem de 180px) ou é o primeiro carregamento
+        const isNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 180;
+        const shouldScroll = forceScroll || isNearBottom || !lastChatLatestKey;
 
-          const initial = escapeHtml(m.author_nick || 'J').substring(0, 1).toUpperCase();
-          const avatarColor = isMsgAdmin ? 'bg-gradient-to-tr from-rose-600 to-pink-600' : 'bg-gradient-to-tr from-purple-600 to-indigo-600';
+        if (hasNewMsg || forceScroll) {
+          lastChatLatestKey = latestKey;
+          container.innerHTML = msgs.map(m => {
+            const isMsgAdmin = m.author_role === 'admin';
+            const roleBadge = isMsgAdmin 
+              ? '<span class="bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[9px] px-1.5 py-0.5 rounded-md font-extrabold ml-1">ADMIN</span>'
+              : `<span class="bg-white/[0.08] text-slate-300 text-[9px] px-1.5 py-0.5 rounded-md ml-1 font-medium">${escapeHtml(m.author_platform || 'Player')}</span>`;
 
-          const tagBadge = m.kingdom_tag 
-            ? `<span class="tag-kingdom" title="Reino [${escapeHtml(m.kingdom_tag)}]">[${escapeHtml(m.kingdom_tag)}]</span>`
-            : '';
+            const initial = escapeHtml(m.author_nick || 'J').substring(0, 1).toUpperCase();
+            const avatarColor = isMsgAdmin ? 'bg-gradient-to-tr from-rose-600 to-pink-600' : 'bg-gradient-to-tr from-purple-600 to-indigo-600';
 
-          return `
-            <div class="flex items-start gap-2 hover:bg-white/[0.04] p-1.5 md:p-2 rounded-xl transition border border-transparent hover:border-white/[0.06]">
-              <div class="w-8 h-8 rounded-xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">
-                ${initial}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-1.5 flex-wrap">
-                  ${tagBadge}
-                  <span class="font-extrabold text-xs ${isMsgAdmin ? 'text-rose-400' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
-                  ${roleBadge}
-                  <span class="text-[9px] text-slate-400 ml-1 font-mono">${formatarHora(m.created_at)}</span>
+            const tagBadge = m.kingdom_tag 
+              ? `<span class="tag-kingdom" title="Reino [${escapeHtml(m.kingdom_tag)}]">[${escapeHtml(m.kingdom_tag)}]</span>`
+              : '';
+
+            return `
+              <div class="flex items-start gap-2 hover:bg-white/[0.04] p-1.5 md:p-2 rounded-xl transition border border-transparent hover:border-white/[0.06]">
+                <div class="w-8 h-8 rounded-xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">
+                  ${initial}
                 </div>
-                <div class="text-xs text-slate-200 mt-0.5 break-words leading-relaxed">${escapeHtml(m.content)}</div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    ${tagBadge}
+                    <span class="font-extrabold text-xs ${isMsgAdmin ? 'text-rose-400' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
+                    ${roleBadge}
+                    <span class="text-[9px] text-slate-400 ml-1 font-mono">${formatarHora(m.created_at)}</span>
+                  </div>
+                  <div class="text-xs text-slate-200 mt-0.5 break-words leading-relaxed">${escapeHtml(m.content)}</div>
+                </div>
               </div>
-            </div>
-          `;
-        }).join('');
+            `;
+          }).join('');
 
-        if (shouldScroll && msgs.length !== lastChatCount) {
-          scrollChatToBottom();
+          if (shouldScroll) {
+            scrollChatToBottom();
+          }
         }
-        lastChatCount = msgs.length;
       } catch (_) {}
     }
 
     async function enviarMensagemChat(e) {
-      e.preventDefault();
+      if (e) e.preventDefault();
       const input = document.getElementById('chat-input');
-      const content = input.value.trim();
+      const btn = document.getElementById('btn-chat-send');
+      const content = (input?.value || '').trim();
       if (!content) return;
 
-      input.value = '';
+      if (!currentUser) {
+        mostrarFeedback('Faça login para conversar no chat.', 'amber');
+        abrirModalAuth('login');
+        return;
+      }
+
+      const originalText = content;
+      if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
+
       try {
         const res = await apiFetch('/api/chat', {
           method: 'POST',
           body: JSON.stringify({ content })
         });
         const data = await res.json();
-        if (data.success) {
-          await carregarChat();
-          scrollChatToBottom();
+        if (res.ok && data.success) {
+          if (input) input.value = '';
+          await carregarChat(true);
         } else {
           mostrarFeedback(data.error || 'Erro ao enviar mensagem.', 'red');
         }
       } catch (err) {
         mostrarFeedback('Erro ao conectar ao chat.', 'red');
+      } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
+        if (input) input.focus();
       }
     }
 
@@ -4719,7 +4743,8 @@
         return;
       }
 
-      const shouldScroll = forceScroll || (container.scrollTop + container.clientHeight >= container.scrollHeight - 50) || lastReinoMessagesCount === 0;
+      const isNearBottom = (container.scrollHeight - container.scrollTop - container.clientHeight) < 180;
+      const shouldScroll = forceScroll || isNearBottom || lastReinoMessagesCount === 0;
 
       container.innerHTML = msgs.map(m => {
         const isSys = m.author_role === 'system';
@@ -4759,12 +4784,19 @@
     }
 
     async function enviarMensagemReino(e) {
-      e.preventDefault();
+      if (e) e.preventDefault();
       const input = document.getElementById('reino-chat-input');
+      const btn = document.getElementById('btn-reino-send');
       const content = (input?.value || '').trim();
       if (!content) return;
 
-      input.value = '';
+      if (!currentUser) {
+        mostrarFeedback('Faça login para conversar no reino.', 'amber');
+        return;
+      }
+
+      if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
+
       try {
         const res = await apiFetch('/api/kingdoms/messages', {
           method: 'POST',
@@ -4772,12 +4804,16 @@
         });
         const data = await res.json();
         if (res.ok && data.success) {
+          if (input) input.value = '';
           await carregarMensagensReino(true);
         } else {
           mostrarFeedback(data.error || 'Erro ao enviar mensagem.', 'red');
         }
       } catch (err) {
         mostrarFeedback('Erro de conexão com o chat do reino.', 'red');
+      } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-50'); }
+        if (input) input.focus();
       }
     }
 
