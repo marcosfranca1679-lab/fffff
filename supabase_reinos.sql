@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS kingdoms (
   cor          TEXT NOT NULL DEFAULT '#f59e0b',
   descricao    TEXT NOT NULL,
   owner_nick   TEXT NOT NULL UNIQUE,
-  taxa_paga    NUMERIC(10, 2) NOT NULL DEFAULT 14.99,
+  taxa_paga    NUMERIC(10, 2) NOT NULL DEFAULT 19.99,
   pontos       INTEGER NOT NULL DEFAULT 0,
   kills        INTEGER NOT NULL DEFAULT 0,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
