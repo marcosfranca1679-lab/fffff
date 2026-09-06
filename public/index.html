@@ -1270,6 +1270,20 @@
         Carregando informações do reino...
       </div>
 
+      <!-- Seção de Convites Recebidos (Exibida se o jogador tiver convites pendentes) -->
+      <div id="reino-convites-pendentes-container" class="hidden glass-card rounded-2xl p-4 border border-amber-500/40 bg-gradient-to-r from-amber-950/30 via-black/60 to-yellow-950/20 space-y-3 shadow-lg">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs md:text-sm font-extrabold text-amber-300 flex items-center gap-2">
+            <span class="text-lg">📩</span> Convites de Reinos Recebidos
+          </h3>
+          <span id="reino-badge-convites" class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">0 convites</span>
+        </div>
+        <p class="text-[11px] text-slate-300">Você foi convidado para entrar nos seguintes clãs/reinos:</p>
+        <div id="reino-lista-convites-recebidos" class="space-y-2">
+          <!-- Renderizado via JS -->
+        </div>
+      </div>
+
       <!-- ESTADO A: Jogador SEM Reino -->
       <div id="reino-nao-membro" class="hidden space-y-4">
         <!-- Banner Informativo -->
@@ -1429,16 +1443,36 @@
               <span id="reino-badge-membros" class="text-[10px] text-cyan-300 bg-cyan-500/20 px-2 py-0.5 rounded-full font-mono font-bold">0</span>
             </div>
 
-            <!-- Adicionar membro (Apenas Líder ou Admin) -->
-            <div id="reino-form-add-membro" class="hidden space-y-1.5">
-              <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Adicionar Jogador (Nick)</label>
-              <div class="flex gap-1.5">
-                <input id="reino-add-nick-input" type="text" maxlength="20" placeholder="Nick exato..."
-                  class="flex-1 bg-black/60 border border-white/[0.1] rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 min-w-0" />
-                <button onclick="adicionarMembroReino()"
-                  class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex-shrink-0 shadow-sm">
-                  + Add
-                </button>
+            <!-- Recrutar membro com lista da Whitelist (Apenas Líder ou Admin) -->
+            <div id="reino-form-add-membro" class="hidden space-y-2 bg-black/40 p-2.5 rounded-xl border border-cyan-500/20">
+              <div class="flex items-center justify-between">
+                <label class="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">Convidar da Whitelist</label>
+                <span class="text-[9px] text-slate-400">Apenas Aprovados</span>
+              </div>
+              
+              <!-- Select de jogadores aprovados da Whitelist -->
+              <div class="space-y-1.5">
+                <select id="reino-select-whitelist" class="w-full bg-black/80 border border-white/[0.15] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 transition">
+                  <option value="">Carregando jogadores da Whitelist...</option>
+                </select>
+                
+                <div class="flex items-center gap-1.5">
+                  <input id="reino-add-nick-input" type="text" maxlength="20" placeholder="Ou digite o nick exato..."
+                    class="flex-1 bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500 min-w-0" />
+                  <button onclick="enviarConviteReino()"
+                    class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex-shrink-0 shadow-sm flex items-center gap-1">
+                    <span>📩 Convidar</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Convites enviados pendentes -->
+              <div id="reino-convites-enviados-box" class="hidden pt-1 border-t border-white/[0.06] space-y-1">
+                <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Convites Aguardando Resposta</span>
+                  <span id="reino-badge-sent-count" class="text-cyan-300 font-mono">0</span>
+                </div>
+                <div id="reino-lista-convites-enviados" class="space-y-1 max-h-24 overflow-y-auto"></div>
               </div>
             </div>
 
@@ -4220,9 +4254,12 @@
         allowedToCreateReino = !!data.allowedToCreate;
         meuReinoAtual = data.myKingdom;
 
+        // Renderiza convites recebidos pendentes
+        renderConvitesRecebidos(data.myInvites || []);
+
         if (meuReinoAtual) {
           // ESTADO: JOGADOR COM REINO
-          renderReinoMembro(meuReinoAtual, data.members || []);
+          renderReinoMembro(meuReinoAtual, data.members || [], data.candidates || [], data.sentInvites || []);
           if (membro) membro.classList.remove('hidden');
           carregarMensagensReino();
         } else {
@@ -4233,6 +4270,72 @@
       } catch (err) {
         if (loading) loading.classList.add('hidden');
         mostrarFeedback('Erro ao conectar ao serviço de reinos.', 'red');
+      }
+    }
+
+    function renderConvitesRecebidos(invites) {
+      const container = document.getElementById('reino-convites-pendentes-container');
+      const listaEl = document.getElementById('reino-lista-convites-recebidos');
+      const badgeEl = document.getElementById('reino-badge-convites');
+      if (!container || !listaEl) return;
+
+      if (!invites || invites.length === 0) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+      if (badgeEl) badgeEl.textContent = `${invites.length} convite${invites.length > 1 ? 's' : ''}`;
+
+      listaEl.innerHTML = invites.map(inv => {
+        const k = inv.kingdoms || {};
+        return `
+          <div class="p-3 bg-black/60 rounded-xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-black flex items-center justify-center text-lg font-black flex-shrink-0 shadow-md">
+                🏰
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="tag-kingdom">[${escapeHtml(k.tag || 'TAG')}]</span>
+                  <span class="font-extrabold text-xs md:text-sm text-white truncate">${escapeHtml(k.nome || 'Reino')}</span>
+                </div>
+                <div class="text-[10px] text-slate-300 mt-0.5">
+                  Convidado por: <span class="text-amber-300 font-bold">${escapeHtml(inv.invited_by || k.owner_nick || 'Líder')}</span> &middot; ${formatarData(inv.created_at)}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button onclick="responderConviteReino('${inv.id}', 'accept')"
+                class="flex-1 sm:flex-initial bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-md active:scale-95 flex items-center justify-center gap-1">
+                <span>✅</span> <span>Aceitar</span>
+              </button>
+              <button onclick="responderConviteReino('${inv.id}', 'reject')"
+                class="flex-1 sm:flex-initial bg-white/[0.08] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-white/[0.1] hover:border-rose-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center justify-center gap-1">
+                <span>✕</span> <span>Recusar</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function responderConviteReino(inviteId, action) {
+      try {
+        const res = await apiFetch('/api/kingdoms/invites/respond', {
+          method: 'POST',
+          body: JSON.stringify({ inviteId, action })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message, action === 'accept' ? 'green' : 'amber');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao responder convite.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
       }
     }
 
@@ -4317,7 +4420,7 @@
       }
     }
 
-    function renderReinoMembro(reino, membros) {
+    function renderReinoMembro(reino, membros, candidates = [], sentInvites = []) {
       const nomeEl = document.getElementById('reino-info-nome');
       const tagEl = document.getElementById('reino-info-tag');
       const roleEl = document.getElementById('reino-info-role');
@@ -4352,6 +4455,50 @@
       }
       if (btnDissolver) {
         btnDissolver.classList.toggle('hidden', !isLider);
+      }
+
+      // Popula o Select de jogadores aprovados na Whitelist (se for líder)
+      if (isLider) {
+        const selectWl = document.getElementById('reino-select-whitelist');
+        if (selectWl) {
+          if (candidates.length === 0) {
+            selectWl.innerHTML = '<option value="">Nenhum jogador sem reino disponível na Whitelist</option>';
+          } else {
+            selectWl.innerHTML = '<option value="">-- Selecionar Jogador da Whitelist --</option>' + candidates.map(c => {
+              const statusTag = c.isInvited ? ' (Convite Pendente)' : '';
+              return `<option value="${escapeHtml(c.nick)}" ${c.isInvited ? 'disabled' : ''}>👤 ${escapeHtml(c.nick)} [${escapeHtml(c.platform || 'Minecraft')}]${statusTag}</option>`;
+            }).join('');
+          }
+          selectWl.onchange = () => {
+            const input = document.getElementById('reino-add-nick-input');
+            if (input && selectWl.value) input.value = selectWl.value;
+          };
+        }
+
+        // Renderiza lista de convites enviados aguardando resposta
+        const sentBox = document.getElementById('reino-convites-enviados-box');
+        const sentList = document.getElementById('reino-lista-convites-enviados');
+        const sentCount = document.getElementById('reino-badge-sent-count');
+
+        if (sentBox && sentList) {
+          if (sentInvites.length > 0) {
+            sentBox.classList.remove('hidden');
+            if (sentCount) sentCount.textContent = sentInvites.length;
+            sentList.innerHTML = sentInvites.map(inv => `
+              <div class="flex items-center justify-between p-1.5 rounded-lg bg-black/50 border border-white/[0.06] text-[10px]">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="text-amber-400">⏳</span>
+                  <span class="font-bold text-white truncate">${escapeHtml(inv.invited_nick)}</span>
+                </div>
+                <button onclick="cancelarConviteReino('${inv.id}')" class="text-rose-400 hover:text-rose-300 font-bold px-1.5 py-0.5 rounded hover:bg-rose-500/20 transition flex-shrink-0" title="Cancelar convite">
+                  ✕ Cancelar
+                </button>
+              </div>
+            `).join('');
+          } else {
+            sentBox.classList.add('hidden');
+          }
+        }
       }
 
       // Lista de Membros
@@ -4399,23 +4546,47 @@
       }
     }
 
-    async function adicionarMembroReino() {
+    async function enviarConviteReino() {
+      const select = document.getElementById('reino-select-whitelist');
       const input = document.getElementById('reino-add-nick-input');
-      const nick = (input?.value || '').trim();
-      if (!nick) return;
+      const nick = (input?.value || select?.value || '').trim();
+      if (!nick) {
+        mostrarFeedback('Selecione ou digite o nick do jogador.', 'amber');
+        return;
+      }
 
       try {
-        const res = await apiFetch('/api/kingdoms/members/add', {
+        const res = await apiFetch('/api/kingdoms/invites/send', {
           method: 'POST',
           body: JSON.stringify({ targetNick: nick })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          mostrarFeedback(`Membro "${nick}" adicionado ao reino!`, 'green');
-          input.value = '';
+          mostrarFeedback(data.message || `Convite enviado para "${nick}"!`, 'green');
+          if (input) input.value = '';
+          if (select) select.value = '';
           await carregarReinoStatus();
         } else {
-          mostrarFeedback(data.error || 'Erro ao adicionar membro.', 'red');
+          mostrarFeedback(data.error || 'Erro ao enviar convite.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function cancelarConviteReino(inviteId) {
+      if (!confirm('Deseja cancelar este convite?')) return;
+      try {
+        const res = await apiFetch('/api/kingdoms/invites/cancel', {
+          method: 'POST',
+          body: JSON.stringify({ inviteId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          mostrarFeedback('Convite cancelado.', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao cancelar convite.', 'red');
         }
       } catch (err) {
         mostrarFeedback('Erro de conexão.', 'red');
