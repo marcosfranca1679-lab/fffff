@@ -59,6 +59,34 @@ function getClientIp(req) {
 const userWebIps = new Map();
 const bannedIpsCache = new Map();
 
+// ─── Cache em memória de tags de reinos (declarado aqui para uso global antes de /api/chat) ───
+const kingdomTagsCache = new Map(); // lower_nick -> { tag, kingdomName, kingdomId, role }
+let lastKingdomCacheSync = 0;
+
+async function syncKingdomsCache(force = false) {
+  const now = Date.now();
+  if (!force && now - lastKingdomCacheSync < 30000 && kingdomTagsCache.size > 0) return;
+  lastKingdomCacheSync = now;
+  try {
+    const { data: members } = await supabase
+      .from('kingdom_members')
+      .select('user_nick, role, kingdoms ( id, nome, tag )');
+    if (members) {
+      kingdomTagsCache.clear();
+      for (const m of members) {
+        if (m.kingdoms && m.kingdoms.tag) {
+          kingdomTagsCache.set(m.user_nick.toLowerCase().trim(), {
+            tag: m.kingdoms.tag.toUpperCase(),
+            kingdomName: m.kingdoms.nome,
+            kingdomId: m.kingdoms.id,
+            role: m.role || 'membro'
+          });
+        }
+      }
+    }
+  } catch (_) {}
+}
+
 // Middleware de Autenticação via Header Bearer
 app.use((req, res, next) => {
   const clientIp = getClientIp(req);
@@ -142,12 +170,17 @@ app.get('/api/auth/me', async (req, res) => {
       }
     } catch (_) {}
 
+    // Lookup kingdom tag from in-memory cache (zero Supabase cost)
+    const kInfo = kingdomTagsCache.get((user.nick || '').toLowerCase().trim());
+
     return res.json({
       authenticated: true,
       isAdmin: false,
       user,
       whitelistStatus: status,
-      banReason
+      banReason,
+      kingdom_tag: kInfo ? kInfo.tag : null,
+      kingdom: kInfo || null
     });
   }
 
@@ -557,6 +590,9 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
     const players = data || [];
     for (const p of players) {
       p.isOnline = onlineNickSet.has((p.nick || '').toLowerCase());
+      // Adiciona tag do reino a partir do cache (custo zero)
+      const kp = kingdomTagsCache.get((p.nick || '').toLowerCase().trim());
+      p.kingdom_tag = kp ? kp.tag : null;
       if (p.status === 'banned') {
         const ban = parseBanInfo(p.ban_reason);
         if (ban.expired) {
@@ -575,13 +611,19 @@ app.get('/api/admin/players', requireAdmin, async (req, res) => {
       }
     }
 
+    // Adiciona kingdom_tag também na lista de online
+    const enrichedOnline = onlineList.map(o => {
+      const ko = kingdomTagsCache.get((o.nick || '').toLowerCase().trim());
+      return { ...o, kingdom_tag: ko ? ko.tag : null };
+    });
+
     res.json({
       pending:  players.filter(p => p.status === 'pending'),
       approved: players.filter(p => p.status === 'approved'),
       rejected: players.filter(p => p.status === 'rejected'),
       banned:   players.filter(p => p.status === 'banned'),
-      online:   onlineList,
-      totalOnline: onlineList.length
+      online:   enrichedOnline,
+      totalOnline: enrichedOnline.length
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -652,17 +694,35 @@ app.post('/api/admin/approve/:nick', requireAdmin, async (req, res) => {
   }
 });
 
-// Rejeitar
+// Rejeitar — apaga conta + todos os dados (nenhum registro fantasma)
 app.post('/api/admin/reject/:nick', requireAdmin, async (req, res) => {
   try {
     const nick = req.params.nick.trim();
-    const { error } = await supabase
-      .from('players')
-      .update({ status: 'rejected', updated_at: new Date().toISOString() })
-      .ilike('nick', nick);
+    const key  = nick.toLowerCase();
 
-    if (error) throw error;
-    res.json({ success: true, message: `❌ ${nick} rejeitado.` });
+    // 1. Remove de players
+    await safeDb(supabase.from('players').delete().ilike('nick', nick));
+
+    // 2. Remove conta de accounts
+    await safeDb(supabase.from('accounts').delete().ilike('nick', nick));
+
+    // 3. Remove de auth_users (caso exista)
+    await safeDb(supabase.from('auth_users').delete().ilike('nick', nick));
+
+    // 4. Remove mensagens do chat
+    await safeDb(supabase.from('messages').delete().ilike('author_nick', nick));
+
+    // 5. Remove de kingdom_members e kingdom_invites
+    await safeDb(supabase.from('kingdom_members').delete().ilike('user_nick', nick));
+    await safeDb(supabase.from('kingdom_invites').delete().ilike('invited_nick', nick));
+
+    // 6. Limpa caches de memória
+    liveTelemetryCache.delete(key);
+    userWebIps.delete(key);
+    lastDbSyncMap.delete(key);
+    kingdomTagsCache.delete(key);
+
+    res.json({ success: true, message: `🗑️ ${nick} — conta e todos os dados excluídos permanentemente.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -2748,35 +2808,7 @@ app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
 //  SISTEMA DE REINOS & GUILDAS (ECONÔMICO & TEMPO REAL)
 // ════════════════════════════════════════════════════════════════════════════
 
-// Cache em memória de tags de reinos para consulta ultra-rápida (0ms, 0 Vercel requests)
-const kingdomTagsCache = new Map(); // lower_nick -> { tag, kingdomName, kingdomId, role }
-let lastKingdomCacheSync = 0;
-
-async function syncKingdomsCache(force = false) {
-  const now = Date.now();
-  if (!force && now - lastKingdomCacheSync < 30000 && kingdomTagsCache.size > 0) return;
-  lastKingdomCacheSync = now;
-  try {
-    const { data: members } = await supabase
-      .from('kingdom_members')
-      .select('user_nick, role, kingdoms ( id, nome, tag )');
-    if (members) {
-      kingdomTagsCache.clear();
-      for (const m of members) {
-        if (m.kingdoms && m.kingdoms.tag) {
-          kingdomTagsCache.set(m.user_nick.toLowerCase().trim(), {
-            tag: m.kingdoms.tag.toUpperCase(),
-            kingdomName: m.kingdoms.nome,
-            kingdomId: m.kingdoms.id,
-            role: m.role || 'membro'
-          });
-        }
-      }
-    }
-  } catch (_) {}
-}
-
-// Inicializa cache
+// Inicializa cache de reinos na inicialização do servidor
 syncKingdomsCache(true).catch(() => {});
 
 // GET /api/kingdoms/status — Obter status do usuário (permissão de criação, reino atual, membro)
