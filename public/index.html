@@ -1348,10 +1348,13 @@
                     oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); atualizarPreviewTag(this.value)"
                     class="w-full bg-black/60 border border-white/[0.12] rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-cyan-300 font-mono font-black uppercase tracking-widest focus:outline-none focus:border-cyan-500 transition" />
                   <div class="absolute right-3 top-2.5">
-                    <span id="preview-tag-badge" class="tag-kingdom">---</span>
+                    <span id="preview-tag-badge" class="tag-kingdom">
+                      <span id="preview-logo-span">👑</span>
+                      <span id="preview-tag-text">[TAG]</span>
+                    </span>
                   </div>
                 </div>
-                <span class="text-[10px] text-slate-400 block mt-1">Essa TAG aparecerá entre colchetes em quase todo o site.</span>
+                <span class="text-[10px] text-slate-400 block mt-1">Essa TAG e o Logo 3D aparecerão juntos no nome dos membros.</span>
               </div>
 
               <div>
@@ -1359,6 +1362,25 @@
                 <input id="reino-input-lider" type="text" disabled readonly
                   class="w-full bg-black/40 border border-white/[0.06] rounded-xl px-3.5 py-2.5 text-xs text-slate-400 font-bold" />
               </div>
+            </div>
+
+            <!-- Seletor de Logo 3D Oficial do Reino -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Logo / Emblema 3D do Reino *
+                </label>
+                <span class="text-cyan-300 font-extrabold text-xs flex items-center gap-1.5 bg-cyan-950/40 px-2 py-0.5 rounded-lg border border-cyan-500/30">
+                  <span id="reino-selected-logo-icon" class="text-sm">👑</span>
+                  <span id="reino-selected-logo-label">Coroa Imperial</span>
+                </span>
+              </div>
+              <input type="hidden" id="reino-input-logo" value="👑" />
+
+              <div id="reino-logos-grid" class="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                <!-- Inserido dinamicamente via JS com 12 logos 3D épicos -->
+              </div>
+              <span class="text-[10px] text-slate-400 block mt-1.5">Clique no logo 3D desejado para representar a honra do seu reino.</span>
             </div>
 
             <div>
@@ -2343,7 +2365,8 @@
       const u = data.user;
       const initial = (u.nick || 'J').substring(0, 1).toUpperCase();
       const kTag = data.kingdom_tag || null;
-      const tagHtml = kTag ? `<span class="tag-kingdom" style="font-size:10px;margin-left:4px">[${escapeHtml(kTag)}]</span>` : '';
+      const kLogo = data.kingdom_logo || (data.kingdom ? data.kingdom.logo : null) || '👑';
+      const tagHtml = kTag ? `<span class="tag-kingdom" style="font-size:10px;margin-left:5px"><span>${escapeHtml(kLogo)}</span>[${escapeHtml(kTag)}]</span>` : '';
       const avBadge = document.getElementById('user-avatar-badge');
       if (avBadge) avBadge.textContent = initial;
 
@@ -2437,7 +2460,7 @@
             const avatarColor = isMsgAdmin ? 'bg-gradient-to-tr from-rose-600 to-pink-600' : 'bg-gradient-to-tr from-purple-600 to-indigo-600';
 
             const tagBadge = m.kingdom_tag 
-              ? `<span class="tag-kingdom" title="Reino [${escapeHtml(m.kingdom_tag)}]">[${escapeHtml(m.kingdom_tag)}]</span>`
+              ? `<span class="tag-kingdom" title="Reino [${escapeHtml(m.kingdom_tag)}]"><span>${escapeHtml(m.kingdom_logo || '👑')}</span>[${escapeHtml(m.kingdom_tag)}]</span>`
               : '';
 
             return `
@@ -3081,7 +3104,7 @@
               
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  ${o.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px">[${escapeHtml(o.kingdom_tag)}]</span>` : ''}
+                  ${o.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px"><span>${escapeHtml(o.kingdom_logo || '👑')}</span>[${escapeHtml(o.kingdom_tag)}]</span>` : ''}
                   <span class="font-extrabold text-xs sm:text-sm text-white truncate">${safeNick}</span>
                   <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[8px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
@@ -3165,7 +3188,7 @@
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="font-extrabold text-xs md:text-sm text-white truncate">${safeNick}</span>
-                  ${p.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px">[${escapeHtml(p.kingdom_tag)}]</span>` : ''}
+                  ${p.kingdom_tag ? `<span class="tag-kingdom" style="font-size:9px"><span>${escapeHtml(p.kingdom_logo || '👑')}</span>[${escapeHtml(p.kingdom_tag)}]</span>` : ''}
                   ${p.isOnline ? '<span class="bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[8px] font-black px-1.5 py-0.2 rounded-full flex items-center gap-1 shadow-sm"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> JOGANDO AGORA</span>' : ''}
                 </div>
                 <div class="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5">
@@ -4411,11 +4434,11 @@
           <div class="p-3 bg-black/60 rounded-xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
             <div class="flex items-center gap-2.5 min-w-0">
               <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-black flex items-center justify-center text-lg font-black flex-shrink-0 shadow-md">
-                🏰
+                ${escapeHtml(k.logo || '👑')}
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="tag-kingdom">[${escapeHtml(k.tag || 'TAG')}]</span>
+                  <span class="tag-kingdom"><span>${escapeHtml(k.logo || '👑')}</span>[${escapeHtml(k.tag || 'TAG')}]</span>
                   <span class="font-extrabold text-xs md:text-sm text-white truncate">${escapeHtml(k.nome || 'Reino')}</span>
                 </div>
                 <div class="text-[10px] text-slate-300 mt-0.5">
@@ -4457,11 +4480,67 @@
       }
     }
 
+    const REINO_LOGOS_3D = [
+      { id: 'coroa', emoji: '👑', name: 'Coroa Imperial', desc: 'Soberania', color: 'from-amber-500/25 to-yellow-600/25', border: 'border-amber-400/50' },
+      { id: 'escudo', emoji: '🛡️', name: 'Escudo Guardião', desc: 'Defesa', color: 'from-cyan-500/25 to-blue-600/25', border: 'border-cyan-400/50' },
+      { id: 'espadas', emoji: '⚔️', name: 'Lâminas Nether', desc: 'Guerra', color: 'from-rose-500/25 to-red-700/25', border: 'border-rose-400/50' },
+      { id: 'dragao', emoji: '🐉', name: 'Dragão Ender', desc: 'Poder', color: 'from-purple-500/25 to-violet-700/25', border: 'border-purple-400/50' },
+      { id: 'leao', emoji: '🦁', name: 'Leão Dourado', desc: 'Nobreza', color: 'from-yellow-500/25 to-amber-600/25', border: 'border-yellow-400/50' },
+      { id: 'aguia', emoji: '🦅', name: 'Águia Real', desc: 'Visão', color: 'from-teal-500/25 to-emerald-600/25', border: 'border-teal-400/50' },
+      { id: 'lobo', emoji: '🐺', name: 'Lobo Alfa', desc: 'Alcateia', color: 'from-slate-500/25 to-indigo-600/25', border: 'border-slate-400/50' },
+      { id: 'castelo', emoji: '🏰', name: 'Fortaleza', desc: 'Bastião', color: 'from-blue-500/25 to-slate-700/25', border: 'border-blue-400/50' },
+      { id: 'raio', emoji: '⚡', name: 'Raio Arcano', desc: 'Magia', color: 'from-amber-400/25 to-yellow-500/25', border: 'border-yellow-300/50' },
+      { id: 'caveira', emoji: '💀', name: 'Caveira Wither', desc: 'Trevas', color: 'from-zinc-600/25 to-stone-800/25', border: 'border-zinc-400/50' },
+      { id: 'cristal', emoji: '💎', name: 'Cristal Divino', desc: 'Pureza', color: 'from-sky-400/25 to-cyan-600/25', border: 'border-sky-300/50' },
+      { id: 'fogo', emoji: '🔥', name: 'Fênix Ardente', desc: 'Glória', color: 'from-orange-500/25 to-rose-600/25', border: 'border-orange-400/50' }
+    ];
+
+    let reinoSelectedLogo = '👑';
+
+    function renderLogosReinoSelector() {
+      const grid = document.getElementById('reino-logos-grid');
+      if (!grid) return;
+      grid.innerHTML = REINO_LOGOS_3D.map(item => {
+        const isSelected = item.emoji === reinoSelectedLogo;
+        return `
+          <button type="button" onclick="selecionarLogoReino('${item.emoji}', '${item.name}')"
+            class="group relative flex flex-col items-center justify-center p-2 rounded-xl border bg-gradient-to-b ${item.color} ${isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/70 shadow-[0_0_15px_rgba(6,182,212,0.4)] scale-105' : 'border-white/[0.08] hover:border-white/30 hover:scale-102'} transition-all duration-150">
+            <span class="text-2xl sm:text-3xl filter drop-shadow-[0_3px_5px_rgba(0,0,0,0.7)] group-hover:scale-110 transition-transform">${item.emoji}</span>
+            <span class="text-[9px] font-bold text-slate-300 group-hover:text-white truncate mt-1 w-full text-center">${item.name}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selecionarLogoReino(emoji, name) {
+      reinoSelectedLogo = emoji;
+      const input = document.getElementById('reino-input-logo');
+      if (input) input.value = emoji;
+      const icon = document.getElementById('reino-selected-logo-icon');
+      if (icon) icon.textContent = emoji;
+      const label = document.getElementById('reino-selected-logo-label');
+      if (label) label.textContent = name;
+      const prevLogo = document.getElementById('preview-logo-span');
+      if (prevLogo) prevLogo.textContent = emoji;
+      renderLogosReinoSelector();
+    }
+
+    function atualizarPreviewTag(val) {
+      const previewText = document.getElementById('preview-tag-text');
+      const prevLogo = document.getElementById('preview-logo-span');
+      if (prevLogo) prevLogo.textContent = reinoSelectedLogo;
+      if (previewText) {
+        previewText.textContent = val ? `[${val}]` : '[TAG]';
+      }
+    }
+
     function renderReinoCriacao(allowed) {
       const liderInput = document.getElementById('reino-input-lider');
       if (liderInput && currentUser) {
         liderInput.value = currentUser.nick || 'Jogador';
       }
+
+      renderLogosReinoSelector();
 
       const statusPermissaoTxt = document.getElementById('reino-status-permissao-txt');
       const bloqueioAviso = document.getElementById('reino-bloqueio-aviso');
@@ -4505,6 +4584,7 @@
       const nome = (document.getElementById('reino-input-nome')?.value || '').trim();
       const tag = (document.getElementById('reino-input-tag')?.value || '').trim().toUpperCase();
       const desc = (document.getElementById('reino-input-desc')?.value || '').trim();
+      const logo = (document.getElementById('reino-input-logo')?.value || reinoSelectedLogo || '👑').trim();
 
       if (!nome || !tag || !desc) {
         mostrarFeedback('Preencha todos os campos obrigatórios.', 'red');
@@ -4522,7 +4602,7 @@
       try {
         const res = await apiFetch('/api/kingdoms/create', {
           method: 'POST',
-          body: JSON.stringify({ nome, tag, descricao: desc })
+          body: JSON.stringify({ nome, tag, descricao: desc, logo })
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -4552,7 +4632,7 @@
       const btnDissolver = document.getElementById('btn-dissolver-reino');
 
       if (nomeEl) nomeEl.textContent = reino.nome || 'Meu Reino';
-      if (tagEl) tagEl.textContent = `[${reino.tag || 'TAG'}]`;
+      if (tagEl) tagEl.innerHTML = `<span>${escapeHtml(reino.logo || '👑')}</span>[${escapeHtml(reino.tag || 'TAG')}]`;
       if (descEl) descEl.textContent = reino.descricao || 'Sem descrição cadastrada.';
       if (liderEl) liderEl.textContent = reino.owner_nick || '–';
       if (pontosEl) pontosEl.textContent = reino.pontos || 0;
@@ -4921,7 +5001,7 @@
             <div class="flex flex-col items-center">
               <div class="text-sm font-bold text-slate-300 mb-1">🥈 #2</div>
               <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-slate-400/40 bg-black/40">
-                <span class="tag-kingdom mb-1">[${escapeHtml(second.tag)}]</span>
+                <span class="tag-kingdom mb-1"><span>${second.logo || '👑'}</span>[${escapeHtml(second.tag)}]</span>
                 <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nome)}</div>
                 <div class="text-xs font-mono font-bold text-cyan-300 mt-0.5">${second.totalPoints} pts</div>
                 <div class="text-[10px] text-slate-400 mt-0.5">${second.kills} kills &middot; ${second.hoursPlayed}h</div>
@@ -4938,7 +5018,7 @@
             <div class="flex flex-col items-center">
               <div class="text-base font-bold text-amber-300 mb-1">👑 #1</div>
               <div class="glass-card w-full rounded-2xl p-3 md:p-4 text-center border-2 border-amber-400/70 bg-gradient-to-b from-amber-950/30 to-black/60 shadow-xl">
-                <span class="tag-kingdom mb-1 text-xs px-2 py-0.5">[${escapeHtml(first.tag)}]</span>
+                <span class="tag-kingdom mb-1 text-xs px-2 py-0.5"><span>${first.logo || '👑'}</span>[${escapeHtml(first.tag)}]</span>
                 <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1">${escapeHtml(first.nome)}</div>
                 <div class="text-sm md:text-base font-mono font-black text-amber-200 mt-0.5">${first.totalPoints} pts</div>
                 <div class="text-[11px] text-slate-300 mt-0.5">${first.kills} kills &middot; ${first.hoursPlayed}h &middot; ${first.membersCount} membros</div>
@@ -4953,7 +5033,7 @@
             <div class="flex flex-col items-center">
               <div class="text-sm font-bold text-amber-600 mb-1">🥉 #3</div>
               <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-amber-700/40 bg-black/40">
-                <span class="tag-kingdom mb-1">[${escapeHtml(third.tag)}]</span>
+                <span class="tag-kingdom mb-1"><span>${third.logo || '👑'}</span>[${escapeHtml(third.tag)}]</span>
                 <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nome)}</div>
                 <div class="text-xs font-mono font-bold text-amber-400 mt-0.5">${third.totalPoints} pts</div>
                 <div class="text-[10px] text-slate-400 mt-0.5">${third.kills} kills &middot; ${third.hoursPlayed}h</div>
@@ -4982,7 +5062,7 @@
                 <div class="w-6 text-center font-mono flex-shrink-0">${rankBadge}</div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="tag-kingdom">[${escapeHtml(k.tag)}]</span>
+                    <span class="tag-kingdom"><span>${k.logo || '👑'}</span>[${escapeHtml(k.tag)}]</span>
                     <span class="font-bold text-xs md:text-sm text-white truncate">${escapeHtml(k.nome)}</span>
                   </div>
                   <div class="text-[10px] text-slate-400 mt-0.5">
