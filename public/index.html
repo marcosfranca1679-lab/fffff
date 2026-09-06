@@ -1830,7 +1830,9 @@
         const data = await res.json();
         if (data.authenticated) {
           currentUser = data.user;
-          isUserAdmin = data.isAdmin || false;
+          isUserAdmin = !!(data.isAdmin || (currentUser && (currentUser.nick === 'Administrador' || currentUser.nick === 'admin' || currentUser.role === 'admin')));
+          window.isUserAdmin = isUserAdmin;
+          window.currentUser = currentUser;
           fecharModalAuth();
           configurarInterfaceUsuario(data);
           carregarChat();
@@ -1849,6 +1851,10 @@
         const res = await apiFetch('/api/auth/me');
         const data = await res.json();
         if (data.authenticated) {
+          currentUser = data.user;
+          isUserAdmin = !!(data.isAdmin || (currentUser && (currentUser.nick === 'Administrador' || currentUser.nick === 'admin' || currentUser.role === 'admin')));
+          window.isUserAdmin = isUserAdmin;
+          window.currentUser = currentUser;
           configurarInterfaceUsuario(data);
         }
       } catch (_) {}
@@ -3552,17 +3558,27 @@
         lista.innerHTML = tickets.map(t => {
           const isAberto = t.status === 'aberto';
           const data = new Date(t.created_at).toLocaleDateString('pt-BR');
+          const isAdmin = !!(window.isUserAdmin || (window.currentUser && (window.currentUser.nick === 'admin' || window.currentUser.nick === 'Administrador' || window.currentUser.role === 'admin')));
           return `
-            <div onclick="abrirTicket('${t.id}')" class="glass-card rounded-xl p-3 border ${isAberto ? 'border-orange-500/30 hover:border-orange-400/60' : 'border-white/[0.06] opacity-60'} cursor-pointer transition-all duration-150 space-y-1">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isAberto ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}">
-                  ${isAberto ? '🟢 Aberto' : '🔴 Encerrado'}
-                </span>
-                <span class="text-[10px] text-slate-500">${data}</span>
-                ${t.user_nick && window.currentUser && (window.currentUser.nick === 'admin' || window.isUserAdmin) ? `<span class="text-[10px] text-orange-400 font-semibold">👤 ${t.user_nick}</span>` : ''}
+            <div class="glass-card rounded-xl p-3 border ${isAberto ? 'border-orange-500/30 hover:border-orange-400/60' : 'border-white/[0.06] opacity-60'} transition-all duration-150 space-y-2">
+              <div class="flex items-center justify-between gap-2 flex-wrap cursor-pointer" onclick="abrirTicket('${t.id}')">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full ${isAberto ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}">
+                    ${isAberto ? '🟢 Aberto' : '🔴 Encerrado'}
+                  </span>
+                  <span class="text-[10px] text-slate-500">${data}</span>
+                  ${t.user_nick ? `<span class="text-[10px] text-orange-400 font-semibold">👤 Autor: ${t.user_nick}</span>` : ''}
+                </div>
+                ${isAdmin ? `
+                  <button onclick="event.stopPropagation(); fecharTicketAdmin('${t.id}')" title="Encerrar e apagar ticket" class="bg-rose-600/80 hover:bg-rose-500 text-white font-bold text-[10px] px-2 py-1 rounded-lg transition shadow-sm flex items-center gap-1">
+                    🗑️ Fechar & Apagar
+                  </button>
+                ` : ''}
               </div>
-              <div class="text-xs font-bold text-white truncate">${t.titulo}</div>
-              ${t.denunciado ? `<div class="text-[11px] text-slate-400">Denunciado: <span class="text-rose-400 font-semibold">${t.denunciado}</span></div>` : ''}
+              <div class="cursor-pointer" onclick="abrirTicket('${t.id}')">
+                <div class="text-xs font-bold text-white truncate">${t.titulo}</div>
+                ${t.denunciado ? `<div class="text-[11px] text-slate-400 mt-0.5">Denunciado: <span class="text-rose-400 font-semibold">${t.denunciado}</span></div>` : ''}
+              </div>
             </div>`;
         }).join('');
       } catch (err) {
@@ -3626,7 +3642,8 @@
 
         // Botão fechar — só admin
         const btnFechar = document.getElementById('tv-fechar-btn');
-        if (window.isUserAdmin && isAberto) {
+        const isAdmin = !!(window.isUserAdmin || isUserAdmin || (window.currentUser && (window.currentUser.nick === 'admin' || window.currentUser.nick === 'Administrador' || window.currentUser.role === 'admin')));
+        if (isAdmin && isAberto) {
           btnFechar.classList.remove('hidden');
         } else {
           btnFechar.classList.add('hidden');
@@ -3770,15 +3787,18 @@
       }
     }
 
-    async function fecharTicketAdmin() {
-      if (!ticketAtualId) return;
+    async function fecharTicketAdmin(id) {
+      const targetId = id || ticketAtualId;
+      if (!targetId) return;
       if (!confirm('Encerrar e apagar este ticket permanentemente do banco de dados?')) return;
       try {
-        const res = await apiFetch(`/api/tickets/${ticketAtualId}`, { method: 'DELETE' });
+        const res = await apiFetch(`/api/tickets/${targetId}`, { method: 'DELETE' });
         const data = await res.json();
         if (!res.ok) { mostrarFeedback(data.error || 'Erro ao encerrar.', 'red'); return; }
-        mostrarFeedback(data.message || '✅ Ticket encerrado!', 'green');
-        fecharVisualizacaoTicket();
+        mostrarFeedback(data.message || '✅ Ticket encerrado e excluído com sucesso!', 'green');
+        if (targetId === ticketAtualId) {
+          fecharVisualizacaoTicket();
+        }
         await carregarTickets();
       } catch (err) {
         mostrarFeedback('Erro de conexão.', 'red');
