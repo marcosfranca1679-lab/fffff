@@ -92,3 +92,24 @@ CREATE POLICY "Permitir tudo em kingdom_messages" ON kingdom_messages FOR ALL US
 DROP POLICY IF EXISTS "Permitir tudo em kingdom_invites" ON kingdom_invites;
 CREATE POLICY "Permitir tudo em kingdom_invites" ON kingdom_invites FOR ALL USING (true) WITH CHECK (true);
 
+-- 8. Ativar Realtime WebSockets (Entrega instantânea em 10ms com consumo ZERO no Vercel)
+ALTER TABLE messages REPLICA IDENTITY FULL;
+ALTER TABLE kingdom_messages REPLICA IDENTITY FULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'kingdom_messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE kingdom_messages;
+  END IF;
+END $$;
+
