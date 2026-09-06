@@ -1,5 +1,9 @@
 package com.mapabermuda.whitelist;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -41,10 +45,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String SYNC_URL  = "https://fffff-autoforge.vercel.app/api/plugin/sync";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // 1200 ticks = 60s (telemetria periódica ao vivo)
+    // 1200 ticks = 60s (telemetria de inventário e estatísticas)
     private static final long TELEM_INTERVAL_TICKS = 1200L;
-    // 600 ticks = 30s (sync unificado quando houver jogadores online)
-    private static final long SYNC_INTERVAL_TICKS = 600L;
+    // 300 ticks = 15s (sync rápido de whitelist, bans, vidas e comandos com jogadores online)
+    private static final long SYNC_ONLINE_TICKS = 300L;
+    // 1200 ticks = 60s (sync em repouso quando o servidor estiver sem jogadores)
+    private static final long SYNC_EMPTY_TICKS = 1200L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -52,7 +58,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         "marcosfranca1679"
     );
 
-    // ── Dados locais em memória (Cache Ultra-Rápido e Autônomo) ──────────────
+    // ── Dados Locais em Memória (Sincronizados com o dados.yml) ──────────────
     private final Set<String> localWhitelist = ConcurrentHashMap.newKeySet();
     private final Map<String, BanEntry> localBans = new ConcurrentHashMap<>();
     private final Map<String, String> localIpBans = new ConcurrentHashMap<>();
@@ -62,6 +68,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     private HttpClient httpClient;
     private Logger log;
+    private volatile long lastSyncTime = 0L;
 
     @Override
     public void onEnable() {
@@ -72,13 +79,13 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
         getServer().getPluginManager().registerEvents(this, this);
 
-        // 1. Carrega dados salvos localmente do disco (dados.yml)
+        // 1. Carrega dados salvos do dados.yml
         loadLocalData();
 
-        // 2. Faz uma primeira sincronização inicial com o site
+        // 2. Faz primeira sincronização com o site
         getServer().getScheduler().runTaskAsynchronously(this, this::syncWithWeb);
 
-        // ── Task: Telemetria periódica (a cada 60s se houver jogadores online) ──
+        // ── Task: Telemetria Periódica (a cada 60s se houver jogadores online) ──
         getServer().getScheduler().runTaskTimer(this, () -> {
             if (getServer().getOnlinePlayers().isEmpty()) return;
             for (Player player : getServer().getOnlinePlayers()) {
@@ -89,14 +96,20 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
 
-        // ── Task: Sincronização Geral Unificada (a cada 30s se houver jogadores) ──
-        // ZERA 100% de requisições se o servidor estiver vazio (repouso total).
+        // ── Task: Sincronização Geral Unificada ──────────────────────────────────
+        // 15s com jogadores online (para bans e vidas do site refletirem rápido).
+        // 60s quando vazio (para não gastar a Vercel e ainda assim puxar mudanças).
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            if (getServer().getOnlinePlayers().isEmpty()) return;
-            syncWithWeb();
-        }, SYNC_INTERVAL_TICKS, SYNC_INTERVAL_TICKS);
+            boolean hasPlayers = !getServer().getOnlinePlayers().isEmpty();
+            long now = System.currentTimeMillis();
+            long requiredInterval = hasPlayers ? (SYNC_ONLINE_TICKS * 50L) : (SYNC_EMPTY_TICKS * 50L);
+            if (now - lastSyncTime >= requiredInterval) {
+                lastSyncTime = now;
+                syncWithWeb();
+            }
+        }, 100L, 100L);
 
-        log.info("Mapa Bermuda Whitelist v3.0 (Armazenamento Local + Sincronização Unificada) - ATIVA!");
+        log.info("Mapa Bermuda Whitelist v3.1 (Sincronização Gson + Persistência Local) - ATIVA!");
     }
 
     @Override
@@ -127,7 +140,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 for (String nick : bansSec.getKeys(false)) {
                     String r = bansSec.getString(nick + ".reason", "Violação das regras");
                     String rem = bansSec.getString(nick + ".remaining", "Permanente");
-                    localBans.put(nick.toLowerCase(), new BanEntry(r, rem));
+                    localBans.put(nick.toLowerCase().trim(), new BanEntry(r, rem));
                 }
             }
 
@@ -137,7 +150,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 for (String key : ipSec.getKeys(false)) {
                     String ip = key.replace("_", ".");
                     String r = ipSec.getString(key, "IP Bloqueado");
-                    localIpBans.put(ip, r);
+                    localIpBans.put(ip.trim(), r);
                 }
             }
 
@@ -146,11 +159,11 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (livesSec != null) {
                 for (String nick : livesSec.getKeys(false)) {
                     int l = livesSec.getInt(nick, 5);
-                    localLives.put(nick.toLowerCase(), l);
+                    localLives.put(nick.toLowerCase().trim(), l);
                 }
             }
 
-            log.info("[LocalData] Carregados localmente: " + localWhitelist.size() + " whitelist, " 
+            log.info("[LocalData] Carregados do disco: " + localWhitelist.size() + " whitelist, " 
                 + localBans.size() + " bans, " + localIpBans.size() + " bans IP, " + localLives.size() + " vidas.");
         } catch (Exception e) {
             log.warning("[LocalData] Erro ao carregar dados.yml: " + e.getMessage());
@@ -184,51 +197,34 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // ── Login Instantâneo: Validação Local Primária + Fallback no Site ───────
+    // ── Login Inteligente: Cache Local + Consulta Imediata ao Site em caso de Bloqueio ──
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onAsyncPreLogin(AsyncPlayerPreLoginEvent event) {
         String cleanName = cleanNick(event.getName());
-        String lowerName = cleanName.toLowerCase();
+        String lowerName = cleanName.toLowerCase().trim();
 
         if (BYPASS.contains(lowerName)) {
             log.info("[Whitelist] Admin: " + cleanName + " - Liberado!");
             return;
         }
 
-        String clientIp = event.getAddress().getHostAddress();
+        String clientIp = event.getAddress().getHostAddress().trim();
 
-        // 1. Checa IP Ban localmente (0ms, 0 requisições)
-        if (localIpBans.containsKey(clientIp)) {
-            String reason = localIpBans.get(clientIp);
-            log.info("[Whitelist] 🚫 IP '" + clientIp + "' (" + cleanName + ") BANIDO LOCALMENTE!");
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessageDirect(cleanName, reason, "Permanente", clientIp, true));
+        // Se localmente o jogador já é aprovado, não está banido e tem vidas > 0:
+        // ENTRADA INSTANTÂNEA (0ms, 0 Vercel)
+        boolean locallyAllowed = localWhitelist.contains(lowerName) 
+            && !localBans.containsKey(lowerName) 
+            && !localIpBans.containsKey(clientIp) 
+            && localLives.getOrDefault(lowerName, 5) > 0;
+
+        if (locallyAllowed) {
+            log.info("[Whitelist] ✅ '" + cleanName + "' liberado pelo cache local (0ms)!");
             return;
         }
 
-        // 2. Checa Ban de Nick localmente (0ms, 0 requisições)
-        if (localBans.containsKey(lowerName)) {
-            BanEntry be = localBans.get(lowerName);
-            log.info("[Whitelist] 🔨 '" + cleanName + "' BANIDO LOCALMENTE!");
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessageDirect(cleanName, be.reason(), be.remaining(), null, false));
-            return;
-        }
-
-        // 3. Checa Vidas localmente (0ms, 0 requisições)
-        Integer lives = localLives.get(lowerName);
-        if (lives != null && lives <= 0) {
-            log.info("[Whitelist] 💀 '" + cleanName + "' sem vidas localmente. Bloqueando...");
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, buildNoLivesMessage(cleanName, "em breve"));
-            return;
-        }
-
-        // 4. Checa Whitelist localmente (0ms, 0 requisições)
-        if (localWhitelist.contains(lowerName)) {
-            log.info("[Whitelist] ✅ '" + cleanName + "' aprovado na memória local! Acesso imediato.");
-            return;
-        }
-
-        // 5. Jogador NÃO está no cache local: consulta o site para ver se foi aprovado recentemente
-        log.info("[Whitelist] 🔍 '" + cleanName + "' não encontrado localmente. Consultando site...");
+        // Se o jogador está bloqueado localmente (0 vidas ou banido) ou ausente na whitelist,
+        // consulta a API na hora para ver se o Admin acabou de aprovar ou dar vidas pelo site!
+        log.info("[Whitelist] 🔍 Verificando status atualizado de '" + cleanName + "' no site...");
         try {
             String url = API_URL + URLEncoder.encode(cleanName, StandardCharsets.UTF_8)
                 + "?ip=" + URLEncoder.encode(clientIp, StandardCharsets.UTF_8);
@@ -251,19 +247,38 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             } else if (outOfLives) {
                 localLives.put(lowerName, 0);
                 saveLocalData();
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, buildNoLivesMessage(cleanName, "em breve"));
+                String remainingReset = extractJsonField(body, "remainingReset");
+                if (remainingReset == null || remainingReset.isBlank()) remainingReset = "em breve";
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, buildNoLivesMessage(cleanName, remainingReset));
             } else if (allowed) {
-                // Aprovado no site! Adiciona à memória local e salva
+                // Aprovado e liberado pelo site!
+                localBans.remove(lowerName);
                 localWhitelist.add(lowerName);
+
+                // Sincroniza vidas informadas pela API (ex: se o admin deu vidas no site)
+                String livesStr = extractJsonField(body, "lives");
+                int lv = 5;
+                if (livesStr != null && !livesStr.isBlank()) {
+                    try { lv = Integer.parseInt(livesStr); } catch (Exception ignored) {}
+                }
+                localLives.put(lowerName, lv);
                 saveLocalData();
-                log.info("[Whitelist] ✅ '" + cleanName + "' aprovado pelo site! Salvo nos dados locais.");
+                log.info("[Whitelist] ✅ '" + cleanName + "' liberado pelo site! (Vidas: " + lv + ")");
             } else {
-                log.info("[Whitelist] ❌ '" + cleanName + "' não aprovado no site. Expulsando...");
+                log.info("[Whitelist] ❌ '" + cleanName + "' não está na whitelist.");
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
             }
         } catch (Exception e) {
-            log.warning("[Whitelist] ⚠️ Erro ao consultar site para '" + cleanName + "': " + e.getMessage());
-            log.warning("[Whitelist] 🔓 Permitindo entrada por segurança (fail-open).");
+            log.warning("[Whitelist] ⚠️ Falha ao consultar site para '" + cleanName + "': " + e.getMessage());
+            // Fallback usando o estado local
+            if (localBans.containsKey(lowerName)) {
+                BanEntry be = localBans.get(lowerName);
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_BANNED, buildBanMessageDirect(cleanName, be.reason(), be.remaining(), null, false));
+            } else if (localLives.getOrDefault(lowerName, 5) <= 0) {
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, buildNoLivesMessage(cleanName, "em breve"));
+            } else if (!localWhitelist.contains(lowerName)) {
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, buildKickMessage(cleanName));
+            }
         }
     }
 
@@ -294,12 +309,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
-    // ── Evento de Morte: Gestão 100% Local de Vidas ──
+    // ── Evento de Morte: Desconta Vidas Localmente e Sincroniza com o Site ──
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerDeath(PlayerDeathEvent event) {
         Player player = event.getEntity();
         String cleanName = cleanNick(player.getName());
-        String lowerName = cleanName.toLowerCase();
+        String lowerName = cleanName.toLowerCase().trim();
         if (BYPASS.contains(lowerName)) return;
 
         // Desconta vida localmente
@@ -327,7 +342,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }, 40L); // 2 segundos após morrer
         }
 
-        // Notifica o site de forma assíncrona (1 chamada para ranking e histórico)
+        // Notifica o site com as vidas calculadas (atualiza o painel do site e ranking)
         String world = player.getWorld() != null ? player.getWorld().getName() : "world";
         int x = (int) player.getLocation().getX();
         int y = (int) player.getLocation().getY();
@@ -337,6 +352,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         String payload = "{"
             + "\"secret\":\"" + PLUGIN_SECRET + "\","
             + "\"event\":\"death\","
+            + "\"lives\":" + newLives + ","
             + "\"deathMessage\":\"" + escJson(deathMsg) + "\","
             + "\"world\":\"" + escJson(world) + "\","
             + "\"x\":" + x + ",\"y\":" + y + ",\"z\":" + z + ","
@@ -357,87 +373,107 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         } catch (Exception ignored) {}
     }
 
-    // ── Sincronização Geral Unificada com o Site ─────────────────────────────
+    // ── Sincronização Robusta com o Site (Usando GSON) ────────────────────────
     public void syncWithWeb() {
         try {
             String url = SYNC_URL + "?secret=" + PLUGIN_SECRET;
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(4))
+                .timeout(Duration.ofSeconds(5))
                 .header("x-plugin-secret", PLUGIN_SECRET)
-                .header("User-Agent", "MapaBermuda-Plugin/3.0")
+                .header("User-Agent", "MapaBermuda-Plugin/3.1")
                 .GET()
                 .build();
             HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
             String body = resp.body();
-            if (body == null || !body.contains("\"success\":true")) return;
+            if (body == null || body.isBlank()) return;
 
-            // 1. Atualiza Whitelist de aprovados
-            int appStart = body.indexOf("\"approved\":[");
-            if (appStart != -1) {
-                int appEnd = body.indexOf("]", appStart);
-                if (appEnd != -1) {
-                    String arr = body.substring(appStart + 12, appEnd);
-                    for (String part : arr.split(",")) {
-                        String clean = part.replace("\"", "").trim().toLowerCase();
-                        if (!clean.isEmpty()) localWhitelist.add(clean);
-                    }
+            JsonObject root = JsonParser.parseString(body).getAsJsonObject();
+            if (!root.has("success") || !root.get("success").getAsBoolean()) return;
+
+            // 1. Sincroniza Whitelist
+            if (root.has("approved") && root.get("approved").isJsonArray()) {
+                JsonArray appArr = root.getAsJsonArray("approved");
+                localWhitelist.clear();
+                for (JsonElement el : appArr) {
+                    String n = el.getAsString().toLowerCase().trim();
+                    if (!n.isEmpty()) localWhitelist.add(n);
                 }
             }
 
-            // 2. Atualiza Vidas modificadas pelo Administrador no site
-            int livesStart = body.indexOf("\"lives\":{");
-            if (livesStart != -1) {
-                int livesEnd = body.indexOf("}", livesStart);
-                if (livesEnd != -1) {
-                    String sub = body.substring(livesStart + 9, livesEnd);
-                    for (String item : sub.split("},")) {
-                        int colon = item.indexOf(":");
-                        if (colon != -1) {
-                            String n = item.substring(0, colon).replace("\"", "").trim().toLowerCase();
-                            int lvIdx = item.indexOf("\"lives\":");
-                            if (lvIdx != -1) {
-                                int comma = item.indexOf(",", lvIdx);
-                                if (comma == -1) comma = item.indexOf("}", lvIdx);
-                                if (comma != -1) {
-                                    String livesStr = item.substring(lvIdx + 8, comma).replaceAll("[^0-9]", "");
-                                    if (!livesStr.isEmpty()) {
-                                        try {
-                                            localLives.put(n, Integer.parseInt(livesStr));
-                                        } catch (Exception ignored) {}
-                                    }
-                                }
-                            }
+            // 2. Sincroniza Bans de Nick aplicados no site
+            if (root.has("bans") && root.get("bans").isJsonArray()) {
+                JsonArray bansArr = root.getAsJsonArray("bans");
+                localBans.clear();
+                for (JsonElement el : bansArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject bObj = el.getAsJsonObject();
+                        String n = bObj.has("nick") ? bObj.get("nick").getAsString().toLowerCase().trim() : "";
+                        String r = bObj.has("reason") ? bObj.get("reason").getAsString() : "Violação das regras";
+                        String rem = bObj.has("remaining") ? bObj.get("remaining").getAsString() : "Permanente";
+                        if (!n.isEmpty()) {
+                            localBans.put(n, new BanEntry(r, rem));
                         }
                     }
                 }
             }
 
-            // 3. Executa comandos pendentes enviados pelo console web
-            if (body.contains("\"commands\":[")) {
+            // 3. Sincroniza IP Bans aplicados no site
+            if (root.has("ipBans") && root.get("ipBans").isJsonArray()) {
+                JsonArray ipArr = root.getAsJsonArray("ipBans");
+                localIpBans.clear();
+                for (JsonElement el : ipArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject ipObj = el.getAsJsonObject();
+                        String ip = ipObj.has("ip") ? ipObj.get("ip").getAsString().trim() : "";
+                        String r = ipObj.has("reason") ? ipObj.get("reason").getAsString() : "IP Bloqueado";
+                        if (!ip.isEmpty()) {
+                            localIpBans.put(ip, r);
+                        }
+                    }
+                }
+            }
+
+            // 4. Sincroniza Vidas ajustadas pelo Administrador no site
+            if (root.has("lives") && root.get("lives").isJsonObject()) {
+                JsonObject livesObj = root.getAsJsonObject("lives");
+                for (String nickKey : livesObj.keySet()) {
+                    JsonElement entry = livesObj.get(nickKey);
+                    if (entry.isJsonObject()) {
+                        JsonObject pLives = entry.getAsJsonObject();
+                        int lv = pLives.has("lives") ? pLives.get("lives").getAsInt() : 5;
+                        localLives.put(nickKey.toLowerCase().trim(), lv);
+                    }
+                }
+            }
+
+            // 5. Executa Comandos Remotos do Console Web
+            if (root.has("commands") && root.get("commands").isJsonArray()) {
                 processCommandsJson(body);
             }
 
-            // Salva dados atualizados
+            // Salva dados atualizados no dados.yml
             saveLocalData();
 
-            // 4. Se algum jogador online estiver com 0 vidas ou banido, expulsa
+            // 6. Expulsa jogadores online que foram banidos ou zeraram vidas no site
             getServer().getScheduler().runTask(this, () -> {
                 for (Player p : getServer().getOnlinePlayers()) {
-                    String lower = cleanNick(p.getName()).toLowerCase();
+                    String lower = cleanNick(p.getName()).toLowerCase().trim();
                     if (BYPASS.contains(lower)) continue;
 
                     if (localBans.containsKey(lower)) {
                         BanEntry be = localBans.get(lower);
+                        log.info("[Sync] 🔨 Expulsando jogador banido no site: " + p.getName());
                         p.kick(buildBanMessageDirect(p.getName(), be.reason(), be.remaining(), null, false));
                     } else if (localLives.getOrDefault(lower, 5) <= 0) {
+                        log.info("[Sync] 💀 Expulsando jogador sem vidas no site: " + p.getName());
                         p.kick(buildNoLivesMessage(p.getName(), "em breve"));
                     }
                 }
             });
 
         } catch (Exception e) {
-            log.fine("[Sync] Erro na sincronização: " + e.getMessage());
+            log.warning("[Sync] Erro na sincronização: " + e.getMessage());
         }
     }
 
@@ -517,7 +553,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 .timeout(Duration.ofSeconds(3))
                 .header("Content-Type", "application/json")
                 .header("x-plugin-secret", PLUGIN_SECRET)
-                .header("User-Agent", "MapaBermuda-Plugin/3.0")
+                .header("User-Agent", "MapaBermuda-Plugin/3.1")
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build();
             httpClient.send(req, HttpResponse.BodyHandlers.discarding());
@@ -530,7 +566,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 .uri(URI.create(TELEM_URL + URLEncoder.encode(nick, StandardCharsets.UTF_8)))
                 .timeout(Duration.ofSeconds(4))
                 .header("Content-Type", "application/json")
-                .header("User-Agent", "MapaBermuda-Plugin/3.0")
+                .header("User-Agent", "MapaBermuda-Plugin/3.1")
                 .POST(HttpRequest.BodyPublishers.ofString(payload))
                 .build();
             httpClient.send(req, HttpResponse.BodyHandlers.discarding());
@@ -541,7 +577,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(url))
             .timeout(Duration.ofSeconds(4))
-            .header("User-Agent", "MapaBermuda-Plugin/3.0")
+            .header("User-Agent", "MapaBermuda-Plugin/3.1")
             .GET()
             .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
