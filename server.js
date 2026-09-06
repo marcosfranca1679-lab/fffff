@@ -342,7 +342,15 @@ app.get('/api/chat', async (req, res) => {
       .limit(60);
 
     if (error) throw error;
-    res.json((data || []).reverse());
+    const msgs = (data || []).reverse().map(m => {
+      const lowerNick = (m.author_nick || '').toLowerCase().trim();
+      const kInfo = kingdomTagsCache.get(lowerNick);
+      return {
+        ...m,
+        kingdom_tag: kInfo ? kInfo.tag : null
+      };
+    });
+    res.json(msgs);
   } catch (err) {
     res.json([]);
   }
@@ -1551,6 +1559,25 @@ app.post('/api/telemetry/:nick', async (req, res) => {
         : await descontarVidaJogador(nick);
       const livesRemaining = livesData ? livesData.lives : null;
 
+      // Se houve killer e o killer pertence a um reino, incrementa kills e pontos do reino
+      if (payload.killer) {
+        const killerNick = String(payload.killer).trim();
+        const killerInfo = kingdomTagsCache.get(killerNick.toLowerCase());
+        if (killerInfo && killerInfo.kingdomId) {
+          safeDb(supabase.rpc('increment_kingdom_kill', { kid: killerInfo.kingdomId })).catch(() => {
+            // Fallback caso a RPC não exista: busca e atualiza
+            safeDb(supabase.from('kingdoms').select('kills, pontos').eq('id', killerInfo.kingdomId).single())
+              .then(res => {
+                if (res && res.data) {
+                  const currentKills = (res.data.kills || 0) + 1;
+                  const currentPontos = (res.data.pontos || 0) + 50;
+                  safeDb(supabase.from('kingdoms').update({ kills: currentKills, pontos: currentPontos }).eq('id', killerInfo.kingdomId));
+                }
+              });
+          });
+        }
+      }
+
       registrarConsoleLog('error', '\uD83D\uDC80 ' + (payload.deathMessage || (nick + ' morreu')), 'Minecraft');
       return res.json({
         success: true,
@@ -2712,6 +2739,478 @@ app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
     const { error } = await supabase.from('tickets').delete().eq('id', req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, message: '✅ Ticket encerrado e excluído com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SISTEMA DE REINOS & GUILDAS (ECONÔMICO & TEMPO REAL)
+// ════════════════════════════════════════════════════════════════════════════
+
+// Cache em memória de tags de reinos para consulta ultra-rápida (0ms, 0 Vercel requests)
+const kingdomTagsCache = new Map(); // lower_nick -> { tag, kingdomName, kingdomId, role }
+let lastKingdomCacheSync = 0;
+
+async function syncKingdomsCache(force = false) {
+  const now = Date.now();
+  if (!force && now - lastKingdomCacheSync < 30000 && kingdomTagsCache.size > 0) return;
+  lastKingdomCacheSync = now;
+  try {
+    const { data: members } = await supabase
+      .from('kingdom_members')
+      .select('user_nick, role, kingdoms ( id, nome, tag )');
+    if (members) {
+      kingdomTagsCache.clear();
+      for (const m of members) {
+        if (m.kingdoms && m.kingdoms.tag) {
+          kingdomTagsCache.set(m.user_nick.toLowerCase().trim(), {
+            tag: m.kingdoms.tag.toUpperCase(),
+            kingdomName: m.kingdoms.nome,
+            kingdomId: m.kingdoms.id,
+            role: m.role || 'membro'
+          });
+        }
+      }
+    }
+  } catch (_) {}
+}
+
+// Inicializa cache
+syncKingdomsCache(true).catch(() => {});
+
+// GET /api/kingdoms/status — Obter status do usuário (permissão de criação, reino atual, membro)
+app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const lowerNick = nick.toLowerCase();
+
+    // 1. Verifica se é admin (admin tem permissão total)
+    let isAllowedToCreate = !!req.isAdmin;
+
+    if (!isAllowedToCreate) {
+      const { data: perm } = await supabase
+        .from('kingdom_permissions')
+        .select('allowed')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+      if (perm && perm.allowed) isAllowedToCreate = true;
+    }
+
+    // 2. Busca reino atual do jogador
+    const { data: member } = await supabase
+      .from('kingdom_members')
+      .select('role, kingdom_id, kingdoms ( id, nome, tag, descricao, owner_nick, pontos, kills, created_at )')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    let myKingdom = null;
+    let members = [];
+    if (member && member.kingdoms) {
+      myKingdom = {
+        ...member.kingdoms,
+        myRole: member.role
+      };
+      // Busca membros do reino
+      const { data: mList } = await supabase
+        .from('kingdom_members')
+        .select('id, user_nick, role, joined_at')
+        .eq('kingdom_id', member.kingdom_id)
+        .order('joined_at', { ascending: true });
+      members = mList || [];
+    }
+
+    res.json({
+      success: true,
+      allowedToCreate: isAllowedToCreate,
+      myKingdom,
+      members,
+      taxaCriacao: 14.99
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/create — Criar um reino
+app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { nome, tag, descricao } = req.body || {};
+
+    if (!nome || !tag || !descricao) {
+      return res.status(400).json({ error: 'Nome, TAG de 3 letras e descrição são obrigatórios.' });
+    }
+
+    const cleanTag = tag.trim().toUpperCase();
+    if (!/^[A-Z0-9]{3}$/.test(cleanTag)) {
+      return res.status(400).json({ error: 'A TAG do reino deve conter exatamente 3 letras ou números (Ex: IMP, LEO, REI).' });
+    }
+
+    const cleanNome = nome.trim().slice(0, 30);
+    const cleanDesc = descricao.trim().slice(0, 300);
+
+    // 1. Verifica permissão concedida pelo Admin
+    let allowed = !!req.isAdmin;
+    if (!allowed) {
+      const { data: perm } = await supabase
+        .from('kingdom_permissions')
+        .select('allowed')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+      if (perm && perm.allowed) allowed = true;
+    }
+
+    if (!allowed) {
+      return res.status(403).json({ error: 'Você não tem permissão do Administrador para criar um Reino.' });
+    }
+
+    // 2. Verifica se o jogador já possui um reino ou participa de algum
+    const { data: existingMember } = await supabase
+      .from('kingdom_members')
+      .select('id')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (existingMember) {
+      return res.status(400).json({ error: 'Você já faz parte de um Reino. Saia do reino atual antes de criar um novo.' });
+    }
+
+    // 3. Cria o reino no Supabase
+    const { data: newKingdom, error: kErr } = await supabase
+      .from('kingdoms')
+      .insert([{
+        nome: cleanNome,
+        tag: cleanTag,
+        descricao: cleanDesc,
+        owner_nick: nick,
+        taxa_paga: 14.99,
+        pontos: 0,
+        kills: 0
+      }])
+      .select()
+      .single();
+
+    if (kErr) {
+      if (kErr.message.includes('unique') || kErr.code === '23505') {
+        return res.status(400).json({ error: 'Já existe um Reino com esse Nome ou essa TAG!' });
+      }
+      return res.status(500).json({ error: kErr.message });
+    }
+
+    // 4. Adiciona o criador como Líder
+    await supabase.from('kingdom_members').insert([{
+      kingdom_id: newKingdom.id,
+      user_nick: nick,
+      role: 'lider'
+    }]);
+
+    // Mensagem de boas-vindas no chat do reino
+    await supabase.from('kingdom_messages').insert([{
+      kingdom_id: newKingdom.id,
+      author_nick: 'Sistema',
+      author_role: 'system',
+      content: `🏰 Reino [${cleanTag}] ${cleanNome} criado com sucesso por ${nick}!`
+    }]);
+
+    // Atualiza cache em memória
+    syncKingdomsCache(true).catch(() => {});
+
+    res.json({
+      success: true,
+      message: `🎉 Reino [${cleanTag}] ${cleanNome} fundado com sucesso!`,
+      kingdom: newKingdom
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/members/add — Líder adiciona membro ao seu reino
+app.post('/api/kingdoms/members/add', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { targetNick } = req.body || {};
+
+    if (!targetNick || !targetNick.trim()) {
+      return res.status(400).json({ error: 'Informe o nick do jogador a ser adicionado.' });
+    }
+    const cleanTarget = targetNick.trim();
+
+    // 1. Obtém o reino do solicitante e confirma se é o líder
+    const { data: member } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role, kingdoms ( id, nome, tag, owner_nick )')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!member || (member.role !== 'lider' && !req.isAdmin)) {
+      return res.status(403).json({ error: 'Apenas o Dono/Líder do reino pode adicionar membros.' });
+    }
+
+    // 2. Verifica se o jogador alvo já tem reino
+    const { data: targetExist } = await supabase
+      .from('kingdom_members')
+      .select('id, kingdoms ( nome, tag )')
+      .ilike('user_nick', cleanTarget)
+      .maybeSingle();
+
+    if (targetExist) {
+      return res.status(400).json({ error: `O jogador ${cleanTarget} já faz parte de um Reino.` });
+    }
+
+    // 3. Adiciona
+    const { error: insErr } = await supabase.from('kingdom_members').insert([{
+      kingdom_id: member.kingdom_id,
+      user_nick: cleanTarget,
+      role: 'membro'
+    }]);
+
+    if (insErr) return res.status(500).json({ error: insErr.message });
+
+    // Mensagem no chat do reino
+    await supabase.from('kingdom_messages').insert([{
+      kingdom_id: member.kingdom_id,
+      author_nick: 'Sistema',
+      author_role: 'system',
+      content: `⚔️ ${cleanTarget} foi recrutado para o reino!`
+    }]);
+
+    syncKingdomsCache(true).catch(() => {});
+
+    res.json({ success: true, message: `✅ Jogador ${cleanTarget} recrutado com sucesso!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/members/remove — Líder remove membro ou membro sai
+app.post('/api/kingdoms/members/remove', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { targetNick } = req.body || {};
+    const cleanTarget = (targetNick || nick).trim();
+
+    const { data: myMember } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!myMember) return res.status(400).json({ error: 'Você não faz parte de nenhum reino.' });
+
+    // Se estiver removendo outra pessoa, tem que ser líder ou admin
+    const isRemovingSelf = cleanTarget.toLowerCase() === nick.toLowerCase();
+    if (!isRemovingSelf && myMember.role !== 'lider' && !req.isAdmin) {
+      return res.status(403).json({ error: 'Apenas o líder pode expulsar membros.' });
+    }
+
+    if (isRemovingSelf && myMember.role === 'lider') {
+      return res.status(400).json({ error: 'O Dono/Líder não pode simplesmente sair. Use a opção de dissolver o reino.' });
+    }
+
+    await supabase.from('kingdom_members')
+      .delete()
+      .eq('kingdom_id', myMember.kingdom_id)
+      .ilike('user_nick', cleanTarget);
+
+    await supabase.from('kingdom_messages').insert([{
+      kingdom_id: myMember.kingdom_id,
+      author_nick: 'Sistema',
+      author_role: 'system',
+      content: `🚪 ${cleanTarget} saiu do reino.`
+    }]);
+
+    syncKingdomsCache(true).catch(() => {});
+
+    res.json({ success: true, message: `Membro ${cleanTarget} removido.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/kingdoms — Dissolver reino (Líder ou Admin)
+app.delete('/api/kingdoms', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { data: myMember } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role, kingdoms ( id, nome )')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+      return res.status(403).json({ error: 'Apenas o líder pode dissolver o reino.' });
+    }
+
+    await supabase.from('kingdoms').delete().eq('id', myMember.kingdom_id);
+    syncKingdomsCache(true).catch(() => {});
+
+    res.json({ success: true, message: 'Reino dissolvido com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/kingdoms/messages — Bate-papo exclusivo do Reino
+app.get('/api/kingdoms/messages', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { data: member } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!member) {
+      return res.status(403).json({ error: 'Apenas membros de um reino têm acesso a este bate-papo.' });
+    }
+
+    const { data: messages } = await supabase
+      .from('kingdom_messages')
+      .select('*')
+      .eq('kingdom_id', member.kingdom_id)
+      .order('created_at', { ascending: false })
+      .limit(60);
+
+    res.json((messages || []).reverse());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/messages — Enviar mensagem no Bate-papo do Reino
+app.post('/api/kingdoms/messages', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const content = (req.body.content || '').trim();
+    if (!content) return res.status(400).json({ error: 'Mensagem vazia.' });
+
+    const { data: member } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!member) {
+      return res.status(403).json({ error: 'Você precisa pertencer a um reino para conversar aqui.' });
+    }
+
+    const { data: msg, error } = await supabase
+      .from('kingdom_messages')
+      .insert([{
+        kingdom_id: member.kingdom_id,
+        author_nick: nick,
+        author_role: member.role || 'membro',
+        content: content.slice(0, 500)
+      }])
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, message: msg });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/ranking/kingdoms — Ranking de pontos por reinos (Kills + Tempo de jogo)
+app.get('/api/ranking/kingdoms', async (req, res) => {
+  try {
+    // 1. Busca todos os reinos
+    const { data: kingdomsList } = await supabase
+      .from('kingdoms')
+      .select('id, nome, tag, owner_nick, pontos, kills, created_at');
+
+    if (!kingdomsList || kingdomsList.length === 0) {
+      return res.json({ success: true, ranking: [] });
+    }
+
+    // 2. Busca membros e calcula pontos atualizados dinamicamente (1 kill = 50 pts, 1 hora de jogo = 10 pts)
+    const { data: allMembers } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, user_nick');
+
+    // Mapeia tempo de jogo de cada membro a partir de player_rankings
+    const { data: rankRows } = await supabase
+      .from('player_rankings')
+      .select('nick, playtime_seconds');
+
+    const playtimeMap = new Map();
+    (rankRows || []).forEach(r => {
+      playtimeMap.set(r.nick.toLowerCase(), Number(r.playtime_seconds) || 0);
+    });
+
+    const kingdomStats = kingdomsList.map(k => {
+      const members = (allMembers || []).filter(m => m.kingdom_id === k.id);
+      let totalSeconds = 0;
+      members.forEach(m => {
+        totalSeconds += playtimeMap.get(m.user_nick.toLowerCase()) || 0;
+      });
+      const hoursPlayed = Math.floor(totalSeconds / 3600);
+      const kills = Number(k.kills) || 0;
+      // Cálculo: Base de pontos + 50 por Kill + 10 por Hora jogada de cada membro
+      const totalPoints = (Number(k.pontos) || 0) + (kills * 50) + (hoursPlayed * 10);
+
+      return {
+        id: k.id,
+        nome: k.nome,
+        tag: k.tag,
+        owner_nick: k.owner_nick,
+        membersCount: members.length,
+        kills,
+        hoursPlayed,
+        totalPoints
+      };
+    });
+
+    // Ordena do maior para o menor
+    kingdomStats.sort((a, b) => b.totalPoints - a.totalPoints);
+
+    res.json({
+      success: true,
+      ranking: kingdomStats
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ROTAS ADMIN: Gerenciar Permissões de Criação de Reino ──────────────────
+app.get('/api/admin/kingdoms/permissions', requireAdmin, async (req, res) => {
+  try {
+    const { data } = await supabase
+      .from('kingdom_permissions')
+      .select('*')
+      .order('created_at', { ascending: false });
+    res.json({ success: true, permissions: data || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/admin/kingdoms/permissions', requireAdmin, async (req, res) => {
+  try {
+    const { nick, allowed } = req.body || {};
+    if (!nick || !nick.trim()) return res.status(400).json({ error: 'Nick obrigatório.' });
+    const cleanNick = nick.trim();
+    const isAllowed = allowed !== false;
+
+    const { error } = await supabase
+      .from('kingdom_permissions')
+      .upsert({ user_nick: cleanNick, allowed: isAllowed }, { onConflict: 'user_nick' });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, message: `Permissão para "${cleanNick}" atualizada: ${isAllowed ? 'PERMITIDO' : 'BLOQUEADO'}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/kingdoms/permissions/:nick', requireAdmin, async (req, res) => {
+  try {
+    await supabase.from('kingdom_permissions').delete().ilike('user_nick', req.params.nick);
+    res.json({ success: true, message: 'Permissão removida.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
