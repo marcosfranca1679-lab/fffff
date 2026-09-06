@@ -2606,6 +2606,117 @@ app.post('/api/admin/lives/reset-all', requireAdmin, async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+//  SISTEMA DE TICKETS / DENÚNCIAS
+// ═══════════════════════════════════════════════════════════════
+
+// GET /api/tickets — lista tickets do usuário logado (admin vê todos)
+app.get('/api/tickets', requireAuth, async (req, res) => {
+  try {
+    let query = supabase.from('tickets').select('*').order('created_at', { ascending: false });
+    if (!req.isAdmin) {
+      query = query.eq('user_id', req.user.id || req.user.nick);
+    }
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ tickets: data || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets — abre novo ticket
+app.post('/api/tickets', requireAuth, async (req, res) => {
+  try {
+    const { titulo, descricao, denunciado } = req.body;
+    if (!titulo || !descricao) return res.status(400).json({ error: 'Título e descrição são obrigatórios.' });
+    const userId = req.user.id || req.user.nick;
+    // verifica se já tem ticket aberto
+    const { data: existing } = await supabase.from('tickets')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'aberto')
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return res.status(400).json({ error: 'Você já tem um ticket aberto. Aguarde o admin responder ou fechar o atual.' });
+    }
+    const { data, error } = await supabase.from('tickets').insert([{
+      user_nick: req.user.nick,
+      user_id: userId,
+      tipo: 'denuncia',
+      titulo: titulo.trim().slice(0, 120),
+      descricao: descricao.trim().slice(0, 2000),
+      denunciado: (denunciado || '').trim().slice(0, 50) || null,
+      status: 'aberto'
+    }]).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, ticket: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/tickets/:id — detalhes + mensagens do ticket
+app.get('/api/tickets/:id', requireAuth, async (req, res) => {
+  try {
+    const { data: ticket, error } = await supabase.from('tickets')
+      .select('*').eq('id', req.params.id).single();
+    if (error || !ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
+    const userId = req.user.id || req.user.nick;
+    if (!req.isAdmin && ticket.user_id !== userId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+    const { data: messages } = await supabase.from('ticket_messages')
+      .select('*').eq('ticket_id', ticket.id).order('created_at', { ascending: true });
+    res.json({ ticket, messages: messages || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tickets/:id/messages — enviar mensagem no ticket
+app.post('/api/tickets/:id/messages', requireAuth, async (req, res) => {
+  try {
+    const { mensagem } = req.body;
+    if (!mensagem || !mensagem.trim()) return res.status(400).json({ error: 'Mensagem vazia.' });
+    const { data: ticket, error: tErr } = await supabase.from('tickets')
+      .select('id, user_id, status').eq('id', req.params.id).single();
+    if (tErr || !ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
+    if (ticket.status === 'fechado') return res.status(400).json({ error: 'Ticket já foi fechado.' });
+    const userId = req.user.id || req.user.nick;
+    if (!req.isAdmin && ticket.user_id !== userId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+    const { data, error } = await supabase.from('ticket_messages').insert([{
+      ticket_id: ticket.id,
+      autor_nick: req.user.nick,
+      is_admin: req.isAdmin || false,
+      mensagem: mensagem.trim().slice(0, 1000)
+    }]).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    // atualiza updated_at do ticket
+    await supabase.from('tickets').update({ updated_at: new Date().toISOString() }).eq('id', ticket.id);
+    res.json({ success: true, message: data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/tickets/:id — fecha e apaga ticket (somente admin)
+app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
+  try {
+    const { data: ticket, error: tErr } = await supabase.from('tickets')
+      .select('id').eq('id', req.params.id).single();
+    if (tErr || !ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
+    // ON DELETE CASCADE apaga ticket_messages automaticamente
+    const { error } = await supabase.from('tickets').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, message: '✅ Ticket encerrado e excluído com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Fallback SPA
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Rota não encontrada' });
