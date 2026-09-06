@@ -2930,9 +2930,32 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       }
     }
 
+    // 4. Busca reinos existentes para calcular limite (máx 12) e listas de logos/cores já em uso
+    let totalKingdoms = 0;
+    let usedLogos = [];
+    let usedColors = [];
+    try {
+      const { data: allKingdomsList } = await supabase
+        .from('kingdoms')
+        .select('id, logo, cor');
+      if (allKingdomsList) {
+        totalKingdoms = allKingdomsList.length;
+        usedLogos = allKingdomsList.map(k => k.logo).filter(Boolean);
+        usedColors = allKingdomsList.map(k => (k.cor || '').toLowerCase()).filter(Boolean);
+      }
+    } catch (_) {}
+
+    const maxKingdoms = 12;
+    const isLimitReached = totalKingdoms >= maxKingdoms;
+
     res.json({
       success: true,
       allowedToCreate: isAllowedToCreate,
+      totalKingdoms,
+      maxKingdoms,
+      isLimitReached,
+      usedLogos,
+      usedColors,
       myKingdom,
       members,
       candidates,
@@ -2992,6 +3015,43 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
 
     if (existingMember) {
       return res.status(400).json({ error: 'Você já faz parte de um Reino. Saia do reino atual antes de criar um novo.' });
+    }
+
+    // 2.5. Valida o limite de no máximo 12 reinos no servidor
+    const { count: currentKingdomsCount, error: countErr } = await supabase
+      .from('kingdoms')
+      .select('id', { count: 'exact', head: true });
+
+    if (!countErr && (currentKingdomsCount || 0) >= 12) {
+      return res.status(400).json({ 
+        error: 'Limite máximo de 12 reinos atingido no servidor! Não é possível fundar novos clãs.' 
+      });
+    }
+
+    // 2.6. Garante que o Logo 3D não seja repetido (cada reino possui um logo exclusivo)
+    const { data: logoExists } = await supabase
+      .from('kingdoms')
+      .select('id, nome')
+      .eq('logo', cleanLogo)
+      .maybeSingle();
+
+    if (logoExists) {
+      return res.status(400).json({ 
+        error: `O emblema 3D "${cleanLogo}" já pertence ao reino "${logoExists.nome}"! Cada um dos 12 reinos deve possuir um logo exclusivo.` 
+      });
+    }
+
+    // 2.7. Garante que a Cor da TAG não seja repetida (cada reino possui uma cor exclusiva)
+    const { data: corExists } = await supabase
+      .from('kingdoms')
+      .select('id, nome')
+      .ilike('cor', cleanCor)
+      .maybeSingle();
+
+    if (corExists) {
+      return res.status(400).json({ 
+        error: `A cor da TAG "${cleanCor}" já pertence ao reino "${corExists.nome}"! Cada um dos 12 reinos deve possuir uma cor exclusiva.` 
+      });
     }
 
     // 3. Cria o reino no Supabase (com logo, cor e fallback seguro)
