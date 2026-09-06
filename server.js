@@ -3713,6 +3713,27 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
       .eq('author_role', 'telemetry')
       .order('created_at', { ascending: false });
 
+    // 5. Busca baselines de todos os membros (para descontar stats pré-entrada no reino)
+    const { data: allBaselines } = await supabase
+      .from('messages')
+      .select('author_nick, content')
+      .eq('author_role', 'kingdom_member_baseline');
+
+    // Mapa de baseline por nick em minúsculo: { initialPlaytime, initialPvp, initialMob }
+    const baselineMap = new Map();
+    (allBaselines || []).forEach(b => {
+      const nickKey = (b.author_nick || '').toLowerCase().trim();
+      if (!nickKey) return;
+      try {
+        const json = JSON.parse(b.content);
+        baselineMap.set(nickKey, {
+          initialPlaytime: Number(json.initialPlaytime) || 0,
+          initialPvp: Number(json.initialPvp) || 0,
+          initialMob: Number(json.initialMob) || 0
+        });
+      } catch (_) {}
+    });
+
     // Mapas de agregação por nick em minúsculo
     const playtimeMap = new Map();
     const playerKillsMap = new Map();
@@ -3765,26 +3786,29 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
 
       memberNicksSet.forEach(nickKey => {
         const clean = nickKey.replace(/^[._]/, '');
-        const sec = Math.max(playtimeMap.get(nickKey) || 0, playtimeMap.get(clean) || 0);
-        const pk = Math.max(playerKillsMap.get(nickKey) || 0, playerKillsMap.get(clean) || 0);
-        const mk = Math.max(mobKillsMap.get(nickKey) || 0, mobKillsMap.get(clean) || 0);
+        const rawSec = Math.max(playtimeMap.get(nickKey) || 0, playtimeMap.get(clean) || 0);
+        const rawPk  = Math.max(playerKillsMap.get(nickKey) || 0, playerKillsMap.get(clean) || 0);
+        const rawMk  = Math.max(mobKillsMap.get(nickKey) || 0, mobKillsMap.get(clean) || 0);
+
+        // Desconta o baseline (stats que o jogador já tinha ANTES de entrar no reino)
+        const base = baselineMap.get(nickKey) || baselineMap.get(clean) || {};
+        const sec = Math.max(0, rawSec - (base.initialPlaytime || 0));
+        const pk  = Math.max(0, rawPk  - (base.initialPvp      || 0));
+        const mk  = Math.max(0, rawMk  - (base.initialMob      || 0));
 
         totalSeconds += sec;
         totalPk += pk;
         totalMk += mk;
       });
 
-      // Kills PvP: usa o maior entre k.kills no banco e soma de playerKills dos membros
-      const dbKills = Number(k.kills) || 0;
-      const finalPvpKills = Math.max(dbKills, totalPk);
-      const totalKills = finalPvpKills + totalMk;
+      // Kills PvP: usa apenas a soma calculada com baseline (expulsos não contam mais)
+      const totalKills = totalPk + totalMk;
 
       // Cálculo de pontos dinâmico:
-      // Base de pontos do reino + 50 pts por PvP Kill + 1 pt por Mob Kill + 1 pt a cada 6 min jogados (10 pts/h)
+      // 50 pts por PvP Kill + 1 pt por Mob Kill + 1 pt a cada 6 min jogados (10 pts/h)
       const pointsFromTime = Math.floor(totalSeconds / 360);
-      const pointsFromKills = (finalPvpKills * 50) + (totalMk * 1);
-      const basePoints = Number(k.pontos) || 0;
-      const totalPoints = basePoints + pointsFromKills + pointsFromTime;
+      const pointsFromKills = (totalPk * 50) + (totalMk * 1);
+      const totalPoints = pointsFromKills + pointsFromTime;
 
       // Formatação de tempo de jogo
       let playtimeFormatted = '0m';
@@ -3805,7 +3829,7 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
         owner_nick: k.owner_nick,
         membersCount: memberNicksSet.size,
         kills: totalKills,
-        pvpKills: finalPvpKills,
+        pvpKills: totalPk,
         mobKills: totalMk,
         totalSeconds,
         hoursPlayed: hours,
