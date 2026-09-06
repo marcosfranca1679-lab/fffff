@@ -1640,22 +1640,51 @@ app.post('/api/telemetry/:nick', async (req, res) => {
         : await descontarVidaJogador(nick);
       const livesRemaining = livesData ? livesData.lives : null;
 
-      // Se houve killer e o killer pertence a um reino, incrementa kills e pontos do reino
+      // Se houve killer e o killer pertence a um reino, incrementa kills e pontos do reino com await direto no banco
       if (payload.killer) {
         const killerNick = String(payload.killer).trim();
-        const killerInfo = kingdomTagsCache.get(killerNick.toLowerCase());
-        if (killerInfo && killerInfo.kingdomId) {
-          safeDb(supabase.rpc('increment_kingdom_kill', { kid: killerInfo.kingdomId })).catch(() => {
-            // Fallback caso a RPC não exista: busca e atualiza
-            safeDb(supabase.from('kingdoms').select('kills, pontos').eq('id', killerInfo.kingdomId).single())
-              .then(res => {
-                if (res && res.data) {
-                  const currentKills = (res.data.kills || 0) + 1;
-                  const currentPontos = (res.data.pontos || 0) + 50;
-                  safeDb(supabase.from('kingdoms').update({ kills: currentKills, pontos: currentPontos }).eq('id', killerInfo.kingdomId));
-                }
-              });
-          });
+        const cleanKiller = killerNick.replace(/^[._]/, '');
+        try {
+          let targetKingdomId = null;
+          const { data: memberRows } = await supabase
+            .from('kingdom_members')
+            .select('kingdom_id')
+            .or(`user_nick.ilike.${killerNick},user_nick.ilike.${cleanKiller}`)
+            .limit(1);
+
+          if (memberRows && memberRows.length > 0) {
+            targetKingdomId = memberRows[0].kingdom_id;
+          } else {
+            const { data: ownerRows } = await supabase
+              .from('kingdoms')
+              .select('id')
+              .or(`owner_nick.ilike.${killerNick},owner_nick.ilike.${cleanKiller}`)
+              .limit(1);
+            if (ownerRows && ownerRows.length > 0) {
+              targetKingdomId = ownerRows[0].id;
+            }
+          }
+
+          if (targetKingdomId) {
+            const { data: kd } = await supabase
+              .from('kingdoms')
+              .select('kills, pontos, tag, nome')
+              .eq('id', targetKingdomId)
+              .single();
+
+            if (kd) {
+              const currentKills = (Number(kd.kills) || 0) + 1;
+              const currentPontos = (Number(kd.pontos) || 0) + 50;
+              await supabase
+                .from('kingdoms')
+                .update({ kills: currentKills, pontos: currentPontos })
+                .eq('id', targetKingdomId);
+
+              registrarConsoleLog('info', `⚔️ [Reino ${kd.tag}] ${killerNick} abateu ${nick}! (+1 Kill PvP, +50 Pontos)`, 'Reinos');
+            }
+          }
+        } catch (kErr) {
+          console.error('Erro ao processar kill de reino:', kErr);
         }
       }
 
@@ -3474,7 +3503,7 @@ app.post('/api/kingdoms/messages', requireAuth, async (req, res) => {
 
 // GET /api/ranking/kingdoms — Ranking de pontos por reinos (Kills + Tempo de jogo)
 app.get('/api/ranking/kingdoms', async (req, res) => {
-  res.setHeader('Cache-Control', 'public, s-maxage=15, stale-while-revalidate=45');
+  res.setHeader('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=15');
   try {
     // 1. Busca todos os reinos
     const { data: kingdomsList } = await supabase
@@ -3485,31 +3514,105 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
       return res.json({ success: true, ranking: [] });
     }
 
-    // 2. Busca membros e calcula pontos atualizados dinamicamente (1 kill = 50 pts, 1 hora de jogo = 10 pts)
+    // 2. Busca todos os membros de todos os reinos
     const { data: allMembers } = await supabase
       .from('kingdom_members')
       .select('kingdom_id, user_nick');
 
-    // Mapeia tempo de jogo de cada membro a partir de player_rankings
+    // 3. Busca registros da tabela player_rankings
     const { data: rankRows } = await supabase
       .from('player_rankings')
-      .select('nick, playtime_seconds');
+      .select('nick, playtime_seconds, playtime_formatted');
 
+    // 4. Busca telemetria recente para tempo real ao vivo de playtime e kills
+    const { data: dbTelemetry } = await supabase
+      .from('messages')
+      .select('author_nick, content, created_at')
+      .eq('author_role', 'telemetry')
+      .order('created_at', { ascending: false });
+
+    // Mapas de agregação por nick em minúsculo
     const playtimeMap = new Map();
+    const playerKillsMap = new Map();
+    const mobKillsMap = new Map();
+
+    // Popula a partir de player_rankings (usando Math.max para evitar que duplicatas zerem o tempo)
     (rankRows || []).forEach(r => {
-      playtimeMap.set(r.nick.toLowerCase(), Number(r.playtime_seconds) || 0);
+      const nickKey = (r.nick || '').toLowerCase().trim();
+      if (!nickKey) return;
+      const sec = Number(r.playtime_seconds) || 0;
+      const current = playtimeMap.get(nickKey) || 0;
+      playtimeMap.set(nickKey, Math.max(current, sec));
+    });
+
+    // Popula a partir da telemetria do plugin (tempo real)
+    (dbTelemetry || []).forEach(t => {
+      const nickKey = (t.author_nick || '').toLowerCase().trim();
+      if (!nickKey) return;
+      try {
+        const json = JSON.parse(t.content);
+        const sec = Number(json.playtimeSeconds) || 0;
+        if (sec > 0) {
+          const current = playtimeMap.get(nickKey) || 0;
+          playtimeMap.set(nickKey, Math.max(current, sec));
+        }
+        const pk = Number(json.playerKills) || 0;
+        if (pk > 0) {
+          const curPk = playerKillsMap.get(nickKey) || 0;
+          playerKillsMap.set(nickKey, Math.max(curPk, pk));
+        }
+        const mk = Number(json.mobKills) || 0;
+        if (mk > 0) {
+          const curMk = mobKillsMap.get(nickKey) || 0;
+          mobKillsMap.set(nickKey, Math.max(curMk, mk));
+        }
+      } catch (_) {}
     });
 
     const kingdomStats = kingdomsList.map(k => {
       const members = (allMembers || []).filter(m => m.kingdom_id === k.id);
-      let totalSeconds = 0;
+      const memberNicksSet = new Set();
       members.forEach(m => {
-        totalSeconds += playtimeMap.get(m.user_nick.toLowerCase()) || 0;
+        if (m.user_nick) memberNicksSet.add(m.user_nick.toLowerCase().trim());
       });
-      const hoursPlayed = Math.floor(totalSeconds / 3600);
-      const kills = Number(k.kills) || 0;
-      // Cálculo: Base de pontos + 50 por Kill + 10 por Hora jogada de cada membro
-      const totalPoints = (Number(k.pontos) || 0) + (kills * 50) + (hoursPlayed * 10);
+      if (k.owner_nick) memberNicksSet.add(k.owner_nick.toLowerCase().trim());
+
+      let totalSeconds = 0;
+      let totalPk = 0;
+      let totalMk = 0;
+
+      memberNicksSet.forEach(nickKey => {
+        const clean = nickKey.replace(/^[._]/, '');
+        const sec = Math.max(playtimeMap.get(nickKey) || 0, playtimeMap.get(clean) || 0);
+        const pk = Math.max(playerKillsMap.get(nickKey) || 0, playerKillsMap.get(clean) || 0);
+        const mk = Math.max(mobKillsMap.get(nickKey) || 0, mobKillsMap.get(clean) || 0);
+
+        totalSeconds += sec;
+        totalPk += pk;
+        totalMk += mk;
+      });
+
+      // Kills PvP: usa o maior entre k.kills no banco e soma de playerKills dos membros
+      const dbKills = Number(k.kills) || 0;
+      const finalPvpKills = Math.max(dbKills, totalPk);
+      const totalKills = finalPvpKills + totalMk;
+
+      // Cálculo de pontos dinâmico:
+      // Base de pontos do reino + 50 pts por PvP Kill + 1 pt por Mob Kill + 1 pt a cada 6 min jogados (10 pts/h)
+      const pointsFromTime = Math.floor(totalSeconds / 360);
+      const pointsFromKills = (finalPvpKills * 50) + (totalMk * 1);
+      const basePoints = Number(k.pontos) || 0;
+      const totalPoints = basePoints + pointsFromKills + pointsFromTime;
+
+      // Formatação de tempo de jogo
+      let playtimeFormatted = '0m';
+      const hours = Math.floor(totalSeconds / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      if (hours > 0) {
+        playtimeFormatted = `${hours}h ${mins}m`;
+      } else {
+        playtimeFormatted = `${mins}m`;
+      }
 
       return {
         id: k.id,
@@ -3518,9 +3621,13 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
         logo: k.logo || '👑',
         cor: k.cor || '#f59e0b',
         owner_nick: k.owner_nick,
-        membersCount: members.length,
-        kills,
-        hoursPlayed,
+        membersCount: memberNicksSet.size,
+        kills: totalKills,
+        pvpKills: finalPvpKills,
+        mobKills: totalMk,
+        totalSeconds,
+        hoursPlayed: hours,
+        playtimeFormatted,
         totalPoints
       };
     });
