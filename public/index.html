@@ -368,11 +368,35 @@
 
         </div>
 
-        <!-- Botão Baixar 5DAY para Windows -->
-        <div class="w-full max-w-md">
+        <!-- Seção de Downloads Oficiais (Android & Windows) -->
+        <div class="w-full max-w-md space-y-2.5">
+          <!-- Botão Baixar App Android -->
+          <button onclick="abrirModalDownloadAndroid()"
+            class="w-full group relative overflow-hidden rounded-2xl p-[2px] focus:outline-none transition-transform duration-200 active:scale-95 shadow-xl hover:shadow-emerald-500/25">
+            <div class="absolute inset-0 bg-gradient-to-r from-emerald-500 via-teal-600 to-green-600 animate-pulse"></div>
+            <div class="relative px-5 py-3.5 bg-slate-950/90 rounded-[14px] flex items-center justify-between gap-3 group-hover:bg-slate-900/90 transition-colors">
+              <div class="flex items-center gap-3 text-left">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-xl shadow-lg border-t border-white/40">
+                  📱
+                </div>
+                <div>
+                  <div class="text-xs md:text-sm font-black text-white tracking-wide flex items-center gap-1.5">
+                    Baixar App Android (APK)
+                    <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono border border-emerald-500/30">v2.0</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 font-medium">App oficial para celular &middot; Leve (5.0 MB)</div>
+                </div>
+              </div>
+              <div class="text-emerald-400 font-black text-lg group-hover:translate-x-1 transition-transform">
+                ➔
+              </div>
+            </div>
+          </button>
+
+          <!-- Botão Baixar 5DAY para Windows -->
           <button onclick="abrirModalDownloadWindows()"
             class="w-full group relative overflow-hidden rounded-2xl p-[2px] focus:outline-none transition-transform duration-200 active:scale-95 shadow-xl hover:shadow-cyan-500/25">
-            <div class="absolute inset-0 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 animate-pulse"></div>
+            <div class="absolute inset-0 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600"></div>
             <div class="relative px-5 py-3.5 bg-slate-950/90 rounded-[14px] flex items-center justify-between gap-3 group-hover:bg-slate-900/90 transition-colors">
               <div class="flex items-center gap-3 text-left">
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-xl shadow-lg border-t border-white/40">
@@ -1070,6 +1094,73 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
+       MODAL EXPLICATIVO: DOWNLOAD ANDROID (APK)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-download-android" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="glass-card border border-emerald-500/30 rounded-2xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      
+      <!-- Cabeçalho -->
+      <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-green-600 flex items-center justify-center text-xl shadow-lg border-t border-white/40">
+            📱
+          </div>
+          <div>
+            <h3 class="font-extrabold text-base md:text-lg text-white">5DAY MC para Android</h3>
+            <p class="text-xs text-emerald-300 font-semibold">Aplicativo Oficial &middot; v2.0 (APK)</p>
+          </div>
+        </div>
+        <button onclick="fecharModalDownloadAndroid()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition text-lg">
+          ✕
+        </button>
+      </div>
+
+      <!-- Destaques -->
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center">
+          <span class="text-emerald-400 font-bold block">⚡ Super Leve</span>
+          <span class="text-slate-400 text-[11px]">Apenas 5.0 MB</span>
+        </div>
+        <div class="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center">
+          <span class="text-emerald-400 font-bold block">🚀 Otimizado</span>
+          <span class="text-slate-400 text-[11px]">Sem recargas acidentais</span>
+        </div>
+      </div>
+
+      <!-- Aviso de Instalação no Android -->
+      <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 space-y-2 text-xs text-slate-300">
+        <div class="font-semibold text-amber-300 flex items-center gap-1.5">
+          <span>🛡️</span> Dica de instalação no celular:
+        </div>
+        <p class="text-[11px] leading-relaxed text-slate-300">
+          Como o app é baixado diretamente do site, o Android pode exibir o aviso padrão: <strong class="text-white">"O arquivo pode ser nocivo"</strong>. 
+          O aplicativo é 100% seguro e oficial do servidor. Basta tocar em <span class="text-emerald-300 font-bold">"Fazer o download mesmo assim"</span> e depois em <span class="text-white font-bold">"Instalar"</span>.
+        </p>
+      </div>
+
+      <!-- Botões de Ação -->
+      <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+        <a href="/5DayMC.apk"
+           download="5DayMC.apk"
+           onclick="fecharModalDownloadAndroid()"
+           class="flex-1 py-3 px-4 rounded-xl font-extrabold text-xs md:text-sm bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white text-center shadow-lg hover:shadow-emerald-500/30 transition-all duration-200 active:scale-95 flex items-center justify-center gap-2">
+          <span>📥</span> Baixar 5DayMC.apk (5.0 MB)
+        </a>
+        <button onclick="fecharModalDownloadAndroid()" 
+                class="py-3 px-4 rounded-xl font-bold text-xs bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white transition">
+          Fechar
+        </button>
+      </div>
+      <div class="text-center pt-1">
+        <a href="https://raw.githubusercontent.com/marcosfranca1679-lab/fffff/main/5DayMC.apk" target="_blank" class="text-[11px] text-emerald-400 hover:underline">
+          Link alternativo direto (GitHub) ↗
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
        MODAL EXPLICATIVO: DOWNLOAD WINDOWS & SMART SCREEN
   ══════════════════════════════════════════════════════════════════════════ -->
   <div id="modal-download-windows" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
@@ -1539,13 +1630,25 @@
 
     // Suporte ao Botão Voltar do Android App
     window.handleAndroidBack = function() {
-      // 1. Fechar modal de autenticação se aberto
-      const authModal = document.getElementById('modal-auth');
+      // 1. Fechar modal de download android se aberto
+      const androidModal = document.getElementById('modal-download-android');
+      if (androidModal && !androidModal.classList.contains('hidden')) {
+        fecharModalDownloadAndroid();
+        return "handled";
+      }
+      // 2. Fechar modal de download windows se aberto
+      const winModal = document.getElementById('modal-download-windows');
+      if (winModal && !winModal.classList.contains('hidden')) {
+        fecharModalDownloadWindows();
+        return "handled";
+      }
+      // 3. Fechar modal de autenticação se aberto
+      const authModal = document.getElementById('auth-modal') || document.getElementById('modal-auth');
       if (authModal && !authModal.classList.contains('hidden')) {
         fecharModalAuth();
         return "handled";
       }
-      // 2. Fechar submenu flutuante se aberto
+      // 4. Fechar submenu flutuante se aberto
       const submenu = document.getElementById('floating-submenu');
       if (submenu && !submenu.classList.contains('hidden')) {
         fecharSubmenu();
@@ -3090,7 +3193,17 @@
       await carregarAdminData();
     }
 
-    // ── Download Windows App Modal ──────────────────────────────────────────
+    // ── Download App Modals (Android & Windows) ─────────────────────────────
+    function abrirModalDownloadAndroid() {
+      const m = document.getElementById('modal-download-android');
+      if (m) m.classList.remove('hidden');
+    }
+
+    function fecharModalDownloadAndroid() {
+      const m = document.getElementById('modal-download-android');
+      if (m) m.classList.add('hidden');
+    }
+
     function abrirModalDownloadWindows() {
       const m = document.getElementById('modal-download-windows');
       if (m) m.classList.remove('hidden');
