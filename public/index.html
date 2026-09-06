@@ -1235,7 +1235,7 @@
           <h2 class="text-xs md:text-sm font-black text-cyan-300 flex items-center gap-2">
             <span>🏰</span> Ranking de Reinos & Guildas
           </h2>
-          <p class="text-[11px] text-slate-400">Pontuação geral baseada em Kills in-game (+50 pts) e Horas jogadas (+10 pts/h)</p>
+          <p class="text-[11px] text-slate-400">Pontuação baseada em Kills PvP (+50 pts), Monstros (+1 pt) e Tempo jogado dos membros (+10 pts/h)</p>
         </div>
         <button onclick="carregarRankingReinos()" class="bg-cyan-600/30 hover:bg-cyan-600/50 border border-cyan-500/40 text-cyan-200 px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
           <span>Atualizar</span>
@@ -5243,7 +5243,7 @@
                 ${renderTagReino(second.tag, second.logo, second.cor, 'margin-bottom:4px;')}
                 <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nome)}</div>
                 <div class="text-xs font-mono font-bold text-cyan-300 mt-0.5">${second.totalPoints} pts</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">${second.kills} kills &middot; ${second.hoursPlayed}h</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">${second.kills} kills &middot; ${second.playtimeFormatted || (second.hoursPlayed + 'h')}</div>
               </div>
             </div>
           `;
@@ -5260,7 +5260,7 @@
                 ${renderTagReino(first.tag, first.logo, first.cor, 'margin-bottom:4px; font-size:12px; padding:2px 8px;')}
                 <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1">${escapeHtml(first.nome)}</div>
                 <div class="text-sm md:text-base font-mono font-black text-amber-200 mt-0.5">${first.totalPoints} pts</div>
-                <div class="text-[11px] text-slate-300 mt-0.5">${first.kills} kills &middot; ${first.hoursPlayed}h &middot; ${first.membersCount} membros</div>
+                <div class="text-[11px] text-slate-300 mt-0.5">${first.kills} kills &middot; ${first.playtimeFormatted || (first.hoursPlayed + 'h')} &middot; ${first.membersCount} membros</div>
               </div>
             </div>
           `;
@@ -5275,7 +5275,7 @@
                 ${renderTagReino(third.tag, third.logo, third.cor, 'margin-bottom:4px;')}
                 <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nome)}</div>
                 <div class="text-xs font-mono font-bold text-amber-400 mt-0.5">${third.totalPoints} pts</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">${third.kills} kills &middot; ${third.hoursPlayed}h</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">${third.kills} kills &middot; ${third.playtimeFormatted || (third.hoursPlayed + 'h')}</div>
               </div>
             </div>
           `;
@@ -5312,7 +5312,7 @@
 
               <div class="text-right flex-shrink-0">
                 <div class="font-mono font-black text-xs md:text-sm text-cyan-300">${k.totalPoints} pts</div>
-                <div class="text-[10px] text-slate-400 font-mono">${k.kills} kills &middot; ${k.hoursPlayed}h</div>
+                <div class="text-[10px] text-slate-400 font-mono">${k.kills} kills &middot; ${k.playtimeFormatted || (k.hoursPlayed + 'h')}</div>
               </div>
             </div>
           `;
