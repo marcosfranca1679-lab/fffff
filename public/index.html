@@ -1108,11 +1108,14 @@
             <p id="tv-denunciado" class="text-[11px] text-slate-400 hidden">Denunciado: <span id="tv-denunciado-nick" class="text-rose-400 font-bold"></span></p>
             <p id="tv-autor" class="text-[11px] text-slate-500 mt-0.5">Por <span class="text-slate-300 font-semibold"></span></p>
           </div>
-          <div class="flex items-center gap-2 flex-shrink-0">
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <button onclick="recarregarTicketAberto()" title="Atualizar mensagens" class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white flex items-center justify-center text-xs transition shadow-sm">
+              🔄
+            </button>
             <button id="tv-fechar-btn" onclick="fecharTicketAdmin()" class="hidden bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] px-3 py-1.5 rounded-xl transition shadow-sm">
               🔒 Encerrar & Apagar
             </button>
-            <button onclick="fecharVisualizacaoTicket()"
+            <button onclick="fecharVisualizacaoTicket()" title="Fechar visualização"
               class="text-slate-400 hover:text-white w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] flex items-center justify-center text-xs transition">
               ✕
             </button>
@@ -1651,7 +1654,7 @@
       const data = categorySubdivisions[categoria];
       if (!data) return;
 
-      ['info', 'ranks', 'comunidade', 'admin'].forEach(cat => {
+      ['info', 'ranks', 'comunidade', 'suporte', 'admin'].forEach(cat => {
         const btn = document.getElementById(`icon-cat-${cat}`);
         const dot = document.getElementById(`dot-cat-${cat}`);
         const isCat = cat === categoria;
@@ -3567,15 +3570,41 @@
       }
     }
 
-    async function abrirTicket(id) {
+    let ticketPollInterval = null;
+
+    function recarregarTicketAberto() {
+      if (ticketAtualId) {
+        abrirTicket(ticketAtualId, true);
+      }
+    }
+
+    function fecharVisualizacaoTicket() {
+      const tv = document.getElementById('ticket-view');
+      if (tv) tv.classList.add('hidden');
+      ticketAtualId = null;
+      if (ticketPollInterval) {
+        clearInterval(ticketPollInterval);
+        ticketPollInterval = null;
+      }
+    }
+
+    async function abrirTicket(id, silencioso = false) {
       ticketAtualId = id;
       ocultarFormNovoTicket();
       const tv = document.getElementById('ticket-view');
       if (tv) tv.classList.remove('hidden');
-      document.getElementById('tv-messages').innerHTML = '<div class="text-slate-500 text-xs text-center py-3">Carregando...</div>';
+      
+      const msgBox = document.getElementById('tv-messages');
+      if (!silencioso && msgBox) {
+        msgBox.innerHTML = '<div class="text-slate-500 text-xs text-center py-3">Carregando mensagens...</div>';
+      }
+
       try {
         const res = await apiFetch(`/api/tickets/${id}`);
-        if (!res.ok) { mostrarFeedback('Erro ao abrir ticket.', 'red'); return; }
+        if (!res.ok) {
+          if (!silencioso) mostrarFeedback('Erro ao abrir ticket.', 'red');
+          return;
+        }
         const { ticket, messages } = await res.json();
 
         document.getElementById('tv-titulo').textContent = ticket.titulo;
@@ -3612,18 +3641,31 @@
         }
 
         renderizarMensagensTicket(messages);
+
+        // Gerenciar polling suave (apenas enquanto a janela estiver aberta e o usuário ativo na aba)
+        if (ticketPollInterval) clearInterval(ticketPollInterval);
+        if (isAberto) {
+          ticketPollInterval = setInterval(() => {
+            if (!document.hidden && isUserActive && ticketAtualId === id && currentChannel === 'denuncias') {
+              abrirTicket(id, true);
+            }
+          }, 8000);
+        }
       } catch (err) {
-        mostrarFeedback('Erro ao carregar ticket.', 'red');
+        if (!silencioso) mostrarFeedback('Erro ao carregar ticket.', 'red');
       }
     }
 
     function renderizarMensagensTicket(messages) {
       const container = document.getElementById('tv-messages');
+      if (!container) return;
       if (!messages || !messages.length) {
         container.innerHTML = '<div class="text-slate-500 text-xs text-center py-3">Sem mensagens ainda.</div>';
         return;
       }
-      container.innerHTML = messages.map(m => {
+
+      // Evita piscar a tela caso as mensagens sejam idênticas
+      const newHtml = messages.map(m => {
         const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         const isAdmin = m.is_admin;
         return `
@@ -3639,7 +3681,14 @@
             </div>
           </div>`;
       }).join('');
-      container.scrollTop = container.scrollHeight;
+
+      if (container.innerHTML !== newHtml) {
+        const wasScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+        container.innerHTML = newHtml;
+        if (wasScrolledToBottom) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
     }
 
     async function enviarMensagemTicket() {
@@ -3648,16 +3697,41 @@
       const msg = input.value.trim();
       if (!msg) return;
       input.value = '';
+
+      // Adiciona temporariamente a mensagem na interface imediatamente (UI otimista, sem gastar request para renderizar)
+      const container = document.getElementById('tv-messages');
+      if (container) {
+        const tempNick = (currentUser && currentUser.nick) || 'Eu';
+        const tempIsAdmin = !!window.isUserAdmin;
+        const tempHora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const msgNode = document.createElement('div');
+        msgNode.className = `flex ${tempIsAdmin ? 'justify-start' : 'justify-end'}`;
+        msgNode.innerHTML = `
+          <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs ${tempIsAdmin ? 'bg-orange-500/20 border border-orange-500/30 text-white' : 'bg-white/[0.08] border border-white/[0.06] text-slate-200'}">
+            <div class="font-bold text-[10px] mb-0.5 ${tempIsAdmin ? 'text-orange-300' : 'text-slate-400'}">
+              ${tempIsAdmin ? '🛡️ Admin' : tempNick}
+            </div>
+            <div class="whitespace-pre-wrap leading-relaxed">${msg.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div class="text-[9px] text-slate-500 text-right mt-0.5">${tempHora} (enviando...)</div>
+          </div>`;
+        container.appendChild(msgNode);
+        container.scrollTop = container.scrollHeight;
+      }
+
       try {
         const res = await apiFetch(`/api/tickets/${ticketAtualId}/messages`, {
           method: 'POST',
           body: JSON.stringify({ mensagem: msg })
         });
         const data = await res.json();
-        if (!res.ok) { mostrarFeedback(data.error || 'Erro ao enviar.', 'red'); return; }
-        await abrirTicket(ticketAtualId);
+        if (!res.ok) {
+          mostrarFeedback(data.error || 'Erro ao enviar.', 'red');
+          return;
+        }
+        // Atualiza a lista de mensagens de forma silenciosa e suave
+        await abrirTicket(ticketAtualId, true);
       } catch (err) {
-        mostrarFeedback('Erro de conexão.', 'red');
+        mostrarFeedback('Erro de conexão ao enviar mensagem.', 'red');
       }
     }
 
