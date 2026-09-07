@@ -1998,6 +1998,8 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
 
 // ─── CHECK (Minecraft Plugin) ─────────────────────────────────────────────
 app.get('/api/check/:nick', async (req, res) => {
+  // Cache de 5s no Edge CDN da Vercel: reduz invocações do plugin para o mesmo nick
+  res.setHeader('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=10');
   try {
     const nick = req.params.nick.trim();
     const ip = (req.query.ip || '').trim();
@@ -2208,6 +2210,9 @@ app.get('/api/plugin/sync', async (req, res) => {
   const secret = req.headers['x-plugin-secret'] || req.query.secret || '';
   const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
   if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  // Cache de 30s no Edge CDN: o plugin recebe dados frescos sem invocar o Node a cada chamada
+  res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
 
   try {
     // 1. Whitelist e Bans da tabela players
