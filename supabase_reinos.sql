@@ -119,5 +119,68 @@ BEGIN
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE kingdom_messages;
   END IF;
-END $$;
+-- 9. Colunas de Assinatura e Planos dos Reinos
+ALTER TABLE kingdoms
+  ADD COLUMN IF NOT EXISTS subscription_status TEXT NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS subscription_renewed_at TIMESTAMPTZ;
+
+-- Define expiração inicial de 30 dias para reinos legados que ainda não têm data
+UPDATE kingdoms
+SET
+  subscription_expires_at = NOW() + INTERVAL '30 days',
+  subscription_renewed_at = NOW()
+WHERE subscription_expires_at IS NULL;
+
+-- 10. Tabela de Pagamentos / Histórico do Mercado Pago
+CREATE TABLE IF NOT EXISTS kingdom_payments (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  kingdom_id        UUID REFERENCES kingdoms(id) ON DELETE CASCADE,
+  owner_nick        TEXT NOT NULL,
+  mp_payment_id     TEXT,
+  mp_preference_id  TEXT,
+  status            TEXT NOT NULL DEFAULT 'pending',
+  amount            NUMERIC(10,2) NOT NULL DEFAULT 19.99,
+  tipo              TEXT NOT NULL DEFAULT 'assinatura',
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 11. Tabela de Pagamentos Pendentes Pré-Criação de Reino
+CREATE TABLE IF NOT EXISTS kingdom_pending_payments (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_nick        TEXT NOT NULL,
+  mp_payment_id     TEXT,
+  mp_preference_id  TEXT UNIQUE,
+  nome              TEXT NOT NULL,
+  tag               TEXT NOT NULL,
+  logo              TEXT NOT NULL DEFAULT '👑',
+  cor               TEXT NOT NULL DEFAULT '#f59e0b',
+  descricao         TEXT DEFAULT '',
+  status            TEXT NOT NULL DEFAULT 'pending',
+  amount            NUMERIC(10,2) NOT NULL DEFAULT 19.99,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at        TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '2 hours'
+);
+
+-- Índices de Otimização
+CREATE INDEX IF NOT EXISTS idx_kingdom_payments_kingdom_id ON kingdom_payments(kingdom_id);
+CREATE INDEX IF NOT EXISTS idx_kingdom_payments_mp_id ON kingdom_payments(mp_payment_id);
+CREATE INDEX IF NOT EXISTS idx_kingdom_pending_mp_pref ON kingdom_pending_payments(mp_preference_id);
+CREATE INDEX IF NOT EXISTS idx_kingdom_pending_nick ON kingdom_pending_payments(owner_nick);
+CREATE INDEX IF NOT EXISTS idx_kingdoms_sub_status ON kingdoms(subscription_status);
+CREATE INDEX IF NOT EXISTS idx_kingdoms_sub_expires ON kingdoms(subscription_expires_at);
+
+-- Permissões das novas tabelas
+ALTER TABLE kingdom_payments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kingdom_pending_payments ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE kingdom_payments TO anon, authenticated, service_role;
+GRANT ALL ON TABLE kingdom_pending_payments TO anon, authenticated, service_role;
+
+DROP POLICY IF EXISTS "Permitir tudo em kingdom_payments" ON kingdom_payments;
+CREATE POLICY "Permitir tudo em kingdom_payments" ON kingdom_payments FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir tudo em kingdom_pending_payments" ON kingdom_pending_payments;
+CREATE POLICY "Permitir tudo em kingdom_pending_payments" ON kingdom_pending_payments FOR ALL USING (true) WITH CHECK (true);
 
