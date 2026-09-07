@@ -991,14 +991,14 @@
 
         <!-- ── MÓDULO PERMISSÕES DE REINOS ────────────────────────── -->
         <div id="admin-mod-content-reinos" class="hidden p-3 md:p-4 space-y-3">
-          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08] gap-2 flex-wrap">
             <div>
               <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
                 <span>🏰 Permissões de Criação de Reino</span>
               </div>
               <div class="text-[10px] text-slate-400">Libere jogadores para criar reino gratuitamente (sem precisar pagar no Mercado Pago)</div>
             </div>
-            <button onclick="carregarAdminPermissoesReino()" class="bg-cyan-600/40 hover:bg-cyan-600/70 text-cyan-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+            <button onclick="carregarAdminPermissoesReino()" class="bg-cyan-600/40 hover:bg-cyan-600/70 text-cyan-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm flex-shrink-0">
               🔄 Atualizar
             </button>
           </div>
@@ -1006,10 +1006,10 @@
           <!-- Adicionar Permissão -->
           <div class="bg-black/40 rounded-xl p-3 border border-white/[0.08] space-y-2">
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Autorizar Novo Jogador</div>
-            <div class="flex gap-2">
+            <div class="flex flex-col sm:flex-row gap-2">
               <input id="admin-reino-nick-input" type="text" maxlength="20" placeholder="Nick exato do jogador..."
-                class="flex-1 bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500" />
-              <button onclick="concederPermissaoReino(true)" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 shadow-sm flex-shrink-0">
+                class="w-full sm:flex-1 min-w-0 bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-500" />
+              <button onclick="concederPermissaoReino(true)" class="w-full sm:w-auto justify-center bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer flex-shrink-0">
                 <span>✅ Liberar Criação</span>
               </button>
             </div>
@@ -1025,7 +1025,7 @@
 
           <!-- ── SEÇÃO: TODOS OS REINOS CRIADOS (Com botão de Excluir do Supabase) ── -->
           <div class="pt-3 border-t border-white/[0.08] space-y-2">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <div class="text-xs font-bold text-white flex items-center gap-1.5">
                   <span>🏰 Reinos Ativos no Servidor</span>
@@ -1033,7 +1033,7 @@
                 </div>
                 <div class="text-[10px] text-slate-400">Exclua reinos permanentemente (remove membros, chat, pagamentos e dados do Supabase)</div>
               </div>
-              <button onclick="carregarAdminReinosAtivos()" class="text-[11px] text-cyan-300 hover:text-cyan-200 font-bold bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+              <button onclick="carregarAdminReinosAtivos()" class="text-[11px] text-cyan-300 hover:text-cyan-200 font-bold bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition flex items-center gap-1 flex-shrink-0">
                 <span>🔄</span> <span>Atualizar</span>
               </button>
             </div>
