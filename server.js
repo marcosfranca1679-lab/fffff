@@ -3335,11 +3335,76 @@ app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
     const { preferenceId } = req.query;
     if (!preferenceId) return res.status(400).json({ error: 'preferenceId obrigatório.' });
 
-    const { data: pending } = await supabase
-      .from('kingdom_pending_payments').select('status, nome, tag, logo, cor')
+    // 1. Busca registro local
+    let { data: pending } = await supabase
+      .from('kingdom_pending_payments').select('*')
       .eq('mp_preference_id', preferenceId).ilike('owner_nick', nick).maybeSingle();
 
+    if (!pending) {
+      // Tenta buscar sem ilike do nick (caso o nick tenha divergência de maiúsculas)
+      const { data: altPending } = await supabase
+        .from('kingdom_pending_payments').select('*')
+        .eq('mp_preference_id', preferenceId).maybeSingle();
+      if (altPending) pending = altPending;
+    }
+
     if (!pending) return res.status(404).json({ error: 'Pagamento não encontrado.' });
+
+    // Se já estiver aprovado no banco, retorna imediatamente
+    if (pending.status === 'approved') {
+      return res.json({ status: 'approved', nome: pending.nome, tag: pending.tag });
+    }
+
+    // 2. Se ainda estiver pendente, consulta a API do Mercado Pago diretamente!
+    // Isso garante a confirmação mesmo se o Webhook da Vercel falhar, atrasar ou não receber notificação.
+    try {
+      const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc`, {
+        headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+      });
+
+      if (mpSearchRes.ok) {
+        const mpSearchData = await mpSearchRes.json();
+        const payments = mpSearchData.results || [];
+        const approvedPayment = payments.find(p => p.status === 'approved');
+
+        if (approvedPayment) {
+          const paymentId = String(approvedPayment.id);
+          const expiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 86400000).toISOString();
+
+          // Verifica se o reino já foi criado
+          const { data: existingK } = await supabase.from('kingdoms').select('id').or(`nome.ilike.${pending.nome},tag.ilike.${pending.tag}`).maybeSingle();
+          let kingdomId = existingK?.id;
+
+          if (!kingdomId) {
+            const insertPayload = {
+              nome: pending.nome, tag: pending.tag, descricao: pending.descricao,
+              owner_nick: pending.owner_nick, taxa_paga: SUBSCRIPTION_PRICE,
+              pontos: 0, kills: 0, logo: pending.logo, cor: pending.cor,
+              subscription_status: 'active',
+              subscription_expires_at: expiresAt,
+              subscription_renewed_at: new Date().toISOString()
+            };
+
+            const { data: newKingdom } = await supabase.from('kingdoms').insert([insertPayload]).select().single();
+            if (newKingdom) {
+              kingdomId = newKingdom.id;
+              await supabase.from('kingdom_members').insert([{ kingdom_id: kingdomId, user_nick: pending.owner_nick, role: 'lider' }]);
+              await salvarBaselineMembroReino(pending.owner_nick, kingdomId);
+              await supabase.from('kingdom_messages').insert([{ kingdom_id: kingdomId, author_nick: 'Sistema', author_role: 'system', content: `🏰 Reino [${pending.tag}] ${pending.nome} fundado por ${pending.owner_nick}! Plano ativo até ${new Date(expiresAt).toLocaleDateString('pt-BR')}.` }]);
+              await supabase.from('kingdom_payments').insert([{ kingdom_id: kingdomId, owner_nick: pending.owner_nick, mp_payment_id: paymentId, mp_preference_id: preferenceId, status: 'approved', amount: SUBSCRIPTION_PRICE, tipo: 'assinatura' }]);
+            }
+          }
+
+          await supabase.from('kingdom_pending_payments').update({ status: 'approved', mp_payment_id: paymentId }).eq('id', pending.id);
+          syncKingdomsCache(true).catch(() => {});
+
+          return res.json({ status: 'approved', nome: pending.nome, tag: pending.tag });
+        }
+      }
+    } catch (mpErr) {
+      console.warn('[MP direct check warn]', mpErr.message);
+    }
+
     res.json({ status: pending.status, nome: pending.nome, tag: pending.tag });
   } catch (err) {
     res.status(500).json({ error: err.message });
