@@ -3216,14 +3216,16 @@ app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
     // Remove pagamentos pendentes anteriores deste nick
     await safeDb(supabase.from('kingdom_pending_payments').delete().ilike('owner_nick', nick).eq('status', 'pending'));
 
-    // Cria preferência no Mercado Pago com external_reference vinculada ao nick e TAG
-    const extRef = `REINO_${cleanTag}_${nick}_${Date.now()}`;
+    // ID único e exclusivo desta tentativa de pagamento
+    const pendingId = crypto.randomUUID();
+
+    // Cria preferência no Mercado Pago com external_reference vinculada ao ID único
     const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
       body: JSON.stringify({
         items: [{ title: `Assinatura de Reino [${cleanTag}] ${cleanNome} - 5DAY MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
-        external_reference: extRef,
+        external_reference: pendingId,
         back_urls: {
           success: `${SITE_URL}/#criar-reinos`,
           failure: `${SITE_URL}/#criar-reinos`,
@@ -3243,14 +3245,15 @@ app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
 
     const mpData = await mpRes.json();
 
-    // Salva pagamento pendente
+    // Salva pagamento pendente com o ID único
     const { data: pending } = await supabase.from('kingdom_pending_payments').insert([{
+      id: pendingId,
       owner_nick: nick, mp_preference_id: mpData.id,
       nome: cleanNome, tag: cleanTag, logo: cleanLogo, cor: cleanCor, descricao: cleanDesc,
       status: 'pending', amount: SUBSCRIPTION_PRICE
     }]).select().single();
 
-    res.json({ success: true, preferenceId: mpData.id, paymentUrl: mpData.init_point, pendingId: pending?.id });
+    res.json({ success: true, preferenceId: mpData.id, paymentUrl: mpData.init_point, pendingId: pending?.id || pendingId });
   } catch (err) {
     console.error('[MP initiate]', err);
     res.status(500).json({ error: err.message });
@@ -3274,12 +3277,23 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
     if (payment.status !== 'approved') return;
 
     const preferenceId = payment.preference_id;
+    const externalRef  = payment.external_reference;
     const paymentId    = String(data.id);
 
     // CASO 1: Criação de reino (kingdom_pending_payments)
-    const { data: pending } = await supabase
-      .from('kingdom_pending_payments').select('*')
-      .eq('mp_preference_id', preferenceId).eq('status', 'pending').maybeSingle();
+    let pending = null;
+    if (externalRef) {
+      const { data: p } = await supabase
+        .from('kingdom_pending_payments').select('*')
+        .eq('id', externalRef).eq('status', 'pending').maybeSingle();
+      if (p) pending = p;
+    }
+    if (!pending && preferenceId) {
+      const { data: p } = await supabase
+        .from('kingdom_pending_payments').select('*')
+        .eq('mp_preference_id', preferenceId).eq('status', 'pending').maybeSingle();
+      if (p) pending = p;
+    }
 
     if (pending) {
       const expiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 86400000).toISOString();
@@ -3298,7 +3312,7 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
       await supabase.from('kingdom_members').insert([{ kingdom_id: newKingdom.id, user_nick: pending.owner_nick, role: 'lider' }]);
       await salvarBaselineMembroReino(pending.owner_nick, newKingdom.id);
       await supabase.from('kingdom_messages').insert([{ kingdom_id: newKingdom.id, author_nick: 'Sistema', author_role: 'system', content: `🏰 Reino [${pending.tag}] ${pending.nome} fundado por ${pending.owner_nick}! Plano ativo até ${new Date(expiresAt).toLocaleDateString('pt-BR')}.` }]);
-      await supabase.from('kingdom_payments').insert([{ kingdom_id: newKingdom.id, owner_nick: pending.owner_nick, mp_payment_id: paymentId, mp_preference_id: preferenceId, status: 'approved', amount: SUBSCRIPTION_PRICE, tipo: 'assinatura' }]);
+      await supabase.from('kingdom_payments').insert([{ kingdom_id: newKingdom.id, owner_nick: pending.owner_nick, mp_payment_id: paymentId, mp_preference_id: preferenceId || pending.mp_preference_id, status: 'approved', amount: SUBSCRIPTION_PRICE, tipo: 'assinatura' }]);
       await supabase.from('kingdom_pending_payments').update({ status: 'approved', mp_payment_id: paymentId }).eq('id', pending.id);
       syncKingdomsCache(true).catch(() => {});
       console.log(`✅ [MP] Reino [${pending.tag}] criado para ${pending.owner_nick} após pagamento ${paymentId}`);
@@ -3345,7 +3359,6 @@ app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
       .eq('mp_preference_id', preferenceId).ilike('owner_nick', nick).maybeSingle();
 
     if (!pending) {
-      // Tenta buscar sem ilike do nick (caso o nick tenha divergência de maiúsculas)
       const { data: altPending } = await supabase
         .from('kingdom_pending_payments').select('*')
         .eq('mp_preference_id', preferenceId).maybeSingle();
@@ -3360,23 +3373,34 @@ app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
     }
 
     // 2. Se ainda estiver pendente, consulta a API do Mercado Pago diretamente!
-    // Isso garante a confirmação mesmo se o Webhook da Vercel falhar ou se o MP não preencher preference_id no PIX
     try {
       let approvedPayment = null;
 
-      // 2.1 Busca por preference_id
-      const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc`, {
+      // 2.1 Busca por external_reference (ID exclusivo gerado nesta tentativa)
+      const mpExtRes = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${pending.id}&sort=date_created&criteria=desc`, {
         headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
       });
-
-      if (mpSearchRes.ok) {
-        const mpSearchData = await mpSearchRes.json();
-        const payments = mpSearchData.results || [];
+      if (mpExtRes.ok) {
+        const extData = await mpExtRes.json();
+        const payments = extData.results || [];
         approvedPayment = payments.find(p => p.status === 'approved');
       }
 
-      // 2.2 Se o MP não associou preference_id (comum no PIX do checkout pro), busca os pagamentos recentes da conta aprovados
+      // 2.2 Se não encontrou por external_reference, busca por preference_id
       if (!approvedPayment) {
+        const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc`, {
+          headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+        });
+        if (mpSearchRes.ok) {
+          const mpSearchData = await mpSearchRes.json();
+          const payments = mpSearchData.results || [];
+          approvedPayment = payments.find(p => p.status === 'approved');
+        }
+      }
+
+      // 2.3 Fallback ULTRA-ESTRITO (Proteção contra reuso de pagamentos antigos ou não pagos)
+      if (!approvedPayment) {
+        const pendingCreated = new Date(pending.created_at).getTime();
         const mpRecentRes = await fetch(`https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10`, {
           headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
         });
@@ -3385,14 +3409,41 @@ app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
           const recentData = await mpRecentRes.json();
           const recentList = recentData.results || [];
 
-          // Procura pagamento aprovado recente de R$ 19,99 que contenha a TAG ou o Nome do Reino no título
-          approvedPayment = recentList.find(p => {
-            if (p.status !== 'approved') return false;
+          for (const p of recentList) {
+            if (p.status !== 'approved') continue;
+
+            // REGRA 1: O pagamento DEVE ter sido criado DEPOIS do pedido pendente (bloqueia pagamentos de minutos/horas atrás)
+            const payTime = new Date(p.date_created || p.date_approved).getTime();
+            if (payTime < pendingCreated - 30000) continue;
+
+            // REGRA 2: O pagamento NUNCA pode ter sido registrado antes em kingdom_payments
+            const { data: alreadyUsed } = await supabase
+              .from('kingdom_payments')
+              .select('id')
+              .eq('mp_payment_id', String(p.id))
+              .maybeSingle();
+            if (alreadyUsed) continue;
+
+            // REGRA 3: O pagamento não pode já ter sido consumido por outro registro pendente
+            const { data: alreadyPending } = await supabase
+              .from('kingdom_pending_payments')
+              .select('id')
+              .eq('mp_payment_id', String(p.id))
+              .neq('id', pending.id)
+              .maybeSingle();
+            if (alreadyPending) continue;
+
+            // REGRA 4: Validação da TAG exata entre colchetes no título
             const desc = (p.description || '').toLowerCase();
-            const tagMatch = desc.includes(`[${pending.tag.toLowerCase()}]`);
-            const nameMatch = desc.includes(pending.nome.toLowerCase());
-            return tagMatch || nameMatch;
-          });
+            const tagExact = `[${pending.tag.toLowerCase()}]`;
+            const matchesRef = p.external_reference === pending.id;
+            const matchesDesc = desc.includes(tagExact);
+
+            if (matchesRef || matchesDesc) {
+              approvedPayment = p;
+              break;
+            }
+          }
         }
       }
 
