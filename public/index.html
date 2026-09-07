@@ -1417,13 +1417,35 @@
               <span>Apenas jogadores autorizados pelo Administrador podem criar um reino. Solicite a permissão com o suporte/admin.</span>
             </div>
 
-            <!-- Botão de Criação -->
+            <!-- Botão de Assinatura e Pagamento Mercado Pago -->
             <button type="submit" id="btn-criar-reino"
-              class="w-full py-3 rounded-xl font-extrabold text-xs md:text-sm bg-gradient-to-r from-cyan-600 via-teal-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg hover:shadow-cyan-500/30 transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2">
-              <span>🏰</span>
-              <span id="btn-criar-reino-texto">Criar Reino (R$ 19,99/mês)</span>
+              class="w-full py-3.5 rounded-xl font-extrabold text-xs md:text-sm bg-gradient-to-r from-sky-500 via-cyan-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white shadow-xl hover:shadow-cyan-500/30 transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 border-t border-white/20">
+              <span class="text-base">💳</span>
+              <span id="btn-criar-reino-texto">Assinar Plano (R$ 19,99/mês)</span>
             </button>
           </form>
+
+          <!-- Painel de Aguardo do Pagamento Mercado Pago -->
+          <div id="reino-pagamento-aguardo" class="hidden p-4 rounded-xl bg-cyan-950/40 border border-cyan-500/30 text-center space-y-3">
+            <div class="w-10 h-10 rounded-full bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto text-lg animate-pulse border border-cyan-500/40">
+              ⏳
+            </div>
+            <div>
+              <div class="text-xs font-bold text-white">Aguardando Confirmação do Mercado Pago...</div>
+              <div class="text-[11px] text-slate-300 mt-1">Conclua o pagamento na aba aberta. O site detecta automaticamente a aprovação e cria o seu Reino!</div>
+            </div>
+            <div class="flex items-center justify-center gap-2 pt-1 flex-wrap">
+              <a id="link-abrir-pagamento-mp" href="#" target="_blank" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5">
+                <span>🔗</span> <span>Abrir Pagamento</span>
+              </a>
+              <button onclick="verificarStatusPagamentoReinoManual()" class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition flex items-center gap-1">
+                <span>🔄</span> <span>Verificar Agora</span>
+              </button>
+              <button onclick="cancelarTentativaPagamentoReino()" class="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs rounded-xl transition">
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1461,6 +1483,38 @@
                 <div id="reino-info-membros-count" class="text-xs md:text-sm font-black text-cyan-300 font-mono">0</div>
                 <div class="text-[9px] uppercase font-bold text-slate-400">Membros</div>
               </div>
+            </div>
+          </div>
+
+          <!-- Painel do Plano & Assinatura (Meses restantes + Renovar) -->
+          <div id="reino-plano-card" class="bg-black/50 border border-cyan-500/20 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-sm font-bold border border-cyan-500/30 flex-shrink-0">
+                📅
+              </div>
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-bold text-white">Status do Plano:</span>
+                  <span id="reino-plano-status-badge" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Ativo</span>
+                  <span id="reino-plano-meses-badge" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-sky-500/20 text-sky-300 font-mono">1.0 mês restante</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-0.5">
+                  Vencimento: <span id="reino-plano-expira-txt" class="text-slate-200 font-semibold">--/--/----</span>
+                  <span id="reino-plano-dias-txt" class="text-cyan-400 ml-1">(30 dias restantes)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botões de Ação do Plano (Líder / Admin) -->
+            <div id="reino-plano-acoes" class="flex items-center gap-1.5 flex-shrink-0">
+              <button id="btn-renovar-plano" onclick="iniciarRenovacaoPlanoReino()"
+                class="hidden bg-gradient-to-r from-sky-500 to-cyan-600 hover:from-sky-400 hover:to-cyan-500 text-white font-extrabold text-xs px-3.5 py-1.5 rounded-xl transition shadow-md flex items-center gap-1 active:scale-95">
+                <span>💳</span> <span>Renovar Plano</span>
+              </button>
+              <button id="btn-admin-renovar-manual" onclick="abrirModalAdminRenovarManual()"
+                class="hidden bg-purple-600/30 hover:bg-purple-600/60 text-purple-200 border border-purple-500/40 text-xs font-bold px-2.5 py-1.5 rounded-xl transition flex items-center gap-1">
+                <span>🛡️ +30d Admin</span>
+              </button>
             </div>
           </div>
 
@@ -4776,7 +4830,7 @@
           btnCriar.classList.remove('opacity-40', 'cursor-not-allowed');
         }
         if (btnCriarTexto) {
-          btnCriarTexto.textContent = 'Criar Reino (R$ 19,99/mês)';
+          btnCriarTexto.textContent = 'Assinar Plano (R$ 19,99/mês)';
         }
       } else {
         if (statusPermissaoTxt) {
@@ -4836,24 +4890,39 @@
       }
 
       const btn = document.getElementById('btn-criar-reino');
+      const btnTexto = document.getElementById('btn-criar-reino-texto');
       if (btn) btn.disabled = true;
+      if (btnTexto) btnTexto.textContent = 'Gerando Pagamento Mercado Pago...';
 
       try {
-        const res = await apiFetch('/api/kingdoms/create', {
+        const res = await apiFetch('/api/kingdoms/payment/initiate', {
           method: 'POST',
           body: JSON.stringify({ nome, tag, descricao: desc, logo, cor })
         });
         const data = await res.json();
-        if (res.ok && data.success) {
-          mostrarFeedback('👑 Reino criado com sucesso! TAG ativada.', 'green');
-          await carregarReinoStatus();
+        if (res.ok && data.success && data.paymentUrl) {
+          mostrarFeedback('💳 Link de pagamento gerado! Conclua para ativar o Reino.', 'green');
+          
+          // Abre checkout do Mercado Pago
+          window.open(data.paymentUrl, '_blank');
+
+          // Exibe card de aguardo
+          const aguardoBox = document.getElementById('reino-pagamento-aguardo');
+          const linkMp = document.getElementById('link-abrir-pagamento-mp');
+          if (linkMp) linkMp.href = data.paymentUrl;
+          if (aguardoBox) aguardoBox.classList.remove('hidden');
+
+          // Inicia verificação contínua do pagamento
+          iniciarMonitoramentoPagamentoReino(data.preferenceId);
         } else {
-          mostrarFeedback(data.error || 'Erro ao criar reino.', 'red');
+          mostrarFeedback(data.error || 'Erro ao gerar pagamento.', 'red');
+          if (btn) btn.disabled = false;
+          if (btnTexto) btnTexto.textContent = 'Assinar Plano (R$ 19,99/mês)';
         }
       } catch (err) {
-        mostrarFeedback('Erro de conexão ao criar reino.', 'red');
-      } finally {
+        mostrarFeedback('Erro de conexão ao gerar pagamento.', 'red');
         if (btn) btn.disabled = false;
+        if (btnTexto) btnTexto.textContent = 'Assinar Plano (R$ 19,99/mês)';
       }
     }
 
@@ -4892,6 +4961,66 @@
       }
       if (btnDissolver) {
         btnDissolver.classList.toggle('hidden', !isLider);
+      }
+
+      // ── MONITOR DE PLANO E ASSINATURA DO REINO ──
+      const sub = reino.subscription || {};
+      const statusBadge = document.getElementById('reino-plano-status-badge');
+      const mesesBadge = document.getElementById('reino-plano-meses-badge');
+      const expiraTxt = document.getElementById('reino-plano-expira-txt');
+      const diasTxt = document.getElementById('reino-plano-dias-txt');
+      const btnRenovar = document.getElementById('btn-renovar-plano');
+      const btnAdminRenovar = document.getElementById('btn-admin-renovar-manual');
+
+      const isExpired = !!sub.isExpired;
+      const daysLeft = typeof sub.daysRemaining === 'number' ? sub.daysRemaining : 30;
+      const monthsLeft = typeof sub.monthsRemaining === 'number' ? sub.monthsRemaining : (daysLeft / 30).toFixed(1);
+
+      if (statusBadge) {
+        if (isExpired) {
+          statusBadge.textContent = 'Plano Expirado';
+          statusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40';
+        } else if (daysLeft <= 5) {
+          statusBadge.textContent = 'Vencendo em Breve';
+          statusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse';
+        } else {
+          statusBadge.textContent = 'Plano Ativo';
+          statusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        }
+      }
+
+      if (mesesBadge) {
+        if (isExpired) {
+          mesesBadge.textContent = '0.0 meses restantes';
+          mesesBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-500/20 text-rose-300 font-mono';
+        } else {
+          mesesBadge.textContent = `${monthsLeft} ${Number(monthsLeft) === 1 ? 'mês restante' : 'meses restantes'}`;
+          mesesBadge.className = daysLeft <= 5
+            ? 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 font-mono'
+            : 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-sky-500/20 text-sky-300 font-mono';
+        }
+      }
+
+      if (expiraTxt) {
+        expiraTxt.textContent = sub.formattedExpiresAt || 'Indeterminado';
+      }
+
+      if (diasTxt) {
+        if (isExpired) {
+          diasTxt.textContent = '(Vencido! Renove para manter seu Reino ativo)';
+          diasTxt.className = 'text-rose-400 font-bold ml-1';
+        } else {
+          diasTxt.textContent = `(${daysLeft} ${daysLeft === 1 ? 'dia restante' : 'dias restantes'})`;
+          diasTxt.className = daysLeft <= 5 ? 'text-amber-400 font-bold ml-1' : 'text-cyan-400 ml-1';
+        }
+      }
+
+      // Apenas Líder ou Admin podem renovar
+      if (btnRenovar) {
+        btnRenovar.classList.toggle('hidden', !isLider);
+      }
+      if (btnAdminRenovar) {
+        btnAdminRenovar.classList.toggle('hidden', !isUserAdmin);
       }
 
       // Popula o Select de jogadores aprovados na Whitelist (se for líder)
@@ -5461,6 +5590,149 @@
           await carregarAdminPermissoesReino();
         }
       } catch (_) {}
+    }
+
+    // ── MERCADO PAGO: Monitoramento de Pagamento Pendente ──────────────────────
+    let reinoPaymentPollingInterval = null;
+    let reinoActivePreferenceId = null;
+
+    function iniciarMonitoramentoPagamentoReino(preferenceId) {
+      if (!preferenceId) return;
+      reinoActivePreferenceId = preferenceId;
+      if (reinoPaymentPollingInterval) clearInterval(reinoPaymentPollingInterval);
+
+      let tentativas = 0;
+      reinoPaymentPollingInterval = setInterval(async () => {
+        tentativas++;
+        if (tentativas > 180) { // 15 minutos (180 x 5s)
+          clearInterval(reinoPaymentPollingInterval);
+          reinoPaymentPollingInterval = null;
+          mostrarFeedback('Tempo limite de verificação atingido. Caso tenha pago, atualize a página.', 'amber');
+          return;
+        }
+
+        try {
+          const res = await apiFetch(`/api/kingdoms/payment/status?preferenceId=${encodeURIComponent(preferenceId)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.status === 'approved') {
+            clearInterval(reinoPaymentPollingInterval);
+            reinoPaymentPollingInterval = null;
+            reinoActivePreferenceId = null;
+
+            const aguardoBox = document.getElementById('reino-pagamento-aguardo');
+            if (aguardoBox) aguardoBox.classList.add('hidden');
+
+            mostrarFeedback(`🎉 Pagamento aprovado! Reino [${data.tag}] ${data.nome} fundado com sucesso!`, 'green');
+            await carregarReinoStatus();
+          }
+        } catch (_) {}
+      }, 5000);
+    }
+
+    async function verificarStatusPagamentoReinoManual() {
+      if (!reinoActivePreferenceId) {
+        mostrarFeedback('Nenhum pagamento ativo sendo monitorado.', 'amber');
+        return;
+      }
+      try {
+        const res = await apiFetch(`/api/kingdoms/payment/status?preferenceId=${encodeURIComponent(reinoActivePreferenceId)}`);
+        const data = await res.json();
+        if (res.ok && data.status === 'approved') {
+          if (reinoPaymentPollingInterval) clearInterval(reinoPaymentPollingInterval);
+          const aguardoBox = document.getElementById('reino-pagamento-aguardo');
+          if (aguardoBox) aguardoBox.classList.add('hidden');
+          mostrarFeedback(`🎉 Pagamento confirmado! Reino criado com sucesso!`, 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback('O pagamento ainda não foi identificado como aprovado pelo Mercado Pago. Aguarde alguns instantes.', 'amber');
+        }
+      } catch (_) {
+        mostrarFeedback('Erro ao consultar status no Mercado Pago.', 'red');
+      }
+    }
+
+    function cancelarTentativaPagamentoReino() {
+      if (reinoPaymentPollingInterval) clearInterval(reinoPaymentPollingInterval);
+      reinoPaymentPollingInterval = null;
+      reinoActivePreferenceId = null;
+
+      const aguardoBox = document.getElementById('reino-pagamento-aguardo');
+      if (aguardoBox) aguardoBox.classList.add('hidden');
+
+      const btn = document.getElementById('btn-criar-reino');
+      const btnTexto = document.getElementById('btn-criar-reino-texto');
+      if (btn) btn.disabled = false;
+      if (btnTexto) btnTexto.textContent = 'Assinar Plano (R$ 19,99/mês)';
+
+      mostrarFeedback('Aguardando novo pagamento cancelado.', 'amber');
+    }
+
+    // ── MERCADO PAGO: Renovar Plano do Reino ──────────────────────────────────
+    async function iniciarRenovacaoPlanoReino() {
+      if (!confirm('Deseja renovar o plano do seu reino por mais 1 mês (R$ 19,99)?\n\nVocê será redirecionado para o pagamento com Mercado Pago.')) return;
+
+      const btn = document.getElementById('btn-renovar-plano');
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await apiFetch('/api/kingdoms/payment/renew', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.success && data.paymentUrl) {
+          window.open(data.paymentUrl, '_blank');
+          mostrarFeedback('💳 Link de renovação aberto! Conclua o pagamento para renovar o plano.', 'green');
+
+          // Monitora renovação
+          let polls = 0;
+          const pollRenew = setInterval(async () => {
+            polls++;
+            if (polls > 120) { clearInterval(pollRenew); return; }
+            try {
+              const stRes = await apiFetch('/api/kingdoms/status');
+              const stData = await stRes.json();
+              if (stRes.ok && stData.myKingdom?.subscription?.formattedExpiresAt !== data.currentExpiry) {
+                clearInterval(pollRenew);
+                mostrarFeedback('🎉 Plano do Reino renovado com sucesso por mais 30 dias!', 'green');
+                await carregarReinoStatus();
+              }
+            } catch (_) {}
+          }, 5000);
+        } else {
+          mostrarFeedback(data.error || 'Erro ao gerar renovação.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao gerar renovação.', 'red');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    // ── ADMIN: Renovar Plano Manualmente ─────────────────────────────────────
+    async function abrirModalAdminRenovarManual() {
+      if (!isUserAdmin || !meuReinoAtual) return;
+      const days = prompt(`[ADMIN] Renovar plano de "${meuReinoAtual.nome}" por quantos dias a mais?`, '30');
+      if (!days) return;
+      const numDays = parseInt(days, 10);
+      if (isNaN(numDays) || numDays <= 0) {
+        mostrarFeedback('Número de dias inválido.', 'red');
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/admin/kingdoms/renew-manual', {
+          method: 'POST',
+          body: JSON.stringify({ kingdomId: meuReinoAtual.id, days: numDays })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Plano renovado por +${numDays} dias!`, 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao renovar plano.', 'red');
+        }
+      } catch (_) {
+        mostrarFeedback('Erro de conexão ao renovar plano.', 'red');
+      }
     }
   </script>
 </body>
