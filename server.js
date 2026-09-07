@@ -3214,12 +3214,14 @@ app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
     // Remove pagamentos pendentes anteriores deste nick
     await safeDb(supabase.from('kingdom_pending_payments').delete().ilike('owner_nick', nick).eq('status', 'pending'));
 
-    // Cria preferência no Mercado Pago
+    // Cria preferência no Mercado Pago com external_reference vinculada ao nick e TAG
+    const extRef = `REINO_${cleanTag}_${nick}_${Date.now()}`;
     const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
       body: JSON.stringify({
         items: [{ title: `Assinatura de Reino [${cleanTag}] ${cleanNome} - Mapa Bermuda MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
+        external_reference: extRef,
         back_urls: {
           success: `${SITE_URL}/#criar-reinos`,
           failure: `${SITE_URL}/#criar-reinos`,
@@ -3356,8 +3358,11 @@ app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
     }
 
     // 2. Se ainda estiver pendente, consulta a API do Mercado Pago diretamente!
-    // Isso garante a confirmação mesmo se o Webhook da Vercel falhar, atrasar ou não receber notificação.
+    // Isso garante a confirmação mesmo se o Webhook da Vercel falhar ou se o MP não preencher preference_id no PIX
     try {
+      let approvedPayment = null;
+
+      // 2.1 Busca por preference_id
       const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc`, {
         headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
       });
@@ -3365,41 +3370,62 @@ app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
       if (mpSearchRes.ok) {
         const mpSearchData = await mpSearchRes.json();
         const payments = mpSearchData.results || [];
-        const approvedPayment = payments.find(p => p.status === 'approved');
+        approvedPayment = payments.find(p => p.status === 'approved');
+      }
 
-        if (approvedPayment) {
-          const paymentId = String(approvedPayment.id);
-          const expiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 86400000).toISOString();
+      // 2.2 Se o MP não associou preference_id (comum no PIX do checkout pro), busca os pagamentos recentes da conta aprovados
+      if (!approvedPayment) {
+        const mpRecentRes = await fetch(`https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10`, {
+          headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+        });
 
-          // Verifica se o reino já foi criado
-          const { data: existingK } = await supabase.from('kingdoms').select('id').or(`nome.ilike.${pending.nome},tag.ilike.${pending.tag}`).maybeSingle();
-          let kingdomId = existingK?.id;
+        if (mpRecentRes.ok) {
+          const recentData = await mpRecentRes.json();
+          const recentList = recentData.results || [];
 
-          if (!kingdomId) {
-            const insertPayload = {
-              nome: pending.nome, tag: pending.tag, descricao: pending.descricao,
-              owner_nick: pending.owner_nick, taxa_paga: SUBSCRIPTION_PRICE,
-              pontos: 0, kills: 0, logo: pending.logo, cor: pending.cor,
-              subscription_status: 'active',
-              subscription_expires_at: expiresAt,
-              subscription_renewed_at: new Date().toISOString()
-            };
-
-            const { data: newKingdom } = await supabase.from('kingdoms').insert([insertPayload]).select().single();
-            if (newKingdom) {
-              kingdomId = newKingdom.id;
-              await supabase.from('kingdom_members').insert([{ kingdom_id: kingdomId, user_nick: pending.owner_nick, role: 'lider' }]);
-              await salvarBaselineMembroReino(pending.owner_nick, kingdomId);
-              await supabase.from('kingdom_messages').insert([{ kingdom_id: kingdomId, author_nick: 'Sistema', author_role: 'system', content: `🏰 Reino [${pending.tag}] ${pending.nome} fundado por ${pending.owner_nick}! Plano ativo até ${new Date(expiresAt).toLocaleDateString('pt-BR')}.` }]);
-              await supabase.from('kingdom_payments').insert([{ kingdom_id: kingdomId, owner_nick: pending.owner_nick, mp_payment_id: paymentId, mp_preference_id: preferenceId, status: 'approved', amount: SUBSCRIPTION_PRICE, tipo: 'assinatura' }]);
-            }
-          }
-
-          await supabase.from('kingdom_pending_payments').update({ status: 'approved', mp_payment_id: paymentId }).eq('id', pending.id);
-          syncKingdomsCache(true).catch(() => {});
-
-          return res.json({ status: 'approved', nome: pending.nome, tag: pending.tag });
+          // Procura pagamento aprovado recente de R$ 19,99 que contenha a TAG ou o Nome do Reino no título
+          approvedPayment = recentList.find(p => {
+            if (p.status !== 'approved') return false;
+            const desc = (p.description || '').toLowerCase();
+            const tagMatch = desc.includes(`[${pending.tag.toLowerCase()}]`);
+            const nameMatch = desc.includes(pending.nome.toLowerCase());
+            return tagMatch || nameMatch;
+          });
         }
+      }
+
+      if (approvedPayment) {
+        const paymentId = String(approvedPayment.id);
+        const expiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 86400000).toISOString();
+
+        // Verifica se o reino já foi criado
+        const { data: existingK } = await supabase.from('kingdoms').select('id').or(`nome.ilike.${pending.nome},tag.ilike.${pending.tag}`).maybeSingle();
+        let kingdomId = existingK?.id;
+
+        if (!kingdomId) {
+          const insertPayload = {
+            nome: pending.nome, tag: pending.tag, descricao: pending.descricao,
+            owner_nick: pending.owner_nick, taxa_paga: SUBSCRIPTION_PRICE,
+            pontos: 0, kills: 0, logo: pending.logo, cor: pending.cor,
+            subscription_status: 'active',
+            subscription_expires_at: expiresAt,
+            subscription_renewed_at: new Date().toISOString()
+          };
+
+          const { data: newKingdom } = await supabase.from('kingdoms').insert([insertPayload]).select().single();
+          if (newKingdom) {
+            kingdomId = newKingdom.id;
+            await supabase.from('kingdom_members').insert([{ kingdom_id: kingdomId, user_nick: pending.owner_nick, role: 'lider' }]);
+            await salvarBaselineMembroReino(pending.owner_nick, kingdomId);
+            await supabase.from('kingdom_messages').insert([{ kingdom_id: kingdomId, author_nick: 'Sistema', author_role: 'system', content: `🏰 Reino [${pending.tag}] ${pending.nome} fundado por ${pending.owner_nick}! Plano ativo até ${new Date(expiresAt).toLocaleDateString('pt-BR')}.` }]);
+            await supabase.from('kingdom_payments').insert([{ kingdom_id: kingdomId, owner_nick: pending.owner_nick, mp_payment_id: paymentId, mp_preference_id: preferenceId, status: 'approved', amount: SUBSCRIPTION_PRICE, tipo: 'assinatura' }]);
+          }
+        }
+
+        await supabase.from('kingdom_pending_payments').update({ status: 'approved', mp_payment_id: paymentId }).eq('id', pending.id);
+        syncKingdomsCache(true).catch(() => {});
+
+        return res.json({ status: 'approved', nome: pending.nome, tag: pending.tag });
       }
     } catch (mpErr) {
       console.warn('[MP direct check warn]', mpErr.message);
