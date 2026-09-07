@@ -972,7 +972,11 @@
           </button>
           <button onclick="mudarModuloAdmin('reinos')" id="admin-mod-reinos"
             class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
-            <span>🏰 Permissões Reinos</span>
+            <span>🏰 Reinos</span>
+          </button>
+          <button onclick="mudarModuloAdmin('vip')" id="admin-mod-vip"
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>👑 Assinaturas VIP</span>
           </button>
         </div>
 
@@ -1293,6 +1297,44 @@
             <!-- Lista de Reinos Ativos com Botão Excluir -->
             <div id="admin-reinos-ativos-list" class="space-y-2 max-h-80 overflow-y-auto pr-1">
               <div class="text-center py-6 text-slate-400 text-xs italic">Carregando reinos...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── MÓDULO GERENCIAR ASSINATURAS VIP ────────────────────── -->
+        <div id="admin-mod-content-vip" class="hidden p-3 md:p-4 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08] gap-2 flex-wrap">
+            <div>
+              <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>👑 Gerenciar Assinaturas de Perfil VIP</span>
+                <span id="admin-vip-count-badge" class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Gerencie planos VIP, renove dias, cancele assinaturas ou conceda VIP manualmente para jogadores</div>
+            </div>
+            <button onclick="carregarAdminVipProfiles()" class="bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm flex-shrink-0">
+              🔄 Atualizar
+            </button>
+          </div>
+
+          <!-- Conceder / Criar VIP Manual -->
+          <div class="bg-black/40 rounded-xl p-3 border border-white/[0.08] space-y-2">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Conceder / Ativar VIP Manualmente</div>
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <input id="admin-vip-grant-nick" type="text" maxlength="20" placeholder="Nick do jogador..."
+                class="sm:col-span-2 bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+              <input id="admin-vip-grant-days" type="number" min="1" max="365" value="30" placeholder="Dias (ex: 30)"
+                class="bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+              <button onclick="concederVipManualAdmin()" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-slate-950 font-black text-xs px-3 py-2 rounded-xl transition flex items-center justify-center gap-1 shadow-md active:scale-95 cursor-pointer">
+                <span>👑</span> <span>Conceder VIP</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de Assinaturas VIP -->
+          <div class="space-y-1.5">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jogadores com Perfil VIP</div>
+            <div id="admin-vip-profiles-list" class="space-y-2 max-h-96 overflow-y-auto pr-1">
+              <div class="text-center py-6 text-slate-400 text-xs italic">Carregando assinaturas VIP...</div>
             </div>
           </div>
         </div>
@@ -2842,13 +2884,17 @@
               ? renderAvatarComMoldura(m.vip_avatar, m.author_nick, m.vip_frame, 'w-8 h-8', avatarColor)
               : `<div class="w-8 h-8 rounded-xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">${initial}</div>`;
 
+            const vipColor = typeof obterCorMolduraVip === 'function' ? obterCorMolduraVip(m.vip_frame) : null;
+            const nickColorStyle = vipColor ? `color: ${vipColor}; text-shadow: 0 0 10px ${vipColor}55;` : '';
+            const nickColorClass = isMsgAdmin ? 'text-rose-400' : (vipColor ? '' : 'text-white');
+
             return `
               <div class="flex items-start gap-2 hover:bg-white/[0.04] p-1.5 md:p-2 rounded-xl transition border border-transparent hover:border-white/[0.06]">
                 ${avatarHtml}
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     ${tagBadge}
-                    <span class="font-extrabold text-xs ${isMsgAdmin ? 'text-rose-400' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
+                    <span class="font-extrabold text-xs ${nickColorClass} truncate" ${nickColorStyle ? `style="${nickColorStyle}"` : ''}>${escapeHtml(m.author_nick)}</span>
                     ${roleBadge}
                     <span class="text-[9px] text-slate-400 ml-1 font-mono">${formatarHora(m.created_at)}</span>
                   </div>
@@ -2973,7 +3019,7 @@
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos'];
+      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
@@ -2992,6 +3038,7 @@
       if (modulo === 'manutencao') atualizarStatsManu();
       if (modulo === 'vidas') carregarAdminVidas();
       if (modulo === 'reinos') carregarAdminPermissoesReino();
+      if (modulo === 'vip') carregarAdminVipProfiles();
     }
 
     // ── Sistema de Vidas (Admin) ──────────────────────────────────────────────
@@ -5660,12 +5707,16 @@
           ? renderAvatarComMoldura(m.vip_avatar, m.author_nick, m.vip_frame, 'w-7 h-7', avatarColor)
           : `<div class="w-7 h-7 rounded-lg ${avatarColor} flex items-center justify-center text-xs flex-shrink-0 mt-0.5 shadow-sm">${initial}</div>`;
 
+        const vipColor = typeof obterCorMolduraVip === 'function' ? obterCorMolduraVip(m.vip_frame) : null;
+        const nickColorStyle = vipColor ? `color: ${vipColor}; text-shadow: 0 0 10px ${vipColor}55;` : '';
+        const nickColorClass = isLider ? 'text-amber-300' : (vipColor ? '' : 'text-white');
+
         return `
           <div class="flex items-start gap-2 hover:bg-white/[0.03] p-1.5 rounded-xl transition">
             ${avatarHtml}
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="font-extrabold text-xs ${isLider ? 'text-amber-300' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
+                <span class="font-extrabold text-xs ${nickColorClass} truncate" ${nickColorStyle ? `style="${nickColorStyle}"` : ''}>${escapeHtml(m.author_nick)}</span>
                 ${isLider ? '<span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">LÍDER</span>' : ''}
                 <span class="text-[9px] text-slate-400 font-mono">${formatarHora(m.created_at)}</span>
               </div>
@@ -6199,6 +6250,190 @@
       }
     }
 
+    // ── ADMIN: Gerenciar Assinaturas VIP ─────────────────────────────────────
+    async function carregarAdminVipProfiles() {
+      const list = document.getElementById('admin-vip-profiles-list');
+      const countBadge = document.getElementById('admin-vip-count-badge');
+      if (!list) return;
+
+      try {
+        const res = await apiFetch('/api/admin/vip/all');
+        if (!res.ok) {
+          list.innerHTML = '<div class="text-center py-6 text-rose-400 text-xs italic">Erro ao carregar assinaturas VIP.</div>';
+          return;
+        }
+        const data = await res.json();
+        const vips = data.vips || [];
+
+        if (countBadge) countBadge.textContent = vips.length;
+
+        if (vips.length === 0) {
+          list.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic">Nenhuma assinatura VIP registrada ainda.</div>';
+          return;
+        }
+
+        list.innerHTML = vips.map(v => {
+          const isAtivo = v.status === 'active';
+          const isCancelado = v.status === 'cancelled';
+          const isExpirado = v.status === 'expired' || (v.expires_at && new Date(v.expires_at).getTime() < Date.now());
+          
+          let statusLabel = 'Ativo';
+          let statusBadgeClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+          if (isCancelado) {
+            statusLabel = 'Cancelado';
+            statusBadgeClass = 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+          } else if (isExpirado) {
+            statusLabel = 'Expirado';
+            statusBadgeClass = 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+          }
+
+          const expDate = v.expires_at ? new Date(v.expires_at).toLocaleDateString('pt-BR') : 'Sem expiração';
+          const safeNick = escapeHtml(v.user_nick || '');
+          const frameObj = VIP_MINECRAFT_FRAMES.find(f => f.id === v.frame_id);
+          const frameNome = frameObj ? frameObj.nome : (v.frame_id || 'Padrão');
+          const frameCor = frameObj ? frameObj.cor : '#ffffff';
+
+          const avatarHtml = typeof renderAvatarComMoldura === 'function'
+            ? renderAvatarComMoldura(v.avatar_url, v.user_nick, v.frame_id, 'w-10 h-10', 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black')
+            : `<div class="w-10 h-10 rounded-xl bg-amber-500 text-black font-bold flex items-center justify-center text-xs">${safeNick.substring(0, 1)}</div>`;
+
+          return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-black/60 border border-white/[0.08] hover:border-amber-500/40 transition gap-2.5">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="flex-shrink-0">
+                  ${avatarHtml}
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-black text-xs md:text-sm truncate" style="color: ${frameCor}; text-shadow: 0 0 10px ${frameCor}55;">${safeNick}</span>
+                    <span class="text-[9px] px-2 py-0.5 rounded-full font-bold border ${statusBadgeClass}">${statusLabel.toUpperCase()}</span>
+                    <span class="text-[9px] bg-white/[0.08] text-slate-300 px-2 py-0.5 rounded-md border border-white/[0.1]">${escapeHtml(frameNome)}</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">
+                    Vencimento: <span class="text-slate-200 font-mono font-bold">${expDate}</span>
+                    ${v.avatar_url ? ' &middot; <span class="text-emerald-400">Foto configurada</span>' : ' &middot; <span class="text-slate-500">Sem foto</span>'}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Ações do Admin -->
+              <div class="flex items-center gap-1.5 flex-wrap flex-shrink-0 self-end sm:self-center">
+                <button onclick="renovarVipAdmin('${safeNick.replace(/'/g, "\\'")}', 30)"
+                  class="px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-xl text-[11px] font-bold transition flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer" title="Adicionar +30 dias de assinatura">
+                  <span>➕</span> <span>+30 Dias</span>
+                </button>
+                ${!isCancelado ? `
+                <button onclick="cancelarVipAdmin('${safeNick.replace(/'/g, "\\'")}')"
+                  class="px-2.5 py-1.5 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-[11px] font-bold transition flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer" title="Cancelar / Desativar VIP">
+                  <span>⛔</span> <span>Cancelar</span>
+                </button>
+                ` : ''}
+                <button onclick="excluirVipAdmin('${v.id}', '${safeNick.replace(/'/g, "\\'")}')"
+                  class="px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-[11px] font-bold transition flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer" title="Excluir registro permanentemente">
+                  <span>🗑️</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        list.innerHTML = '<div class="text-center py-6 text-rose-400 text-xs italic">Erro de conexão ao buscar assinaturas VIP.</div>';
+      }
+    }
+
+    async function concederVipManualAdmin() {
+      const nickInput = document.getElementById('admin-vip-grant-nick');
+      const daysInput = document.getElementById('admin-vip-grant-days');
+      const nick = nickInput ? nickInput.value.trim() : '';
+      const days = daysInput ? parseInt(daysInput.value) || 30 : 30;
+
+      if (!nick) {
+        mostrarFeedback('Informe o nick do jogador.', 'red');
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/admin/vip/grant', {
+          method: 'POST',
+          body: JSON.stringify({ nick, days })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `VIP concedido para ${nick}!`, 'green');
+          if (nickInput) nickInput.value = '';
+          await carregarAdminVipProfiles();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao conceder VIP.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao conceder VIP.', 'red');
+      }
+    }
+
+    async function renovarVipAdmin(nick, days) {
+      try {
+        const res = await apiFetch('/api/admin/vip/renew', {
+          method: 'POST',
+          body: JSON.stringify({ nick, days })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `VIP de ${nick} renovado com sucesso!`, 'green');
+          await carregarAdminVipProfiles();
+          if (currentUser && currentUser.nick && currentUser.nick.toLowerCase() === nick.toLowerCase()) {
+            await carregarStatusPerfilVip();
+          }
+        } else {
+          mostrarFeedback(data.error || 'Erro ao renovar VIP.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao renovar VIP.', 'red');
+      }
+    }
+
+    async function cancelarVipAdmin(nick) {
+      if (!confirm(`Tem certeza que deseja CANCELAR a assinatura VIP de "${nick}"?`)) return;
+
+      try {
+        const res = await apiFetch('/api/admin/vip/cancel', {
+          method: 'POST',
+          body: JSON.stringify({ nick })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `VIP de ${nick} cancelado!`, 'green');
+          await carregarAdminVipProfiles();
+          if (currentUser && currentUser.nick && currentUser.nick.toLowerCase() === nick.toLowerCase()) {
+            await carregarStatusPerfilVip();
+          }
+        } else {
+          mostrarFeedback(data.error || 'Erro ao cancelar VIP.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao cancelar VIP.', 'red');
+      }
+    }
+
+    async function excluirVipAdmin(id, nick) {
+      if (!confirm(`⚠️ Excluir permanentemente o registro VIP de "${nick}"?`)) return;
+
+      try {
+        const res = await apiFetch(`/api/admin/vip/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Registro VIP de ${nick} excluído!`, 'green');
+          await carregarAdminVipProfiles();
+          if (currentUser && currentUser.nick && currentUser.nick.toLowerCase() === nick.toLowerCase()) {
+            await carregarStatusPerfilVip();
+          }
+        } else {
+          mostrarFeedback(data.error || 'Erro ao excluir registro VIP.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao excluir registro VIP.', 'red');
+      }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // PERFIL VIP: FOTO DE PERFIL (MÁX 3MB) & MOLDURAS ANIMADAS DE MINECRAFT
     // ══════════════════════════════════════════════════════════════════════════
@@ -6272,6 +6507,12 @@
     let vipPollInterval = null;
     let currentVipPendingId = null;
     let currentVipPrefId = null;
+
+    function obterCorMolduraVip(frameId) {
+      if (!frameId) return null;
+      const f = VIP_MINECRAFT_FRAMES.find(x => x.id === frameId);
+      return f ? f.cor : null;
+    }
 
     function renderAvatarComMoldura(avatarUrl, nick, frameId, sizeClass = 'w-8 h-8', fallbackColor = 'bg-gradient-to-tr from-purple-600 to-indigo-600') {
       const initial = escapeHtml((nick || 'J').substring(0, 1).toUpperCase());
@@ -6356,7 +6597,14 @@
       const previewNick = document.getElementById('vip-preview-nick');
       const nick = currentUser ? (currentUser.nick || 'SeuNick') : 'SeuNick';
 
-      if (previewNick) previewNick.textContent = nick;
+      const frameObj = VIP_MINECRAFT_FRAMES.find(x => x.id === selectedVipFrameId);
+      const vipColor = frameObj ? frameObj.cor : '#ffffff';
+
+      if (previewNick) {
+        previewNick.textContent = nick;
+        previewNick.style.color = vipColor;
+        previewNick.style.textShadow = `0 0 10px ${vipColor}55`;
+      }
 
       const avatarSrc = tempVipAvatarData !== null ? tempVipAvatarData : currentVipProfile.avatar_url;
       if (previewWrapper) {
@@ -6509,6 +6757,39 @@
             'w-12 h-12',
             'bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black'
           );
+        }
+
+        // Atualizar cor do nick baseado na moldura VIP ativa
+        const activeVipColor = isVipActive ? obterCorMolduraVip(data.frame_id) : null;
+        const profileNickEl = document.getElementById('profile-nick');
+        if (profileNickEl) {
+          if (activeVipColor) {
+            profileNickEl.style.color = activeVipColor;
+            profileNickEl.style.textShadow = `0 0 12px ${activeVipColor}66`;
+          } else {
+            profileNickEl.style.color = '';
+            profileNickEl.style.textShadow = '';
+          }
+        }
+        const homeNickEl = document.getElementById('home-nick');
+        if (homeNickEl) {
+          if (activeVipColor) {
+            homeNickEl.style.color = activeVipColor;
+            homeNickEl.style.textShadow = `0 0 12px ${activeVipColor}66`;
+          } else {
+            homeNickEl.style.color = '';
+            homeNickEl.style.textShadow = '';
+          }
+        }
+        const drawerNickEl = document.getElementById('drawer-user-nick');
+        if (drawerNickEl) {
+          if (activeVipColor) {
+            drawerNickEl.style.color = activeVipColor;
+            drawerNickEl.style.textShadow = `0 0 12px ${activeVipColor}66`;
+          } else {
+            drawerNickEl.style.color = '';
+            drawerNickEl.style.textShadow = '';
+          }
         }
 
         renderizarGridMoldurasVip();
