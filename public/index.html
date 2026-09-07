@@ -456,7 +456,7 @@
         </svg>
       </button>
       
-      <div id="user-avatar-badge" class="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-xs font-extrabold text-slate-950 shadow-md border-t border-white/50">
+      <div id="user-avatar-badge" onclick="selecionarCanal('geral', 'info')" class="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-xs font-extrabold text-slate-950 shadow-md border-t border-white/50 cursor-pointer hover:scale-105 transition" title="Meu Perfil & Personalização VIP">
         ?
       </div>
     </div>
@@ -566,15 +566,18 @@
         </div>
 
         <!-- Card logado -->
-        <div id="home-logged-card" class="hidden w-full max-w-md glass-card rounded-2xl p-5 space-y-4 text-center">
-          <div class="flex items-center justify-center gap-3">
-            <div id="home-avatar" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-xl font-extrabold text-slate-950 shadow-md border-t border-white/50">?</div>
+        <div id="home-logged-card" class="hidden w-full max-w-md glass-card rounded-2xl p-4 md:p-5 space-y-3.5 text-center border border-amber-500/30">
+          <div onclick="selecionarCanal('geral', 'info')" class="flex items-center justify-center gap-3 cursor-pointer group" title="Clique para editar seu perfil">
+            <div id="home-avatar" class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center text-xl font-extrabold text-slate-950 shadow-md border-t border-white/50 group-hover:scale-105 transition">?</div>
             <div class="text-left">
-              <div id="home-nick" class="text-white font-extrabold text-base">Jogador</div>
+              <div id="home-nick" class="text-white font-extrabold text-base group-hover:text-amber-300 transition">Jogador</div>
               <div class="text-xs text-emerald-400 font-semibold">Bem-vindo de volta! 👋</div>
             </div>
           </div>
-
+          <button onclick="selecionarCanal('geral', 'info')"
+            class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:brightness-110 text-slate-950 font-black text-xs md:text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-lg active:scale-95">
+            <span>✨</span> <span>Editar Perfil & Molduras VIP</span> <span>➔</span>
+          </button>
         </div>
 
         <!-- Seção de Downloads Oficiais (Android & Windows) -->
@@ -2268,10 +2271,10 @@
 
     const categorySubdivisions = {
       info: {
-        title: 'INFORMAÇÕES',
-        icon: 'ℹ️',
+        title: 'PERFIL & STATUS',
+        icon: '👤',
         channels: [
-          { id: 'geral', name: 'geral-status', tag: 'Status', desc: 'Status da Whitelist & Conexão' },
+          { id: 'geral', name: 'meu-perfil', tag: 'Perfil VIP', desc: 'Editar Foto, Molduras Animadas & Status' },
           { id: 'bans',  name: 'mural-banidos', tag: 'Bans', desc: 'Mural de jogadores banidos' }
         ]
       },
@@ -2590,7 +2593,7 @@
 
       const titles = {
         home: '5DAY MC',
-        geral: 'geral-status',
+        geral: 'meu-perfil',
         bans:  'mural-banidos',
         chat:  'chat-geral',
         admin: 'gerenciar-whitelist',
