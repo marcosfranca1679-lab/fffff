@@ -3201,7 +3201,11 @@ app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
     const { nome, tag, logo, cor, descricao } = req.body || {};
     if (!nome || !tag || !descricao) return res.status(400).json({ error: 'Nome, TAG e descrição são obrigatórios.' });
 
-    const cleanNome = (nome || '').trim().substring(0, 40);
+    const trimmedNome = (nome || '').trim();
+    if (trimmedNome.length > 16) {
+      return res.status(400).json({ error: 'O nome do reino/clã deve ter no máximo 16 caracteres.' });
+    }
+    const cleanNome = trimmedNome.substring(0, 16);
     const cleanTag  = (tag  || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
     const cleanLogo = (logo || '👑').trim();
     let   cleanCor  = (cor  || '#f59e0b').trim();
@@ -3572,12 +3576,17 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Nome, TAG de 3 letras e descrição são obrigatórios.' });
     }
 
+    const trimmedNome = (nome || '').trim();
+    if (trimmedNome.length > 16) {
+      return res.status(400).json({ error: 'O nome do reino/clã deve ter no máximo 16 caracteres.' });
+    }
+
     const cleanTag = tag.trim().toUpperCase();
     if (!/^[A-Z0-9]{3}$/.test(cleanTag)) {
       return res.status(400).json({ error: 'A TAG do reino deve conter exatamente 3 letras ou números (Ex: IMP, LEO, REI).' });
     }
 
-    const cleanNome = nome.trim().slice(0, 30);
+    const cleanNome = trimmedNome.slice(0, 16);
     const cleanDesc = descricao.trim().slice(0, 300);
     const cleanLogo = (logo || '👑').trim().slice(0, 10);
     let cleanCor = (cor || '#f59e0b').trim();
