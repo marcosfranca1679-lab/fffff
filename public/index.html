@@ -6806,26 +6806,47 @@
 
       const avatarToSend = tempVipAvatarData !== null ? tempVipAvatarData : (currentVipProfile.avatar_url || '');
 
-      // Caso 1: Usuário já é VIP ativo -> Atualizar gratuitamente foto e moldura
+      // Caso 1: Usuário já é VIP ativo -> Atualizar foto e moldura direto no Supabase (0 invocações no Vercel!)
       if (currentVipProfile.is_active || currentVipProfile.is_vip || currentVipProfile.status === 'active') {
         try {
           mostrarFeedback('Salvando personalizações do Perfil VIP...', 'yellow');
-          const res = await apiFetch('/api/profile/vip/update', {
-            method: 'POST',
-            body: JSON.stringify({
-              avatar_data: avatarToSend,
-              frame_id: selectedVipFrameId
-            })
-          });
-          const data = await res.json();
-          if (res.ok && data.success) {
-            mostrarFeedback('Perfil VIP atualizado com sucesso! ✨', 'green');
-            tempVipAvatarData = null;
-            await carregarStatusPerfilVip();
-            if (typeof carregarChat === 'function') carregarChat(true);
-          } else {
-            mostrarFeedback(data.error || 'Erro ao atualizar perfil.', 'red');
+
+          // Tentativa 1: Gravação direta no Supabase via SDK cliente (zero tráfego/CPU no Vercel)
+          let salvouDireto = false;
+          if (realtimeSb && currentUser && currentUser.nick) {
+            try {
+              const { error: sbErr } = await realtimeSb
+                .from('user_vip_profiles')
+                .update({
+                  avatar_url: avatarToSend,
+                  frame_id: selectedVipFrameId,
+                  updated_at: new Date().toISOString()
+                })
+                .ilike('user_nick', currentUser.nick);
+              if (!sbErr) salvouDireto = true;
+            } catch (_) {}
           }
+
+          // Tentativa 2: Fallback via API se a gravação direta não concluiu
+          if (!salvouDireto) {
+            const res = await apiFetch('/api/profile/vip/update', {
+              method: 'POST',
+              body: JSON.stringify({
+                avatar_data: avatarToSend,
+                frame_id: selectedVipFrameId
+              })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) {
+              mostrarFeedback(data.error || 'Erro ao atualizar perfil.', 'red');
+              return;
+            }
+          }
+
+          mostrarFeedback('Perfil VIP atualizado com sucesso! ✨ (Salvo direto no Supabase)', 'green');
+          tempVipAvatarData = null;
+          await carregarStatusPerfilVip();
+          if (typeof carregarChat === 'function') carregarChat(true);
         } catch (err) {
           mostrarFeedback('Erro de conexão ao salvar perfil VIP.', 'red');
         }
