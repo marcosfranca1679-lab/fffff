@@ -3679,8 +3679,8 @@ app.get('/api/profile/vip', requireAuth, async (req, res) => {
       .ilike('user_nick', nick)
       .maybeSingle();
 
-    const isVip = !!(vip && vip.status === 'active');
     const now = Date.now();
+    const isVip = !!(profile && profile.status === 'active' && (!profile.expires_at || new Date(profile.expires_at).getTime() > now));
     let daysRemaining = 0;
     if (profile?.expires_at) {
       const expTime = new Date(profile.expires_at).getTime();
@@ -3690,9 +3690,11 @@ app.get('/api/profile/vip', requireAuth, async (req, res) => {
     res.json({
       success: true,
       is_vip: isVip,
+      is_active: isVip,
+      isActive: isVip,
       avatar_url: profile?.avatar_url || null,
       frame_id: profile?.frame_id || 'portal_nether',
-      status: profile?.status || 'inactive',
+      status: isVip ? 'active' : (profile?.status || 'inactive'),
       expires_at: profile?.expires_at || null,
       days_remaining: daysRemaining,
       price: PROFILE_VIP_PRICE
@@ -3786,25 +3788,42 @@ app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
     const preferenceId = req.query.preferenceId || req.query.preference_id;
-    if (!preferenceId) return res.status(400).json({ error: 'preferenceId obrigatório.' });
 
-    let { data: pending } = await supabase
-      .from('profile_pending_payments')
+    // 1. Se o usuário já está ativo no banco como VIP, retorna aprovado imediatamente
+    const { data: activeProfile } = await supabase
+      .from('user_vip_profiles')
       .select('*')
-      .eq('mp_preference_id', preferenceId)
       .ilike('user_nick', nick)
       .maybeSingle();
 
-    if (!pending) {
-      const { data: altPending } = await supabase
+    if (activeProfile && activeProfile.status === 'active' && (!activeProfile.expires_at || new Date(activeProfile.expires_at).getTime() > Date.now())) {
+      return res.json({ status: 'approved', avatar_url: activeProfile.avatar_url, frame_id: activeProfile.frame_id });
+    }
+
+    // 2. Busca pagamento pendente
+    let pending = null;
+    if (preferenceId) {
+      const { data: p } = await supabase
         .from('profile_pending_payments')
         .select('*')
         .eq('mp_preference_id', preferenceId)
         .maybeSingle();
-      if (altPending) pending = altPending;
+      if (p) pending = p;
     }
 
-    if (!pending) return res.status(404).json({ error: 'Pagamento não encontrado.' });
+    if (!pending) {
+      const { data: pList } = await supabase
+        .from('profile_pending_payments')
+        .select('*')
+        .ilike('user_nick', nick)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (pList && pList.length > 0) pending = pList[0];
+    }
+
+    if (!pending) {
+      return res.status(404).json({ error: 'Nenhum pagamento pendente encontrado.' });
+    }
 
     if (pending.status === 'approved') {
       return res.json({ status: 'approved', avatar_url: pending.avatar_url, frame_id: pending.frame_id });
@@ -3823,9 +3842,10 @@ app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
         approvedPayment = payments.find(p => p.status === 'approved');
       }
 
-      // 2. Busca por preference_id
-      if (!approvedPayment) {
-        const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc`, {
+      // 2. Busca por preference_id se disponível
+      const prefToSearch = preferenceId || pending.mp_preference_id;
+      if (!approvedPayment && prefToSearch) {
+        const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${prefToSearch}&sort=date_created&criteria=desc`, {
           headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
         });
         if (mpSearchRes.ok) {
@@ -3835,10 +3855,10 @@ app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
         }
       }
 
-      // 3. Fallback ultra-criterioso antifraude
+      // 3. Fallback inteligente antifraude
       if (!approvedPayment) {
         const pendingCreated = new Date(pending.created_at).getTime();
-        const mpRecentRes = await fetch(`https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10`, {
+        const mpRecentRes = await fetch(`https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=20`, {
           headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
         });
 
@@ -3849,7 +3869,7 @@ app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
           for (const p of recentList) {
             if (p.status !== 'approved') continue;
             const payTime = new Date(p.date_created || p.date_approved).getTime();
-            if (payTime < pendingCreated - 30000) continue;
+            if (payTime < pendingCreated - 60000) continue;
 
             const { data: alreadyUsed } = await supabase
               .from('profile_payments')
@@ -3858,9 +3878,11 @@ app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
               .maybeSingle();
             if (alreadyUsed) continue;
 
+            const items = p.additional_info?.items || [];
+            const itemTitles = items.map(it => (it.title || '').toLowerCase()).join(' ');
+            const desc = ((p.description || '') + ' ' + itemTitles).toLowerCase();
+            const matchesDesc = (desc.includes('perfil vip') || desc.includes('vip')) && Math.abs(Number(p.transaction_amount) - PROFILE_VIP_PRICE) < 0.1;
             const matchesRef = p.external_reference === pending.id;
-            const desc = (p.description || '').toLowerCase();
-            const matchesDesc = desc.includes('perfil vip') && Math.abs(Number(p.transaction_amount) - PROFILE_VIP_PRICE) < 0.1;
 
             if (matchesRef || matchesDesc) {
               approvedPayment = p;
