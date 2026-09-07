@@ -11,7 +11,8 @@ const PORT = process.env.PORT || 3000;
 // ─── Admin Config ─────────────────────────────────────────────────────────────
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'MinecraftAdmin@2025';
-const TOKEN_SECRET = process.env.TOKEN_SECRET || 'mapabermuda-auth-secret-key-2025-mc';
+const TOKEN_SECRET = process.env.TOKEN_SECRET || '5daymc-auth-secret-key-2026-mc';
+const LEGACY_TOKEN_SECRET = 'mapabermuda-auth-secret-key-2025-mc';
 
 // ─── Mercado Pago ─────────────────────────────────────────────────────────────
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-7322103170597733-041213-494e0ff2a4789bdb62f82e3fabf32e18-292784019';
@@ -45,7 +46,8 @@ function verifyAuthToken(token) {
   if (parts.length !== 2) return null;
   const [b64, sig] = parts;
   const expectedSig = crypto.createHmac('sha256', TOKEN_SECRET).update(b64).digest('hex');
-  if (sig !== expectedSig) return null;
+  const legacyExpectedSig = crypto.createHmac('sha256', LEGACY_TOKEN_SECRET).update(b64).digest('hex');
+  if (sig !== expectedSig && sig !== legacyExpectedSig) return null;
   try {
     const payload = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
     if (payload.exp && Date.now() > payload.exp) return null;
@@ -155,7 +157,7 @@ app.get('/api/auth/me', async (req, res) => {
       isAdmin: true,
       user: {
         nick: 'Administrador',
-        email: 'admin@mapabermuda.com',
+        email: 'admin@5daymc.com',
         role: 'admin',
         platform: 'PC / Java & Bedrock'
       },
@@ -290,7 +292,7 @@ app.post('/api/auth/login', async (req, res) => {
     ) {
       const adminUser = {
         nick: 'Administrador',
-        email: 'admin@mapabermuda.com',
+        email: 'admin@5daymc.com',
         role: 'admin',
         platform: 'PC / Java & Bedrock'
       };
@@ -3220,7 +3222,7 @@ app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
       body: JSON.stringify({
-        items: [{ title: `Assinatura de Reino [${cleanTag}] ${cleanNome} - Mapa Bermuda MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
+        items: [{ title: `Assinatura de Reino [${cleanTag}] ${cleanNome} - 5DAY MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
         external_reference: extRef,
         back_urls: {
           success: `${SITE_URL}/#criar-reinos`,
@@ -3229,7 +3231,7 @@ app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
         },
         notification_url: `${SITE_URL}/api/mercadopago/webhook`,
         auto_return: 'approved',
-        statement_descriptor: 'MAPA BERMUDA MC'
+        statement_descriptor: '5DAY MC'
       })
     });
 
@@ -3458,11 +3460,11 @@ app.post('/api/kingdoms/payment/renew', requireAuth, async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
       body: JSON.stringify({
-        items: [{ title: `Renovação do Reino [${kingdom.tag}] ${kingdom.nome} - Mapa Bermuda MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
+        items: [{ title: `Renovação do Reino [${kingdom.tag}] ${kingdom.nome} - 5DAY MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
         back_urls: { success: `${SITE_URL}/#criar-reinos`, failure: `${SITE_URL}/#criar-reinos`, pending: `${SITE_URL}/#criar-reinos` },
         notification_url: `${SITE_URL}/api/mercadopago/webhook`,
         auto_return: 'approved',
-        statement_descriptor: 'MAPA BERMUDA MC'
+        statement_descriptor: '5DAY MC'
       })
     });
 
