@@ -6564,20 +6564,22 @@
           return;
         }
 
-        currentVipPendingId = data.pending_id;
+        currentVipPendingId = data.pending_id || data.pendingId;
+        const urlPagamento = data.payment_url || data.paymentUrl;
+        const prefId = data.preference_id || data.preferenceId;
 
         const aguardoBox = document.getElementById('vip-pagamento-aguardo');
         const linkAbrir = document.getElementById('link-abrir-pagamento-vip');
         if (aguardoBox) aguardoBox.classList.remove('hidden');
-        if (linkAbrir) linkAbrir.href = data.payment_url;
+        if (linkAbrir && urlPagamento) linkAbrir.href = urlPagamento;
 
-        // Abrir link de checkout
-        try {
-          window.open(data.payment_url, '_blank');
-        } catch (_) {}
+        // Abrir link de checkout do Mercado Pago (https://)
+        if (urlPagamento && urlPagamento.startsWith('http')) {
+          window.open(urlPagamento, '_blank');
+        }
 
         mostrarFeedback('PIX Mercado Pago gerado! Conclua o pagamento para ativar seu Perfil VIP.', 'green');
-        iniciarMonitoramentoPagamentoVip(data.preference_id);
+        iniciarMonitoramentoPagamentoVip(prefId);
       } catch (err) {
         mostrarFeedback('Erro ao conectar ao Mercado Pago.', 'red');
       }
