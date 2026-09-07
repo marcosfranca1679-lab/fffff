@@ -4245,6 +4245,58 @@ app.delete('/api/admin/kingdoms/permissions/:nick', requireAdmin, async (req, re
   }
 });
 
+// ── ROTAS ADMIN: Listar e Excluir Reinos com todos os dados vinculados ─────
+app.get('/api/admin/kingdoms/all', requireAdmin, async (req, res) => {
+  try {
+    const { data: kingdoms, error } = await supabase
+      .from('kingdoms')
+      .select('*, kingdom_members(id, user_nick, role)')
+      .order('created_at', { ascending: false });
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, kingdoms: kingdoms || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/kingdoms/:id', requireAdmin, async (req, res) => {
+  try {
+    const kingdomId = req.params.id;
+    if (!kingdomId) return res.status(400).json({ error: 'ID do reino obrigatório.' });
+
+    const { data: k } = await supabase.from('kingdoms').select('id, nome, tag').eq('id', kingdomId).maybeSingle();
+    if (!k) return res.status(404).json({ error: 'Reino não encontrado.' });
+
+    // 1. Apaga todos os baselines dos membros gerados para esse reino
+    await safeDb(supabase.from('messages').delete().eq('author_role', 'kingdom_member_baseline').like('content', `%"kingdom_id":"${kingdomId}"%`));
+
+    // 2. Apaga mensagens privadas do chat do reino
+    await safeDb(supabase.from('kingdom_messages').delete().eq('kingdom_id', kingdomId));
+
+    // 3. Apaga convites pendentes do reino
+    await safeDb(supabase.from('kingdom_invites').delete().eq('kingdom_id', kingdomId));
+
+    // 4. Apaga pagamentos pendentes ou concluídos vinculados
+    await safeDb(supabase.from('kingdom_payments').delete().eq('kingdom_id', kingdomId));
+    await safeDb(supabase.from('kingdom_pending_payments').delete().ilike('tag', k.tag));
+
+    // 5. Apaga os membros do reino
+    await safeDb(supabase.from('kingdom_members').delete().eq('kingdom_id', kingdomId));
+
+    // 6. Apaga o reino definitivamente
+    const { error: delErr } = await supabase.from('kingdoms').delete().eq('id', kingdomId);
+    if (delErr) return res.status(500).json({ error: delErr.message });
+
+    syncKingdomsCache(true).catch(() => {});
+    console.log(`🗑️ [ADMIN] Reino [${k.tag}] ${k.nome} (${kingdomId}) excluído permanentemente com todos os dados.`);
+
+    res.json({ success: true, message: `Reino [${k.tag}] ${k.nome} e todos os seus dados foram excluídos com sucesso do Supabase!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Fallback SPA
 app.use((req, res) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Rota não encontrada' });
