@@ -3981,6 +3981,115 @@ app.post('/api/profile/vip/update', requireAuth, async (req, res) => {
   }
 });
 
+// ── ADMIN: Gerenciar Assinaturas VIP ─────────────────────────────────────────
+
+// GET /api/admin/vip/all - Listar todas as assinaturas VIP
+app.get('/api/admin/vip/all', requireAdmin, async (req, res) => {
+  try {
+    const { data: vips, error } = await supabase
+      .from('user_vip_profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, vips: vips || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/vip/grant - Conceder / Criar VIP manualmente
+app.post('/api/admin/vip/grant', requireAdmin, async (req, res) => {
+  try {
+    const { nick, days, frame_id } = req.body;
+    const cleanNick = (nick || '').trim();
+    if (!cleanNick) return res.status(400).json({ error: 'Nick é obrigatório.' });
+
+    const extraDays = Math.max(1, Math.min(Number(days) || 30, 365));
+    const chosenFrame = VALID_VIP_FRAMES.includes(frame_id) ? frame_id : 'portal_nether';
+    const expiresAt = new Date(Date.now() + extraDays * 86400000).toISOString();
+
+    await supabase.from('user_vip_profiles').upsert([{
+      user_nick: cleanNick,
+      frame_id: chosenFrame,
+      status: 'active',
+      expires_at: expiresAt,
+      renewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }], { onConflict: 'user_nick' });
+
+    syncVipProfilesCache(true).catch(() => {});
+    res.json({ success: true, message: `VIP concedido para ${cleanNick} por ${extraDays} dias!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/vip/renew - Renovar assinatura VIP por X dias
+app.post('/api/admin/vip/renew', requireAdmin, async (req, res) => {
+  try {
+    const { nick, days } = req.body;
+    const cleanNick = (nick || '').trim();
+    if (!cleanNick) return res.status(400).json({ error: 'Nick é obrigatório.' });
+
+    const extraDays = Math.max(1, Math.min(Number(days) || 30, 365));
+    const { data: existing } = await supabase
+      .from('user_vip_profiles')
+      .select('*')
+      .ilike('user_nick', cleanNick)
+      .maybeSingle();
+
+    if (!existing) return res.status(404).json({ error: 'Perfil VIP não encontrado.' });
+
+    const baseTime = existing.expires_at && new Date(existing.expires_at) > new Date()
+      ? new Date(existing.expires_at).getTime()
+      : Date.now();
+    const newExpiry = new Date(baseTime + extraDays * 86400000).toISOString();
+
+    await supabase.from('user_vip_profiles').update({
+      status: 'active',
+      expires_at: newExpiry,
+      renewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('id', existing.id);
+
+    syncVipProfilesCache(true).catch(() => {});
+    res.json({ success: true, newExpiry, message: `VIP de ${cleanNick} renovado por +${extraDays} dias!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/vip/cancel - Cancelar / Expirar assinatura VIP
+app.post('/api/admin/vip/cancel', requireAdmin, async (req, res) => {
+  try {
+    const { nick } = req.body;
+    const cleanNick = (nick || '').trim();
+    if (!cleanNick) return res.status(400).json({ error: 'Nick é obrigatório.' });
+
+    await supabase.from('user_vip_profiles').update({
+      status: 'cancelled',
+      updated_at: new Date().toISOString()
+    }).ilike('user_nick', cleanNick);
+
+    syncVipProfilesCache(true).catch(() => {});
+    res.json({ success: true, message: `VIP de ${cleanNick} cancelado com sucesso!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/vip/:id - Excluir registro VIP permanentemente
+app.delete('/api/admin/vip/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await supabase.from('user_vip_profiles').delete().eq('id', id);
+    syncVipProfilesCache(true).catch(() => {});
+    res.json({ success: true, message: 'Registro VIP removido com sucesso!' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/kingdoms/create — Criar um reino
 app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
   try {
