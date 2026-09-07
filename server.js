@@ -3708,12 +3708,13 @@ app.post('/api/profile/vip/create-payment', requireAuth, async (req, res) => {
     const nick = (req.user.nick || '').trim();
     if (!nick) return res.status(401).json({ error: 'Não autorizado.' });
 
-    const { avatar_url, frame_id } = req.body || {};
+    const rawAvatar = req.body.avatar_url || req.body.avatar_data || null;
+    const { frame_id } = req.body || {};
     const chosenFrame = VALID_VIP_FRAMES.includes(frame_id) ? frame_id : 'portal_nether';
 
     // Validação da imagem (máximo 3MB / ~4.5MB base64)
-    if (avatar_url && typeof avatar_url === 'string') {
-      if (avatar_url.length > 4.5 * 1024 * 1024) {
+    if (rawAvatar && typeof rawAvatar === 'string') {
+      if (rawAvatar.length > 4.5 * 1024 * 1024) {
         return res.status(400).json({ error: 'A foto de perfil excede o limite máximo permitido de 3MB.' });
       }
     }
@@ -3759,7 +3760,7 @@ app.post('/api/profile/vip/create-payment', requireAuth, async (req, res) => {
       id: pendingId,
       user_nick: nick,
       mp_preference_id: mpData.id,
-      avatar_url: avatar_url || null,
+      avatar_url: rawAvatar || null,
       frame_id: chosenFrame,
       status: 'pending',
       amount: PROFILE_VIP_PRICE
@@ -3768,8 +3769,11 @@ app.post('/api/profile/vip/create-payment', requireAuth, async (req, res) => {
     res.json({
       success: true,
       preferenceId: mpData.id,
+      preference_id: mpData.id,
       paymentUrl: mpData.init_point,
-      pendingId: pending?.id || pendingId
+      payment_url: mpData.init_point,
+      pendingId: pending?.id || pendingId,
+      pending_id: pending?.id || pendingId
     });
   } catch (err) {
     console.error('[MP VIP initiate]', err);
@@ -3781,7 +3785,7 @@ app.post('/api/profile/vip/create-payment', requireAuth, async (req, res) => {
 app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { preferenceId } = req.query;
+    const preferenceId = req.query.preferenceId || req.query.preference_id;
     if (!preferenceId) return res.status(400).json({ error: 'preferenceId obrigatório.' });
 
     let { data: pending } = await supabase
@@ -3913,7 +3917,8 @@ app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
 app.post('/api/profile/vip/update', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { avatar_url, frame_id } = req.body || {};
+    const rawAvatar = req.body.avatar_url !== undefined ? req.body.avatar_url : req.body.avatar_data;
+    const { frame_id } = req.body || {};
 
     const { data: profile } = await supabase
       .from('user_vip_profiles')
@@ -3928,8 +3933,8 @@ app.post('/api/profile/vip/update', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Você precisa de uma assinatura VIP ativa para personalizar seu perfil.' });
     }
 
-    if (avatar_url && typeof avatar_url === 'string') {
-      if (avatar_url.length > 4.5 * 1024 * 1024) {
+    if (rawAvatar && typeof rawAvatar === 'string') {
+      if (rawAvatar.length > 4.5 * 1024 * 1024) {
         return res.status(400).json({ error: 'A foto excede o limite de 3MB.' });
       }
     }
@@ -3937,7 +3942,7 @@ app.post('/api/profile/vip/update', requireAuth, async (req, res) => {
     const updates = {
       updated_at: new Date().toISOString()
     };
-    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (rawAvatar !== undefined) updates.avatar_url = rawAvatar;
     if (frame_id && VALID_VIP_FRAMES.includes(frame_id)) updates.frame_id = frame_id;
 
     const { error: upErr } = await supabase
