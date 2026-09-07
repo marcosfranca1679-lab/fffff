@@ -993,7 +993,7 @@
               <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
                 <span>🏰 Permissões de Criação de Reino</span>
               </div>
-              <div class="text-[10px] text-slate-400">Libere quais jogadores podem pagar a taxa e criar seu próprio reino no servidor</div>
+              <div class="text-[10px] text-slate-400">Libere jogadores para criar reino gratuitamente (sem precisar pagar no Mercado Pago)</div>
             </div>
             <button onclick="carregarAdminPermissoesReino()" class="bg-cyan-600/40 hover:bg-cyan-600/70 text-cyan-200 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
               🔄 Atualizar
@@ -1308,8 +1308,8 @@
             <div class="bg-black/50 border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
               <span class="text-2xl flex-shrink-0">👑</span>
               <div>
-                <div class="text-xs font-bold text-white">Autorização de Admin</div>
-                <div id="reino-status-permissao-txt" class="text-[11px] text-slate-400">Verificando permissão...</div>
+                <div class="text-xs font-bold text-white">Forma de Liberação</div>
+                <div id="reino-status-permissao-txt" class="text-[11px] text-slate-400">Verificando...</div>
               </div>
             </div>
             <div class="bg-black/50 border border-amber-500/30 rounded-xl p-3 flex items-center gap-3">
@@ -4452,7 +4452,8 @@
     //  SISTEMA DE REINOS & GUILDAS — CLIENTE JS
     // ══════════════════════════════════════════════════════════════════════════
     let meuReinoAtual = null;
-    let allowedToCreateReino = false;
+    let allowedToCreateReino = true;
+    let hasFreePermissionReino = false;
     let lastReinoMessagesCount = 0;
     let lastReinoMessagesHash = '';
 
@@ -4483,7 +4484,8 @@
           return;
         }
 
-        allowedToCreateReino = !!data.allowedToCreate;
+        allowedToCreateReino = data.allowedToCreate !== false;
+        hasFreePermissionReino = !!data.hasFreePermission;
         meuReinoAtual = data.myKingdom;
         reinoUsedLogos = data.usedLogos || [];
         reinoUsedColors = (data.usedColors || []).map(c => (c || '').toLowerCase());
@@ -4820,9 +4822,23 @@
         return;
       }
 
-      if (allowed) {
+      // Se o jogador foi liberado pelo Administrador, ele cria GRÁTIS sem pagar!
+      if (hasFreePermissionReino || isUserAdmin) {
         if (statusPermissaoTxt) {
-          statusPermissaoTxt.innerHTML = '<span class="text-emerald-400 font-bold">✅ Autorizado pelo Administrador</span>';
+          statusPermissaoTxt.innerHTML = '<span class="text-emerald-400 font-bold">🎁 Isenção Concedida pelo Admin (Grátis)</span>';
+        }
+        if (bloqueioAviso) bloqueioAviso.classList.add('hidden');
+        if (btnCriar) {
+          btnCriar.disabled = false;
+          btnCriar.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+        if (btnCriarTexto) {
+          btnCriarTexto.textContent = '👑 Criar Reino Grátis (Autorizado pelo Admin)';
+        }
+      } else {
+        // Fluxo normal para qualquer jogador: assina e paga pelo Mercado Pago
+        if (statusPermissaoTxt) {
+          statusPermissaoTxt.innerHTML = '<span class="text-cyan-400 font-bold">⚡ Pagamento Direto (Mercado Pago)</span>';
         }
         if (bloqueioAviso) bloqueioAviso.classList.add('hidden');
         if (btnCriar) {
@@ -4831,21 +4847,6 @@
         }
         if (btnCriarTexto) {
           btnCriarTexto.textContent = 'Assinar Plano (R$ 19,99/mês)';
-        }
-      } else {
-        if (statusPermissaoTxt) {
-          statusPermissaoTxt.innerHTML = '<span class="text-rose-400 font-bold">🔒 Sem autorização do Admin</span>';
-        }
-        if (bloqueioAviso) {
-          bloqueioAviso.classList.remove('hidden');
-          bloqueioAviso.innerHTML = '<span>🔒</span> <span>Apenas jogadores autorizados pelo Administrador podem criar um reino. Solicite a permissão com o suporte/admin.</span>';
-        }
-        if (btnCriar) {
-          btnCriar.disabled = true;
-          btnCriar.classList.add('opacity-40', 'cursor-not-allowed');
-        }
-        if (btnCriarTexto) {
-          btnCriarTexto.textContent = '🔒 Criação Bloqueada (Permissão Obrigatória)';
         }
       }
     }
@@ -4892,6 +4893,33 @@
       const btn = document.getElementById('btn-criar-reino');
       const btnTexto = document.getElementById('btn-criar-reino-texto');
       if (btn) btn.disabled = true;
+
+      // CASO A: Tem isenção do Admin ou é Administrador -> Cria direto GRÁTIS!
+      if (hasFreePermissionReino || isUserAdmin) {
+        if (btnTexto) btnTexto.textContent = 'Fundando Reino Grátis...';
+        try {
+          const res = await apiFetch('/api/kingdoms/create', {
+            method: 'POST',
+            body: JSON.stringify({ nome, tag, descricao: desc, logo, cor })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            mostrarFeedback('👑 Reino criado com sucesso pelo Administrador (Sem cobrança)!', 'green');
+            await carregarReinoStatus();
+          } else {
+            mostrarFeedback(data.error || 'Erro ao criar reino.', 'red');
+            if (btn) btn.disabled = false;
+            if (btnTexto) btnTexto.textContent = '👑 Criar Reino Grátis (Autorizado pelo Admin)';
+          }
+        } catch (err) {
+          mostrarFeedback('Erro de conexão ao criar reino.', 'red');
+          if (btn) btn.disabled = false;
+          if (btnTexto) btnTexto.textContent = '👑 Criar Reino Grátis (Autorizado pelo Admin)';
+        }
+        return;
+      }
+
+      // CASO B: Jogador padrão -> Paga R$ 19,99/mês pelo Mercado Pago
       if (btnTexto) btnTexto.textContent = 'Gerando Pagamento Mercado Pago...';
 
       try {
