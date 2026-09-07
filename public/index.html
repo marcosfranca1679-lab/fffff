@@ -85,6 +85,138 @@
       -webkit-backdrop-filter: blur(32px);
       border: 1px solid rgba(168, 85, 247, 0.22);
       box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+    /* ══════════════════════════════════════════════════════════════════════════
+         MOLDURAS ANIMADAS TEMÁTICAS DE MINECRAFT (PERFIL VIP)
+    ══════════════════════════════════════════════════════════════════════════ */
+    .mc-frame-wrapper {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border-radius: 9999px;
+      padding: 3.5px;
+      transition: all 0.3s ease;
+    }
+    .mc-frame-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      object-fit: cover;
+      display: block;
+      position: relative;
+      z-index: 2;
+      background: #0f172a;
+    }
+    .mc-frame-fallback {
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* 1. Portal do Nether & Obsidiana */
+    @keyframes spin-portal {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes pulse-portal-glow {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(168, 85, 247, 0.7)) drop-shadow(0 0 12px rgba(192, 132, 252, 0.4)); }
+      50% { filter: drop-shadow(0 0 12px rgba(192, 132, 252, 0.95)) drop-shadow(0 0 20px rgba(168, 85, 247, 0.7)); }
+    }
+    .mc-frame-portal_nether {
+      background: conic-gradient(from 0deg, #3b0764, #a855f7, #c084fc, #581c87, #a855f7, #3b0764);
+      animation: pulse-portal-glow 3s infinite ease-in-out;
+      box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+    }
+    .mc-frame-portal_nether::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 9999px;
+      background: conic-gradient(from 180deg, transparent, #c084fc, transparent, #a855f7, transparent);
+      animation: spin-portal 4s linear infinite;
+      z-index: 1;
+    }
+
+    /* 2. Chama de Blaze & Fogo Infernal */
+    @keyframes blaze-flame {
+      0% { box-shadow: 0 0 8px #f59e0b, 0 0 16px #ef4444, inset 0 0 6px #fbbf24; }
+      50% { box-shadow: 0 0 16px #fbbf24, 0 0 26px #dc2626, inset 0 0 10px #f59e0b; }
+      100% { box-shadow: 0 0 10px #f59e0b, 0 0 18px #b91c1c, inset 0 0 8px #ea580c; }
+    }
+    .mc-frame-chama_blaze {
+      background: linear-gradient(135deg, #b45309, #f59e0b, #ef4444, #fbbf24);
+      animation: blaze-flame 1.8s infinite alternate ease-in-out;
+    }
+
+    /* 3. Redstone Energizada & Eletricidade */
+    @keyframes redstone-spark {
+      0%, 100% { box-shadow: 0 0 6px #ef4444, 0 0 12px #991b1b; filter: brightness(1); }
+      25% { box-shadow: 0 0 16px #f87171, 0 0 24px #dc2626; filter: brightness(1.3); }
+      75% { box-shadow: 0 0 8px #ef4444, 0 0 14px #7f1d1d; filter: brightness(0.9); }
+    }
+    .mc-frame-redstone_eletrica {
+      background: linear-gradient(45deg, #7f1d1d, #ef4444, #fca5a5, #dc2626);
+      animation: redstone-spark 1.4s infinite ease-in-out;
+    }
+
+    /* 4. Diamante Encantado (Enchanted Glint) */
+    @keyframes diamond-glint {
+      0% { filter: hue-rotate(0deg) drop-shadow(0 0 6px rgba(6, 182, 212, 0.7)); }
+      50% { filter: hue-rotate(40deg) drop-shadow(0 0 14px rgba(168, 85, 247, 0.85)); }
+      100% { filter: hue-rotate(0deg) drop-shadow(0 0 6px rgba(6, 182, 212, 0.7)); }
+    }
+    .mc-frame-diamante_encantado {
+      background: linear-gradient(135deg, #0284c7, #06b6d4, #a855f7, #38bdf8);
+      animation: diamond-glint 3s infinite linear;
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+    }
+
+    /* 5. Esmeralda Lendária */
+    @keyframes emerald-sparkle {
+      0%, 100% { box-shadow: 0 0 8px #10b981, 0 0 16px #047857; }
+      50% { box-shadow: 0 0 18px #34d399, 0 0 28px #059669; }
+    }
+    .mc-frame-esmeralda_lendaria {
+      background: conic-gradient(from 45deg, #064e3b, #10b981, #6ee7b7, #047857, #10b981);
+      animation: emerald-sparkle 2.5s infinite ease-in-out;
+    }
+
+    /* 6. Coração do Mar & Prismarinho */
+    @keyframes ocean-wave {
+      0% { box-shadow: 0 0 8px #0284c7, 0 0 16px #06b6d4; }
+      50% { box-shadow: 0 0 16px #38bdf8, 0 0 26px #0ea5e9; }
+      100% { box-shadow: 0 0 8px #0284c7, 0 0 16px #06b6d4; }
+    }
+    .mc-frame-coracao_do_mar {
+      background: linear-gradient(135deg, #0369a1, #06b6d4, #38bdf8, #0284c7);
+      animation: ocean-wave 3s infinite alternate ease-in-out;
+    }
+
+    /* 7. Estrela do Nether & Wither */
+    @keyframes nether-star {
+      0%, 100% { box-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px #818cf8; }
+      50% { box-shadow: 0 0 20px rgba(255, 255, 255, 1), 0 0 32px #c084fc; filter: brightness(1.2); }
+    }
+    .mc-frame-estrela_do_nether {
+      background: conic-gradient(from 0deg, #1e1b4b, #ffffff, #818cf8, #312e81, #ffffff);
+      animation: nether-star 3s infinite ease-in-out;
+    }
+
+    /* 8. Totem da Imortalidade */
+    @keyframes totem-glow {
+      0%, 100% { box-shadow: 0 0 8px #fbbf24, 0 0 14px #10b981; }
+      50% { box-shadow: 0 0 18px #f59e0b, 0 0 28px #34d399; }
+    }
+    .mc-frame-totem_imortal {
+      background: linear-gradient(135deg, #b45309, #fbbf24, #10b981, #f59e0b);
+      animation: totem-glow 2s infinite ease-in-out;
     }
 
     /* ══════════════════════════════════════════════════════════════════════════
@@ -544,12 +676,15 @@
       <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-lg">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.1]">
           <div class="flex items-center gap-3">
-            <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-2xl shadow-md flex-shrink-0 border-t border-white/40">
-              🎮
+            <div id="profile-avatar-container" class="flex-shrink-0">
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-2xl shadow-md border-t border-white/40">
+                🎮
+              </div>
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm md:text-lg font-extrabold text-white truncate tracking-tight" id="profile-nick">Carregando...</span>
+                <span id="profile-vip-badge" class="hidden text-[10px] px-2 py-0.5 rounded-full font-black bg-gradient-to-r from-amber-500 to-yellow-400 text-black shadow-sm">👑 VIP</span>
                 <span id="profile-platform-badge" class="bg-white/[0.08] text-emerald-300 border border-white/[0.12] text-[10px] md:text-xs px-2 py-0.5 rounded-lg font-semibold">Bedrock</span>
               </div>
               <span class="text-[11px] text-slate-400 block truncate mt-0.5" id="profile-email">email@carregando.com</span>
@@ -562,6 +697,109 @@
 
         <div class="pt-2.5 text-xs text-slate-200 leading-relaxed" id="whitelist-status-desc">
           Aguarde a verificação do seu acesso...
+        </div>
+      </div>
+
+      <!-- ── CARD: PERSONALIZAÇÃO DE PERFIL VIP (Foto até 3MB & Molduras Minecraft) ── -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-xl border border-amber-500/30 bg-gradient-to-b from-amber-950/20 via-black/50 to-purple-950/20 space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/[0.08]">
+          <div class="flex items-center gap-2.5">
+            <span class="text-2xl">✨</span>
+            <div>
+              <div class="text-xs md:text-sm font-extrabold text-white flex items-center gap-2">
+                <span>Perfil VIP — Foto & Molduras Animadas</span>
+                <span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">R$ 9,99/mês</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Destaque-se no Chat Global, Chat dos Reinos e Rankings com sua foto e aura animada de Minecraft</div>
+            </div>
+          </div>
+          <div id="vip-subscription-status-badge" class="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-white/10 text-slate-300 border border-white/10 self-start sm:self-auto flex items-center gap-1.5">
+            ⚪ Carregando...
+          </div>
+        </div>
+
+        <!-- Área de Preview Interativo em Tempo Real -->
+        <div class="bg-black/50 p-3 rounded-2xl border border-white/[0.08] space-y-2.5">
+          <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Preview ao Vivo no Chat & Perfil:</div>
+          <div class="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <div id="vip-preview-avatar-wrapper" class="flex-shrink-0">
+              <!-- Renderizado via JS -->
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span id="vip-preview-nick" class="font-extrabold text-xs text-white">SeuNick</span>
+                <span class="bg-gradient-to-r from-amber-500 to-yellow-400 text-black text-[9px] px-1.5 py-0.2 rounded font-black shadow-xs">VIP</span>
+                <span class="text-[9px] text-slate-400 font-mono">Agora</span>
+              </div>
+              <div class="text-xs text-slate-300 mt-0.5">Sua foto e moldura animada aparecerão assim para todos no servidor! 💎🔥</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulário de Customização: Upload Foto & Escolha Moldura -->
+        <div class="space-y-3">
+          <!-- 1. Upload de Foto de Perfil (Máx 3MB) -->
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+              <span>1. Escolha sua Foto de Perfil</span>
+              <span class="text-[10px] text-cyan-400 font-normal">Máximo permitido: 3 MB</span>
+            </label>
+            <div class="flex flex-col sm:flex-row items-center gap-2.5">
+              <label for="vip-input-file" class="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs rounded-xl cursor-pointer transition flex items-center justify-center gap-2 shadow-sm flex-shrink-0 active:scale-95">
+                <span>📷</span> <span>Carregar Foto (Máx 3MB)</span>
+              </label>
+              <input type="file" id="vip-input-file" accept="image/png, image/jpeg, image/webp" class="hidden" onchange="processarUploadFotoVip(this)" />
+              <button type="button" onclick="removerFotoVip()" id="btn-remover-foto-vip" class="hidden px-3 py-2 bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold rounded-xl transition flex items-center gap-1 flex-shrink-0">
+                <span>🗑️</span> Remover Foto
+              </button>
+              <span id="vip-file-status-label" class="text-xs text-slate-400 truncate w-full sm:w-auto">Nenhuma foto selecionada</span>
+            </div>
+            <div id="vip-file-error" class="hidden text-[11px] text-rose-400 font-bold"></div>
+          </div>
+
+          <!-- 2. Seletor das 8 Molduras Animadas de Minecraft -->
+          <div class="space-y-1.5">
+            <label class="text-[11px] font-bold text-slate-300 uppercase tracking-wider block">
+              2. Escolha sua Moldura Animada de Minecraft
+            </label>
+            <div id="vip-frames-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <!-- Renderizado dinamicamente com as 8 molduras -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Ação: Botão Assinar / Salvar Alterações -->
+        <div class="pt-2 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div class="text-[10px] text-slate-400">
+            <span class="text-amber-300 font-bold">✨ Vantagem VIP:</span> Troque de foto ou moldura quantas vezes quiser durante os 30 dias de assinatura!
+          </div>
+          <div class="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+            <button id="btn-vip-action" onclick="executarAcaoVip()" class="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer">
+              <span>💎</span> <span id="btn-vip-action-text">Assinar Perfil VIP (R$ 9,99/mês)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Painel de Aguardo do Pagamento Mercado Pago (Perfil VIP) -->
+        <div id="vip-pagamento-aguardo" class="hidden p-4 rounded-xl bg-amber-950/30 border border-amber-500/40 text-center space-y-3">
+          <div class="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center mx-auto text-lg animate-pulse border border-amber-500/40">
+            ⏳
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white">Aguardando Pagamento do Perfil VIP (R$ 9,99 via PIX)...</div>
+            <div class="text-[11px] text-slate-300 mt-1">Conclua o pagamento na aba aberta. O site detecta automaticamente a aprovação e ativa seu perfil instantaneamente!</div>
+          </div>
+          <div class="flex items-center justify-center gap-2 pt-1 flex-wrap">
+            <a id="link-abrir-pagamento-vip" href="#" target="_blank" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow transition flex items-center gap-1.5">
+              <span>🔗</span> <span>Abrir Pagamento</span>
+            </a>
+            <button onclick="verificarStatusPagamentoVipManual()" class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl transition flex items-center gap-1">
+              <span>🔄</span> <span>Verificar Agora</span>
+            </button>
+            <button onclick="cancelarTentativaPagamentoVip()" class="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs rounded-xl transition">
+              Cancelar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2382,6 +2620,7 @@
       if (canalId === 'ranking-reinos') carregarRankingReinos();
       if (canalId === 'denuncias') carregarTickets();
       if (canalId === 'reinos') carregarReinoStatus();
+      if (canalId === 'geral') { if (typeof carregarStatusPerfilVip === 'function') carregarStatusPerfilVip(); }
     }
 
     // Suporte ao Botão Voltar do Android App
@@ -2534,6 +2773,10 @@
         box.innerHTML = '⏳ Aguardando Aprovação';
         desc.innerHTML = 'Sua conta foi criada! Aguarde a aprovação do administrador para entrar.';
       }
+
+      if (typeof carregarStatusPerfilVip === 'function') {
+        carregarStatusPerfilVip();
+      }
     }
 
     // ── Chat da Comunidade (#chat-geral) ─────────────────────────────────────
@@ -2581,11 +2824,13 @@
               ? renderTagReino(m.kingdom_tag, m.kingdom_logo, m.kingdom_color)
               : '';
 
+            const avatarHtml = typeof renderAvatarComMoldura === 'function'
+              ? renderAvatarComMoldura(m.vip_avatar, m.author_nick, m.vip_frame, 'w-8 h-8', avatarColor)
+              : `<div class="w-8 h-8 rounded-xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">${initial}</div>`;
+
             return `
               <div class="flex items-start gap-2 hover:bg-white/[0.04] p-1.5 md:p-2 rounded-xl transition border border-transparent hover:border-white/[0.06]">
-                <div class="w-8 h-8 rounded-xl ${avatarColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 mt-0.5 shadow-md border-t border-white/40">
-                  ${initial}
-                </div>
+                ${avatarHtml}
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-1.5 flex-wrap">
                     ${tagBadge}
@@ -5396,12 +5641,14 @@
         const isLider = m.author_role === 'lider';
         const isMe = currentUser && currentUser.nick && currentUser.nick.toLowerCase() === m.author_nick.toLowerCase();
         const initial = m.author_nick.substring(0, 1).toUpperCase();
+        const avatarColor = isLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black font-black' : 'bg-cyan-800 text-cyan-200 font-bold';
+        const avatarHtml = typeof renderAvatarComMoldura === 'function'
+          ? renderAvatarComMoldura(m.vip_avatar, m.author_nick, m.vip_frame, 'w-7 h-7', avatarColor)
+          : `<div class="w-7 h-7 rounded-lg ${avatarColor} flex items-center justify-center text-xs flex-shrink-0 mt-0.5 shadow-sm">${initial}</div>`;
 
         return `
           <div class="flex items-start gap-2 hover:bg-white/[0.03] p-1.5 rounded-xl transition">
-            <div class="w-7 h-7 rounded-lg ${isLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black font-black' : 'bg-cyan-800 text-cyan-200 font-bold'} flex items-center justify-center text-xs flex-shrink-0 mt-0.5 shadow-sm">
-              ${initial}
-            </div>
+            ${avatarHtml}
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-extrabold text-xs ${isLider ? 'text-amber-300' : 'text-white'} truncate">${escapeHtml(m.author_nick)}</span>
@@ -5936,6 +6183,460 @@
       } catch (err) {
         mostrarFeedback('Erro de conexão ao excluir reino.', 'red');
       }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PERFIL VIP: FOTO DE PERFIL (MÁX 3MB) & MOLDURAS ANIMADAS DE MINECRAFT
+    // ══════════════════════════════════════════════════════════════════════════
+    const VIP_MINECRAFT_FRAMES = [
+      {
+        id: 'portal_nether',
+        nome: 'Portal do Nether',
+        badge: 'Obsidiana & Ametista',
+        desc: 'Vórtice cósmico púrpura dimensional',
+        cor: '#c084fc'
+      },
+      {
+        id: 'chama_blaze',
+        nome: 'Chama de Blaze',
+        badge: 'Fogo Incandescente',
+        desc: 'Labaredas vulcânicas vivas pulsantes',
+        cor: '#fb923c'
+      },
+      {
+        id: 'redstone_eletrica',
+        nome: 'Redstone Elétrica',
+        badge: 'Faíscas 1000V',
+        desc: 'Centelhas vibrantes de alta voltagem',
+        cor: '#f87171'
+      },
+      {
+        id: 'diamante_encantado',
+        nome: 'Diamante Encantado',
+        badge: 'Armadura Encantada',
+        desc: 'Brilho reflexivo ciano e ametista',
+        cor: '#38bdf8'
+      },
+      {
+        id: 'esmeralda_lendaria',
+        nome: 'Esmeralda Lendária',
+        badge: 'Riqueza dos Vilarejos',
+        desc: 'Facetas lapidadas de esmeralda viva',
+        cor: '#34d399'
+      },
+      {
+        id: 'coracao_do_mar',
+        nome: 'Coração do Mar',
+        badge: 'Bioluminescência',
+        desc: 'Ondas místicas do conduto marinho',
+        cor: '#67e8f9'
+      },
+      {
+        id: 'estrela_do_nether',
+        nome: 'Estrela do Nether',
+        badge: 'Sinalizador Sagrado',
+        desc: 'Luz estelar prismática purificadora',
+        cor: '#e2e8f0'
+      },
+      {
+        id: 'totem_imortal',
+        nome: 'Totem da Imortalidade',
+        badge: 'Segunda Chance',
+        desc: 'Asas douradas e bênção mística',
+        cor: '#fde047'
+      }
+    ];
+
+    let currentVipProfile = {
+      is_active: false,
+      avatar_url: null,
+      frame_id: 'portal_nether',
+      expires_at: null
+    };
+    let selectedVipFrameId = 'portal_nether';
+    let tempVipAvatarData = null;
+    let vipPollInterval = null;
+    let currentVipPendingId = null;
+
+    function renderAvatarComMoldura(avatarUrl, nick, frameId, sizeClass = 'w-8 h-8', fallbackColor = 'bg-gradient-to-tr from-purple-600 to-indigo-600') {
+      const initial = escapeHtml((nick || 'J').substring(0, 1).toUpperCase());
+      const safeNick = escapeHtml(nick || 'Jogador');
+      const validFrame = frameId && VIP_MINECRAFT_FRAMES.find(f => f.id === frameId);
+      const frameClass = validFrame ? `mc-frame-${validFrame.id}` : '';
+      const hasValidFrame = Boolean(validFrame);
+
+      if (avatarUrl && avatarUrl.trim()) {
+        const safeSrc = avatarUrl.trim();
+        if (hasValidFrame) {
+          return `
+            <div class="mc-frame-wrapper ${frameClass} ${sizeClass}" title="VIP: ${validFrame.nome} - ${safeNick}">
+              <img src="${safeSrc}" alt="${safeNick}" class="mc-frame-img" onerror="this.parentElement.innerHTML='<div class=\\'mc-frame-fallback ${fallbackColor} text-white font-bold text-xs\\'>${initial}</div>'" />
+            </div>
+          `;
+        } else {
+          return `
+            <div class="${sizeClass} rounded-xl overflow-hidden shadow-md flex-shrink-0 bg-slate-900 border border-white/20">
+              <img src="${safeSrc}" alt="${safeNick}" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center font-bold text-xs text-white ${fallbackColor}\\'>${initial}</div>'" />
+            </div>
+          `;
+        }
+      }
+
+      if (hasValidFrame) {
+        return `
+          <div class="mc-frame-wrapper ${frameClass} ${sizeClass}" title="VIP: ${validFrame.nome} - ${safeNick}">
+            <div class="mc-frame-fallback ${fallbackColor} text-white font-bold text-xs">
+              ${initial}
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="${sizeClass} rounded-xl ${fallbackColor} flex items-center justify-center font-bold text-xs text-white flex-shrink-0 shadow-md border-t border-white/40">
+          ${initial}
+        </div>
+      `;
+    }
+
+    function renderizarGridMoldurasVip() {
+      const grid = document.getElementById('vip-frames-grid');
+      if (!grid) return;
+
+      grid.innerHTML = VIP_MINECRAFT_FRAMES.map(f => {
+        const isSelected = f.id === selectedVipFrameId;
+        const initial = currentUser ? (currentUser.nick || 'J').substring(0, 1).toUpperCase() : 'J';
+        const previewImg = tempVipAvatarData || currentVipProfile.avatar_url;
+
+        const avatarPreview = previewImg
+          ? `<img src="${previewImg}" class="mc-frame-img" />`
+          : `<div class="mc-frame-fallback bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 text-[10px] font-black">${initial}</div>`;
+
+        return `
+          <div onclick="selecionarMolduraVip('${f.id}')"
+            class="p-2 rounded-xl border transition cursor-pointer flex flex-col items-center text-center gap-1.5 ${isSelected ? 'border-amber-400 bg-amber-500/15 shadow-lg shadow-amber-500/10' : 'border-white/10 bg-black/40 hover:border-white/25 hover:bg-white/[0.04]'}">
+            <div class="mc-frame-wrapper mc-frame-${f.id} w-10 h-10">
+              ${avatarPreview}
+            </div>
+            <div class="min-w-0 w-full">
+              <div class="text-[11px] font-extrabold text-white truncate flex items-center justify-center gap-1">
+                <span>${escapeHtml(f.nome)}</span>
+                ${isSelected ? '<span class="text-amber-300 text-xs">✓</span>' : ''}
+              </div>
+              <div class="text-[9px] truncate mt-0.5" style="color: ${f.cor}">${escapeHtml(f.badge)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selecionarMolduraVip(frameId) {
+      selectedVipFrameId = frameId;
+      renderizarGridMoldurasVip();
+      atualizarPreviewVipAoVivo();
+    }
+
+    function atualizarPreviewVipAoVivo() {
+      const previewWrapper = document.getElementById('vip-preview-avatar-wrapper');
+      const previewNick = document.getElementById('vip-preview-nick');
+      const nick = currentUser ? (currentUser.nick || 'SeuNick') : 'SeuNick';
+
+      if (previewNick) previewNick.textContent = nick;
+
+      const avatarSrc = tempVipAvatarData !== null ? tempVipAvatarData : currentVipProfile.avatar_url;
+      if (previewWrapper) {
+        previewWrapper.innerHTML = renderAvatarComMoldura(avatarSrc, nick, selectedVipFrameId, 'w-12 h-12', 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black');
+      }
+    }
+
+    function processarUploadFotoVip(input) {
+      const file = input.files && input.files[0];
+      if (!file) return;
+
+      const MAX_BYTES = 3 * 1024 * 1024; // 3 MB rigoroso
+      const errorEl = document.getElementById('vip-file-error');
+      const statusLabel = document.getElementById('vip-file-status-label');
+      const btnRemover = document.getElementById('btn-remover-foto-vip');
+
+      if (file.size > MAX_BYTES) {
+        if (errorEl) {
+          errorEl.textContent = `❌ A foto tem ${(file.size / (1024 * 1024)).toFixed(2)} MB. O limite máximo é de exatamente 3.0 MB!`;
+          errorEl.classList.remove('hidden');
+        }
+        input.value = '';
+        mostrarFeedback('A foto ultrapassa o limite estrito de 3MB!', 'red');
+        return;
+      }
+
+      if (errorEl) errorEl.classList.add('hidden');
+      if (statusLabel) statusLabel.textContent = `Foto: ${file.name} (${(file.size / 1024).toFixed(0)} KB)`;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 320;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > h) {
+            if (w > MAX_DIM) {
+              h = Math.round((h * MAX_DIM) / w);
+              w = MAX_DIM;
+            }
+          } else {
+            if (h > MAX_DIM) {
+              w = Math.round((w * MAX_DIM) / h);
+              h = MAX_DIM;
+            }
+          }
+
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          tempVipAvatarData = canvas.toDataURL('image/jpeg', 0.90);
+          if (btnRemover) btnRemover.classList.remove('hidden');
+          renderizarGridMoldurasVip();
+          atualizarPreviewVipAoVivo();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removerFotoVip() {
+      tempVipAvatarData = '';
+      const input = document.getElementById('vip-input-file');
+      if (input) input.value = '';
+      const btnRemover = document.getElementById('btn-remover-foto-vip');
+      if (btnRemover) btnRemover.classList.add('hidden');
+      const statusLabel = document.getElementById('vip-file-status-label');
+      if (statusLabel) statusLabel.textContent = 'Foto removida (usará inicial do Nick)';
+      renderizarGridMoldurasVip();
+      atualizarPreviewVipAoVivo();
+    }
+
+    async function carregarStatusPerfilVip() {
+      if (!currentUser) return;
+      try {
+        const res = await apiFetch('/api/profile/vip');
+        if (!res.ok) return;
+        const data = await res.json();
+        currentVipProfile = data;
+
+        if (data.frame_id) {
+          selectedVipFrameId = data.frame_id;
+        }
+
+        const badgeSub = document.getElementById('vip-subscription-status-badge');
+        const badgeVip = document.getElementById('profile-vip-badge');
+        const btnActionText = document.getElementById('btn-vip-action-text');
+        const btnRemover = document.getElementById('btn-remover-foto-vip');
+        const statusLabel = document.getElementById('vip-file-status-label');
+
+        if (data.is_active) {
+          const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString('pt-BR') : '30 dias';
+          if (badgeSub) {
+            badgeSub.className = 'px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 self-start sm:self-auto flex items-center gap-1.5 shadow-sm';
+            badgeSub.innerHTML = `<span>👑</span> <span>VIP Ativo (Vence: ${exp})</span>`;
+          }
+          if (badgeVip) badgeVip.classList.remove('hidden');
+          if (btnActionText) btnActionText.textContent = 'Salvar Foto & Moldura (Sem Custo)';
+          if (data.avatar_url && statusLabel) {
+            statusLabel.textContent = 'Foto atual salva na nuvem';
+            if (btnRemover) btnRemover.classList.remove('hidden');
+          }
+        } else {
+          if (badgeSub) {
+            badgeSub.className = 'px-2.5 py-1 rounded-xl text-[11px] font-bold bg-white/10 text-slate-300 border border-white/10 self-start sm:self-auto flex items-center gap-1.5';
+            badgeSub.innerHTML = '<span>⚪</span> <span>Não Assinante (R$ 9,99/mês)</span>';
+          }
+          if (badgeVip) badgeVip.classList.add('hidden');
+          if (btnActionText) btnActionText.textContent = 'Assinar Perfil VIP (R$ 9,99/mês)';
+        }
+
+        // Atualizar avatar no Card Geral de Perfil
+        const profileAvatarContainer = document.getElementById('profile-avatar-container');
+        if (profileAvatarContainer) {
+          profileAvatarContainer.innerHTML = renderAvatarComMoldura(
+            data.avatar_url,
+            currentUser.nick,
+            data.frame_id,
+            'w-12 h-12',
+            'bg-gradient-to-tr from-emerald-500 to-teal-600'
+          );
+        }
+
+        // Atualizar avatar no sidebar
+        const sidebarAvatar = document.getElementById('user-avatar-badge');
+        if (sidebarAvatar) {
+          sidebarAvatar.innerHTML = renderAvatarComMoldura(
+            data.avatar_url,
+            currentUser.nick,
+            data.frame_id,
+            'w-8 h-8 md:w-9 md:h-9',
+            'bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black'
+          );
+        }
+
+        // Atualizar avatar na home se estiver logado
+        const homeAvatar = document.getElementById('home-avatar');
+        if (homeAvatar) {
+          homeAvatar.innerHTML = renderAvatarComMoldura(
+            data.avatar_url,
+            currentUser.nick,
+            data.frame_id,
+            'w-12 h-12',
+            'bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black'
+          );
+        }
+
+        renderizarGridMoldurasVip();
+        atualizarPreviewVipAoVivo();
+      } catch (_) {}
+    }
+
+    async function executarAcaoVip() {
+      if (!currentUser) {
+        mostrarFeedback('Faça login para assinar o Perfil VIP!', 'red');
+        abrirModalAuth('login');
+        return;
+      }
+
+      const avatarToSend = tempVipAvatarData !== null ? tempVipAvatarData : (currentVipProfile.avatar_url || '');
+
+      // Caso 1: Usuário já é VIP ativo -> Atualizar gratuitamente foto e moldura
+      if (currentVipProfile.is_active) {
+        try {
+          mostrarFeedback('Salvando personalizações do Perfil VIP...', 'yellow');
+          const res = await apiFetch('/api/profile/vip/update', {
+            method: 'POST',
+            body: JSON.stringify({
+              avatar_data: avatarToSend,
+              frame_id: selectedVipFrameId
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            mostrarFeedback('Perfil VIP atualizado com sucesso! ✨', 'green');
+            tempVipAvatarData = null;
+            await carregarStatusPerfilVip();
+            if (typeof carregarChat === 'function') carregarChat(true);
+          } else {
+            mostrarFeedback(data.error || 'Erro ao atualizar perfil.', 'red');
+          }
+        } catch (err) {
+          mostrarFeedback('Erro de conexão ao salvar perfil VIP.', 'red');
+        }
+        return;
+      }
+
+      // Caso 2: Novo assinante -> Gerar pagamento PIX Mercado Pago de R$ 9,99
+      try {
+        mostrarFeedback('Gerando cobrança PIX Mercado Pago (R$ 9,99)...', 'yellow');
+        const res = await apiFetch('/api/profile/vip/create-payment', {
+          method: 'POST',
+          body: JSON.stringify({
+            avatar_data: avatarToSend,
+            frame_id: selectedVipFrameId
+          })
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          mostrarFeedback(data.error || 'Erro ao gerar pagamento VIP.', 'red');
+          return;
+        }
+
+        currentVipPendingId = data.pending_id;
+
+        const aguardoBox = document.getElementById('vip-pagamento-aguardo');
+        const linkAbrir = document.getElementById('link-abrir-pagamento-vip');
+        if (aguardoBox) aguardoBox.classList.remove('hidden');
+        if (linkAbrir) linkAbrir.href = data.payment_url;
+
+        // Abrir link de checkout
+        try {
+          window.open(data.payment_url, '_blank');
+        } catch (_) {}
+
+        mostrarFeedback('PIX Mercado Pago gerado! Conclua o pagamento para ativar seu Perfil VIP.', 'green');
+        iniciarMonitoramentoPagamentoVip(data.preference_id);
+      } catch (err) {
+        mostrarFeedback('Erro ao conectar ao Mercado Pago.', 'red');
+      }
+    }
+
+    function iniciarMonitoramentoPagamentoVip(preferenceId) {
+      if (vipPollInterval) clearInterval(vipPollInterval);
+
+      let tentativas = 0;
+      vipPollInterval = setInterval(async () => {
+        tentativas++;
+        if (tentativas > 120) { // 120 x 3s = 6 minutos
+          clearInterval(vipPollInterval);
+          vipPollInterval = null;
+          mostrarFeedback('Tempo limite de verificação automática excedido. Se já pagou, clique em "Verificar Agora".', 'yellow');
+          return;
+        }
+
+        try {
+          const res = await apiFetch(`/api/profile/vip/payment/status?preference_id=${encodeURIComponent(preferenceId)}`);
+          if (!res.ok) return;
+          const data = await res.json();
+
+          if (data.status === 'approved') {
+            clearInterval(vipPollInterval);
+            vipPollInterval = null;
+            const aguardoBox = document.getElementById('vip-pagamento-aguardo');
+            if (aguardoBox) aguardoBox.classList.add('hidden');
+            tempVipAvatarData = null;
+
+            mostrarFeedback('🎉 PAGAMENTO APROVADO! Seu Perfil VIP foi ativado com sucesso! 💎✨', 'green');
+            await carregarStatusPerfilVip();
+            if (typeof carregarChat === 'function') carregarChat(true);
+          }
+        } catch (_) {}
+      }, 3000);
+    }
+
+    async function verificarStatusPagamentoVipManual() {
+      if (!currentVipPendingId) {
+        mostrarFeedback('Nenhum pagamento pendente encontrado.', 'yellow');
+        return;
+      }
+      mostrarFeedback('Verificando status do pagamento junto ao Mercado Pago...', 'yellow');
+      try {
+        const res = await apiFetch('/api/profile/vip/payment/status');
+        const data = await res.json();
+        if (data.status === 'approved') {
+          if (vipPollInterval) clearInterval(vipPollInterval);
+          vipPollInterval = null;
+          const aguardoBox = document.getElementById('vip-pagamento-aguardo');
+          if (aguardoBox) aguardoBox.classList.add('hidden');
+          tempVipAvatarData = null;
+
+          mostrarFeedback('🎉 Pagamento Confirmado! Seu Perfil VIP já está ativo!', 'green');
+          await carregarStatusPerfilVip();
+          if (typeof carregarChat === 'function') carregarChat(true);
+        } else {
+          mostrarFeedback('Pagamento ainda não identificado. Conclua o PIX e aguarde alguns segundos.', 'yellow');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro ao consultar Mercado Pago.', 'red');
+      }
+    }
+
+    function cancelarTentativaPagamentoVip() {
+      if (vipPollInterval) {
+        clearInterval(vipPollInterval);
+        vipPollInterval = null;
+      }
+      const aguardoBox = document.getElementById('vip-pagamento-aguardo');
+      if (aguardoBox) aguardoBox.classList.add('hidden');
+      mostrarFeedback('Tentativa de pagamento cancelada.', 'yellow');
     }
   </script>
 </body>
