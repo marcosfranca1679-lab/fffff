@@ -13,6 +13,13 @@ const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'MinecraftAdmin@2025';
 const TOKEN_SECRET = process.env.TOKEN_SECRET || 'mapabermuda-auth-secret-key-2025-mc';
 
+// ─── Mercado Pago ─────────────────────────────────────────────────────────────
+const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-7322103170597733-041213-494e0ff2a4789bdb62f82e3fabf32e18-292784019';
+const MP_PUBLIC_KEY   = process.env.MP_PUBLIC_KEY   || 'APP_USR-27b07c49-7c02-437a-b955-f0781758eb74';
+const SUBSCRIPTION_PRICE = 19.99;
+const SUBSCRIPTION_DAYS  = 30;
+const SITE_URL = 'https://fffff-autoforge.vercel.app';
+
 // ─── Middlewares ─────────────────────────────────────────────────────────────
 app.use(cors());
 app.use(express.json());
@@ -3117,6 +3124,23 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
             isInvited: pendingNicksSet.has((p.nick || '').toLowerCase().trim())
           }));
       }
+
+      // Informações detalhadas da assinatura/plano do reino
+      const expiresAt = myKingdom.subscription_expires_at ? new Date(myKingdom.subscription_expires_at) : null;
+      const nowMs = Date.now();
+      const isExpired = expiresAt ? (expiresAt.getTime() < nowMs) : false;
+      const daysRemaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - nowMs) / (1000 * 60 * 60 * 24))) : 0;
+      const monthsRemaining = (daysRemaining / 30).toFixed(1);
+
+      myKingdom.subscription = {
+        status: myKingdom.subscription_status || (isExpired ? 'expired' : 'active'),
+        expiresAt: myKingdom.subscription_expires_at,
+        renewedAt: myKingdom.subscription_renewed_at,
+        isExpired,
+        daysRemaining,
+        monthsRemaining: Number(monthsRemaining),
+        formattedExpiresAt: expiresAt ? expiresAt.toLocaleDateString('pt-BR') : 'Indeterminado'
+      };
     }
 
     // 4. Busca reinos existentes para calcular limite (máx 12) e listas de logos/cores já em uso
@@ -3153,6 +3177,247 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       taxaCriacao: 19.99,
       taxaMensal: 19.99
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── MERCADO PAGO: Iniciar pagamento para criação de reino ────────────────────
+app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+
+    // Verifica permissão do admin
+    let allowed = !!req.isAdmin;
+    if (!allowed) {
+      const { data: perm } = await supabase
+        .from('kingdom_permissions').select('allowed').ilike('user_nick', nick).maybeSingle();
+      if (perm && perm.allowed) allowed = true;
+    }
+    if (!allowed) return res.status(403).json({ error: 'Você não tem permissão do Administrador para criar um Reino.' });
+
+    // Verifica se já está num reino
+    const { data: existing } = await supabase
+      .from('kingdom_members').select('kingdom_id').ilike('user_nick', nick).maybeSingle();
+    if (existing) return res.status(400).json({ error: 'Você já pertence a um reino.' });
+
+    const { nome, tag, logo, cor, descricao } = req.body || {};
+    if (!nome || !tag || !descricao) return res.status(400).json({ error: 'Nome, TAG e descrição são obrigatórios.' });
+
+    const cleanNome = (nome || '').trim().substring(0, 40);
+    const cleanTag  = (tag  || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 3);
+    const cleanLogo = (logo || '👑').trim();
+    let   cleanCor  = (cor  || '#f59e0b').trim();
+    const cleanDesc = (descricao || '').trim().substring(0, 300);
+    if (cleanTag.length !== 3) return res.status(400).json({ error: 'TAG deve ter exatamente 3 letras.' });
+    if (!/^#[0-9A-Fa-f]{6}$/.test(cleanCor)) cleanCor = '#f59e0b';
+
+    // Verifica duplicatas
+    const { data: dup } = await supabase.from('kingdoms').select('id').or(`nome.ilike.${cleanNome},tag.ilike.${cleanTag}`).maybeSingle();
+    if (dup) return res.status(400).json({ error: 'Já existe um Reino com esse Nome ou TAG.' });
+
+    // Remove pagamentos pendentes anteriores deste nick
+    await safeDb(supabase.from('kingdom_pending_payments').delete().ilike('owner_nick', nick).eq('status', 'pending'));
+
+    // Cria preferência no Mercado Pago
+    const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
+      body: JSON.stringify({
+        items: [{ title: `Assinatura de Reino [${cleanTag}] ${cleanNome} - Mapa Bermuda MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
+        back_urls: {
+          success: `${SITE_URL}/#criar-reinos`,
+          failure: `${SITE_URL}/#criar-reinos`,
+          pending: `${SITE_URL}/#criar-reinos`
+        },
+        notification_url: `${SITE_URL}/api/mercadopago/webhook`,
+        auto_return: 'approved',
+        statement_descriptor: 'MAPA BERMUDA MC'
+      })
+    });
+
+    if (!mpRes.ok) {
+      const txt = await mpRes.text();
+      console.error('[MP] Erro ao criar preferência:', txt);
+      return res.status(500).json({ error: 'Erro ao gerar link de pagamento. Tente novamente.' });
+    }
+
+    const mpData = await mpRes.json();
+
+    // Salva pagamento pendente
+    const { data: pending } = await supabase.from('kingdom_pending_payments').insert([{
+      owner_nick: nick, mp_preference_id: mpData.id,
+      nome: cleanNome, tag: cleanTag, logo: cleanLogo, cor: cleanCor, descricao: cleanDesc,
+      status: 'pending', amount: SUBSCRIPTION_PRICE
+    }]).select().single();
+
+    res.json({ success: true, preferenceId: mpData.id, paymentUrl: mpData.init_point, pendingId: pending?.id });
+  } catch (err) {
+    console.error('[MP initiate]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── MERCADO PAGO: Webhook de confirmação de pagamento ───────────────────────
+app.post('/api/mercadopago/webhook', async (req, res) => {
+  res.status(200).send('OK'); // Responde imediatamente para o MP não retentar
+
+  try {
+    const { type, data } = req.body || {};
+    if (type !== 'payment' || !data?.id) return;
+
+    // Consulta detalhes do pagamento no MP
+    const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
+      headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+    });
+    if (!mpRes.ok) return;
+    const payment = await mpRes.json();
+    if (payment.status !== 'approved') return;
+
+    const preferenceId = payment.preference_id;
+    const paymentId    = String(data.id);
+
+    // CASO 1: Criação de reino (kingdom_pending_payments)
+    const { data: pending } = await supabase
+      .from('kingdom_pending_payments').select('*')
+      .eq('mp_preference_id', preferenceId).eq('status', 'pending').maybeSingle();
+
+    if (pending) {
+      const expiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 86400000).toISOString();
+      const insertPayload = {
+        nome: pending.nome, tag: pending.tag, descricao: pending.descricao,
+        owner_nick: pending.owner_nick, taxa_paga: SUBSCRIPTION_PRICE,
+        pontos: 0, kills: 0, logo: pending.logo, cor: pending.cor,
+        subscription_status: 'active',
+        subscription_expires_at: expiresAt,
+        subscription_renewed_at: new Date().toISOString()
+      };
+
+      const { data: newKingdom, error: kErr } = await supabase.from('kingdoms').insert([insertPayload]).select().single();
+      if (kErr) { console.error('[MP Webhook] Erro ao criar reino:', kErr); return; }
+
+      await supabase.from('kingdom_members').insert([{ kingdom_id: newKingdom.id, user_nick: pending.owner_nick, role: 'lider' }]);
+      await salvarBaselineMembroReino(pending.owner_nick, newKingdom.id);
+      await supabase.from('kingdom_messages').insert([{ kingdom_id: newKingdom.id, author_nick: 'Sistema', author_role: 'system', content: `🏰 Reino [${pending.tag}] ${pending.nome} fundado por ${pending.owner_nick}! Plano ativo até ${new Date(expiresAt).toLocaleDateString('pt-BR')}.` }]);
+      await supabase.from('kingdom_payments').insert([{ kingdom_id: newKingdom.id, owner_nick: pending.owner_nick, mp_payment_id: paymentId, mp_preference_id: preferenceId, status: 'approved', amount: SUBSCRIPTION_PRICE, tipo: 'assinatura' }]);
+      await supabase.from('kingdom_pending_payments').update({ status: 'approved', mp_payment_id: paymentId }).eq('id', pending.id);
+      syncKingdomsCache(true).catch(() => {});
+      console.log(`✅ [MP] Reino [${pending.tag}] criado para ${pending.owner_nick} após pagamento ${paymentId}`);
+      return;
+    }
+
+    // CASO 2: Renovação de plano (kingdom_payments com status pending)
+    const { data: renewRec } = await supabase
+      .from('kingdom_payments').select('kingdom_id, owner_nick')
+      .eq('mp_preference_id', preferenceId).eq('status', 'pending').maybeSingle();
+
+    if (renewRec) {
+      const { data: kingdom } = await supabase.from('kingdoms').select('subscription_expires_at').eq('id', renewRec.kingdom_id).single();
+      const currentExpiry = kingdom?.subscription_expires_at ? new Date(kingdom.subscription_expires_at) : new Date();
+      const base = currentExpiry > new Date() ? currentExpiry : new Date();
+      const newExpiry = new Date(base.getTime() + SUBSCRIPTION_DAYS * 86400000).toISOString();
+
+      await supabase.from('kingdoms').update({
+        subscription_status: 'active',
+        subscription_expires_at: newExpiry,
+        subscription_renewed_at: new Date().toISOString()
+      }).eq('id', renewRec.kingdom_id);
+
+      await supabase.from('kingdom_payments').update({ status: 'approved', mp_payment_id: paymentId }).eq('mp_preference_id', preferenceId);
+      await supabase.from('kingdom_messages').insert([{ kingdom_id: renewRec.kingdom_id, author_nick: 'Sistema', author_role: 'system', content: `✅ Plano do Reino renovado! Válido até ${new Date(newExpiry).toLocaleDateString('pt-BR')}.` }]);
+      syncKingdomsCache(true).catch(() => {});
+      console.log(`✅ [MP] Reino renovado para ${renewRec.owner_nick} até ${newExpiry}`);
+    }
+  } catch (err) {
+    console.error('[MP Webhook] Erro:', err);
+  }
+});
+
+// ── MERCADO PAGO: Poll de status do pagamento pendente ───────────────────────
+app.get('/api/kingdoms/payment/status', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { preferenceId } = req.query;
+    if (!preferenceId) return res.status(400).json({ error: 'preferenceId obrigatório.' });
+
+    const { data: pending } = await supabase
+      .from('kingdom_pending_payments').select('status, nome, tag, logo, cor')
+      .eq('mp_preference_id', preferenceId).ilike('owner_nick', nick).maybeSingle();
+
+    if (!pending) return res.status(404).json({ error: 'Pagamento não encontrado.' });
+    res.json({ status: pending.status, nome: pending.nome, tag: pending.tag });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── MERCADO PAGO: Renovar plano do reino (Líder ou Admin) ───────────────────
+app.post('/api/kingdoms/payment/renew', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+
+    const { data: myMember } = await supabase
+      .from('kingdom_members').select('kingdom_id, role, kingdoms(id, nome, tag, subscription_expires_at)')
+      .ilike('user_nick', nick).maybeSingle();
+
+    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+      return res.status(403).json({ error: 'Apenas o líder pode renovar o plano.' });
+    }
+
+    const kingdom = myMember.kingdoms;
+    const expiry = kingdom?.subscription_expires_at ? new Date(kingdom.subscription_expires_at) : new Date();
+    const expLabel = expiry.toLocaleDateString('pt-BR');
+
+    const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
+      body: JSON.stringify({
+        items: [{ title: `Renovação do Reino [${kingdom.tag}] ${kingdom.nome} - Mapa Bermuda MC`, quantity: 1, currency_id: 'BRL', unit_price: SUBSCRIPTION_PRICE }],
+        back_urls: { success: `${SITE_URL}/#criar-reinos`, failure: `${SITE_URL}/#criar-reinos`, pending: `${SITE_URL}/#criar-reinos` },
+        notification_url: `${SITE_URL}/api/mercadopago/webhook`,
+        auto_return: 'approved',
+        statement_descriptor: 'MAPA BERMUDA MC'
+      })
+    });
+
+    if (!mpRes.ok) return res.status(500).json({ error: 'Erro ao gerar link de renovação.' });
+    const mpData = await mpRes.json();
+
+    await supabase.from('kingdom_payments').insert([{
+      kingdom_id: myMember.kingdom_id, owner_nick: nick,
+      mp_preference_id: mpData.id, status: 'pending',
+      amount: SUBSCRIPTION_PRICE, tipo: 'renovacao'
+    }]);
+
+    res.json({ success: true, paymentUrl: mpData.init_point, preferenceId: mpData.id, currentExpiry: expLabel });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── ADMIN: Renovar plano manualmente (sem pagamento) ────────────────────────
+app.post('/api/admin/kingdoms/renew-manual', requireAdmin, async (req, res) => {
+  try {
+    const { kingdomId, days } = req.body;
+    if (!kingdomId) return res.status(400).json({ error: 'kingdomId obrigatório.' });
+    const extraDays = Math.max(1, Math.min(Number(days) || 30, 365));
+
+    const { data: kingdom } = await supabase.from('kingdoms').select('subscription_expires_at, nome, tag').eq('id', kingdomId).single();
+    if (!kingdom) return res.status(404).json({ error: 'Reino não encontrado.' });
+
+    const base = kingdom.subscription_expires_at && new Date(kingdom.subscription_expires_at) > new Date()
+      ? new Date(kingdom.subscription_expires_at) : new Date();
+    const newExpiry = new Date(base.getTime() + extraDays * 86400000).toISOString();
+
+    await supabase.from('kingdoms').update({
+      subscription_status: 'active',
+      subscription_expires_at: newExpiry,
+      subscription_renewed_at: new Date().toISOString()
+    }).eq('id', kingdomId);
+
+    await supabase.from('kingdom_messages').insert([{ kingdom_id: kingdomId, author_nick: 'Admin', author_role: 'system', content: `🛡️ Plano do Reino renovado pelo Administrador por +${extraDays} dias. Válido até ${new Date(newExpiry).toLocaleDateString('pt-BR')}.` }]);
+    syncKingdomsCache(true).catch(() => {});
+    res.json({ success: true, newExpiry, message: `Plano do reino [${kingdom.tag}] renovado por +${extraDays} dias.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3245,6 +3510,7 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
     }
 
     // 3. Cria o reino no Supabase (com logo, cor e fallback seguro)
+    const initialExpiresAt = new Date(Date.now() + SUBSCRIPTION_DAYS * 86400000).toISOString();
     const insertPayload = {
       nome: cleanNome,
       tag: cleanTag,
@@ -3254,7 +3520,10 @@ app.post('/api/kingdoms/create', requireAuth, async (req, res) => {
       pontos: 0,
       kills: 0,
       logo: cleanLogo,
-      cor: cleanCor
+      cor: cleanCor,
+      subscription_status: 'active',
+      subscription_expires_at: initialExpiresAt,
+      subscription_renewed_at: new Date().toISOString()
     };
 
     let { data: newKingdom, error: kErr } = await supabase
