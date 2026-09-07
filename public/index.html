@@ -6698,6 +6698,7 @@
         const badgeVip = document.getElementById('profile-vip-badge');
         const btnActionText = document.getElementById('btn-vip-action-text');
         const btnRemover = document.getElementById('btn-remover-foto-vip');
+        const statusLabel = document.getElementById('vip-file-status-label');
         const isVipActive = Boolean(data.is_active || data.is_vip || data.isActive || data.status === 'active');
         currentVipProfile.is_active = isVipActive;
         currentVipProfile.is_vip = isVipActive;
@@ -6710,9 +6711,12 @@
           }
           if (badgeVip) badgeVip.classList.remove('hidden');
           if (btnActionText) btnActionText.textContent = 'Salvar Foto & Moldura (Sem Custo)';
-          if (data.avatar_url && statusLabel) {
-            statusLabel.textContent = 'Foto atual salva na nuvem';
+          if (data.avatar_url) {
+            if (statusLabel) statusLabel.textContent = 'Foto atual salva na nuvem';
             if (btnRemover) btnRemover.classList.remove('hidden');
+          } else {
+            if (statusLabel) statusLabel.textContent = 'Nenhuma foto selecionada';
+            if (btnRemover) btnRemover.classList.add('hidden');
           }
         } else {
           if (badgeSub) {
