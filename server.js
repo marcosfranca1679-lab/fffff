@@ -18,13 +18,14 @@ const LEGACY_TOKEN_SECRET = 'mapabermuda-auth-secret-key-2025-mc';
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-7322103170597733-041213-494e0ff2a4789bdb62f82e3fabf32e18-292784019';
 const MP_PUBLIC_KEY   = process.env.MP_PUBLIC_KEY   || 'APP_USR-27b07c49-7c02-437a-b955-f0781758eb74';
 const SUBSCRIPTION_PRICE = 19.99;
+const PROFILE_VIP_PRICE  = 9.99;
 const SUBSCRIPTION_DAYS  = 30;
 const SITE_URL = 'https://fffff-autoforge.vercel.app';
 
 // ─── Middlewares ─────────────────────────────────────────────────────────────
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '6mb' }));
+app.use(express.urlencoded({ limit: '6mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Helper Seguro para Operações Supabase (evita .catch is not a function) ───
@@ -93,6 +94,48 @@ async function syncKingdomsCache(force = false) {
             role: m.role || 'membro'
           });
         }
+      }
+    }
+  } catch (_) {}
+}
+
+// ─── Cache em memória de Perfis VIP (Foto & Molduras Animadas de Minecraft) ───
+const vipProfilesCache = new Map(); // lower_nick -> { avatar_url, frame_id, status, expires_at }
+let lastVipProfilesSync = 0;
+
+const VALID_VIP_FRAMES = [
+  'portal_nether',
+  'chama_blaze',
+  'redstone_eletrica',
+  'esmeralda_lendaria',
+  'diamante_encantado',
+  'coracao_do_mar',
+  'estrela_do_nether',
+  'totem_imortal'
+];
+
+async function syncVipProfilesCache(force = false) {
+  const now = Date.now();
+  if (!force && now - lastVipProfilesSync < 20000 && vipProfilesCache.size > 0) return;
+  lastVipProfilesSync = now;
+  try {
+    const { data: vips } = await supabase
+      .from('user_vip_profiles')
+      .select('*')
+      .eq('status', 'active');
+    if (vips) {
+      vipProfilesCache.clear();
+      for (const v of vips) {
+        if (v.expires_at && new Date(v.expires_at).getTime() < now) {
+          safeDb(supabase.from('user_vip_profiles').update({ status: 'expired' }).eq('id', v.id));
+          continue;
+        }
+        vipProfilesCache.set(v.user_nick.toLowerCase().trim(), {
+          avatar_url: v.avatar_url,
+          frame_id: v.frame_id || 'portal_nether',
+          status: 'active',
+          expires_at: v.expires_at
+        });
       }
     }
   } catch (_) {}
@@ -395,14 +438,18 @@ app.get('/api/chat', async (req, res) => {
       .limit(60);
 
     if (error) throw error;
+    await syncVipProfilesCache();
     const msgs = (data || []).reverse().map(m => {
       const lowerNick = (m.author_nick || '').toLowerCase().trim();
       const kInfo = kingdomTagsCache.get(lowerNick);
+      const vipInfo = vipProfilesCache.get(lowerNick);
       return {
         ...m,
         kingdom_tag: kInfo ? kInfo.tag : null,
         kingdom_logo: kInfo ? (kInfo.logo || '👑') : null,
-        kingdom_color: kInfo ? (kInfo.cor || '#f59e0b') : null
+        kingdom_color: kInfo ? (kInfo.cor || '#f59e0b') : null,
+        vip_avatar: vipInfo ? vipInfo.avatar_url : null,
+        vip_frame: vipInfo ? vipInfo.frame_id : null
       };
     });
     res.json(msgs);
@@ -3344,6 +3391,54 @@ app.post('/api/mercadopago/webhook', async (req, res) => {
       await supabase.from('kingdom_messages').insert([{ kingdom_id: renewRec.kingdom_id, author_nick: 'Sistema', author_role: 'system', content: `✅ Plano do Reino renovado! Válido até ${new Date(newExpiry).toLocaleDateString('pt-BR')}.` }]);
       syncKingdomsCache(true).catch(() => {});
       console.log(`✅ [MP] Reino renovado para ${renewRec.owner_nick} até ${newExpiry}`);
+      return;
+    }
+
+    // CASO 3: Perfil VIP (Foto & Moldura de Minecraft)
+    let profilePending = null;
+    if (externalRef) {
+      const { data: pp } = await supabase
+        .from('profile_pending_payments').select('*')
+        .eq('id', externalRef).eq('status', 'pending').maybeSingle();
+      if (pp) profilePending = pp;
+    }
+    if (!profilePending && preferenceId) {
+      const { data: pp } = await supabase
+        .from('profile_pending_payments').select('*')
+        .eq('mp_preference_id', preferenceId).eq('status', 'pending').maybeSingle();
+      if (pp) profilePending = pp;
+    }
+
+    if (profilePending) {
+      const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+      await supabase.from('user_vip_profiles').upsert([{
+        user_nick: profilePending.user_nick,
+        avatar_url: profilePending.avatar_url,
+        frame_id: profilePending.frame_id,
+        status: 'active',
+        expires_at: expiresAt,
+        renewed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }], { onConflict: 'user_nick' });
+
+      await supabase.from('profile_payments').insert([{
+        user_nick: profilePending.user_nick,
+        mp_payment_id: paymentId,
+        mp_preference_id: preferenceId || profilePending.mp_preference_id,
+        frame_id: profilePending.frame_id,
+        status: 'approved',
+        amount: PROFILE_VIP_PRICE,
+        tipo: 'assinatura'
+      }]);
+
+      await supabase.from('profile_pending_payments').update({
+        status: 'approved',
+        mp_payment_id: paymentId
+      }).eq('id', profilePending.id);
+
+      syncVipProfilesCache(true).catch(() => {});
+      console.log(`✨ [MP] Perfil VIP ativado para ${profilePending.user_nick} após pagamento ${paymentId}`);
+      return;
     }
   } catch (err) {
     console.error('[MP Webhook] Erro:', err);
@@ -3561,6 +3656,299 @@ app.post('/api/admin/kingdoms/renew-manual', requireAdmin, async (req, res) => {
     await supabase.from('kingdom_messages').insert([{ kingdom_id: kingdomId, author_nick: 'Admin', author_role: 'system', content: `🛡️ Plano do Reino renovado pelo Administrador por +${extraDays} dias. Válido até ${new Date(newExpiry).toLocaleDateString('pt-BR')}.` }]);
     syncKingdomsCache(true).catch(() => {});
     res.json({ success: true, newExpiry, message: `Plano do reino [${kingdom.tag}] renovado por +${extraDays} dias.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── ROTAS DE PERFIL VIP (Foto de Perfil até 3MB & Molduras Minecraft) ─────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/profile/vip — Consulta status VIP do jogador logado
+app.get('/api/profile/vip', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    await syncVipProfilesCache();
+    const lowerNick = nick.toLowerCase();
+    const vip = vipProfilesCache.get(lowerNick);
+
+    const { data: profile } = await supabase
+      .from('user_vip_profiles')
+      .select('*')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    const isVip = !!(vip && vip.status === 'active');
+    const now = Date.now();
+    let daysRemaining = 0;
+    if (profile?.expires_at) {
+      const expTime = new Date(profile.expires_at).getTime();
+      daysRemaining = Math.max(0, Math.ceil((expTime - now) / (1000 * 60 * 60 * 24)));
+    }
+
+    res.json({
+      success: true,
+      is_vip: isVip,
+      avatar_url: profile?.avatar_url || null,
+      frame_id: profile?.frame_id || 'portal_nether',
+      status: profile?.status || 'inactive',
+      expires_at: profile?.expires_at || null,
+      days_remaining: daysRemaining,
+      price: PROFILE_VIP_PRICE
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/profile/vip/create-payment — Iniciar assinatura VIP de R$ 9,99/mês
+app.post('/api/profile/vip/create-payment', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    if (!nick) return res.status(401).json({ error: 'Não autorizado.' });
+
+    const { avatar_url, frame_id } = req.body || {};
+    const chosenFrame = VALID_VIP_FRAMES.includes(frame_id) ? frame_id : 'portal_nether';
+
+    // Validação da imagem (máximo 3MB / ~4.5MB base64)
+    if (avatar_url && typeof avatar_url === 'string') {
+      if (avatar_url.length > 4.5 * 1024 * 1024) {
+        return res.status(400).json({ error: 'A foto de perfil excede o limite máximo permitido de 3MB.' });
+      }
+    }
+
+    // Remove pagamentos pendentes anteriores deste nick
+    await safeDb(supabase.from('profile_pending_payments').delete().ilike('user_nick', nick).eq('status', 'pending'));
+
+    const pendingId = crypto.randomUUID();
+
+    // Cria preferência no Mercado Pago (R$ 9,99)
+    const mpRes = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` },
+      body: JSON.stringify({
+        items: [{
+          title: `Perfil VIP (Foto & Moldura Minecraft) - 5DAY MC`,
+          quantity: 1,
+          currency_id: 'BRL',
+          unit_price: PROFILE_VIP_PRICE
+        }],
+        external_reference: pendingId,
+        back_urls: {
+          success: `${SITE_URL}/#geral`,
+          failure: `${SITE_URL}/#geral`,
+          pending: `${SITE_URL}/#geral`
+        },
+        notification_url: `${SITE_URL}/api/mercadopago/webhook`,
+        auto_return: 'approved',
+        statement_descriptor: '5DAY MC'
+      })
+    });
+
+    if (!mpRes.ok) {
+      const txt = await mpRes.text();
+      console.error('[MP VIP] Erro ao criar preferência:', txt);
+      return res.status(500).json({ error: 'Erro ao gerar link de pagamento do Perfil VIP.' });
+    }
+
+    const mpData = await mpRes.json();
+
+    // Salva o registro pendente
+    const { data: pending } = await supabase.from('profile_pending_payments').insert([{
+      id: pendingId,
+      user_nick: nick,
+      mp_preference_id: mpData.id,
+      avatar_url: avatar_url || null,
+      frame_id: chosenFrame,
+      status: 'pending',
+      amount: PROFILE_VIP_PRICE
+    }]).select().single();
+
+    res.json({
+      success: true,
+      preferenceId: mpData.id,
+      paymentUrl: mpData.init_point,
+      pendingId: pending?.id || pendingId
+    });
+  } catch (err) {
+    console.error('[MP VIP initiate]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/profile/vip/payment/status — Verificar se o pagamento do Perfil VIP foi aprovado
+app.get('/api/profile/vip/payment/status', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { preferenceId } = req.query;
+    if (!preferenceId) return res.status(400).json({ error: 'preferenceId obrigatório.' });
+
+    let { data: pending } = await supabase
+      .from('profile_pending_payments')
+      .select('*')
+      .eq('mp_preference_id', preferenceId)
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!pending) {
+      const { data: altPending } = await supabase
+        .from('profile_pending_payments')
+        .select('*')
+        .eq('mp_preference_id', preferenceId)
+        .maybeSingle();
+      if (altPending) pending = altPending;
+    }
+
+    if (!pending) return res.status(404).json({ error: 'Pagamento não encontrado.' });
+
+    if (pending.status === 'approved') {
+      return res.json({ status: 'approved', avatar_url: pending.avatar_url, frame_id: pending.frame_id });
+    }
+
+    try {
+      let approvedPayment = null;
+
+      // 1. Busca por external_reference
+      const mpExtRes = await fetch(`https://api.mercadopago.com/v1/payments/search?external_reference=${pending.id}&sort=date_created&criteria=desc`, {
+        headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+      });
+      if (mpExtRes.ok) {
+        const extData = await mpExtRes.json();
+        const payments = extData.results || [];
+        approvedPayment = payments.find(p => p.status === 'approved');
+      }
+
+      // 2. Busca por preference_id
+      if (!approvedPayment) {
+        const mpSearchRes = await fetch(`https://api.mercadopago.com/v1/payments/search?preference_id=${preferenceId}&sort=date_created&criteria=desc`, {
+          headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+        });
+        if (mpSearchRes.ok) {
+          const mpSearchData = await mpSearchRes.json();
+          const payments = mpSearchData.results || [];
+          approvedPayment = payments.find(p => p.status === 'approved');
+        }
+      }
+
+      // 3. Fallback ultra-criterioso antifraude
+      if (!approvedPayment) {
+        const pendingCreated = new Date(pending.created_at).getTime();
+        const mpRecentRes = await fetch(`https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10`, {
+          headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+        });
+
+        if (mpRecentRes.ok) {
+          const recentData = await mpRecentRes.json();
+          const recentList = recentData.results || [];
+
+          for (const p of recentList) {
+            if (p.status !== 'approved') continue;
+            const payTime = new Date(p.date_created || p.date_approved).getTime();
+            if (payTime < pendingCreated - 30000) continue;
+
+            const { data: alreadyUsed } = await supabase
+              .from('profile_payments')
+              .select('id')
+              .eq('mp_payment_id', String(p.id))
+              .maybeSingle();
+            if (alreadyUsed) continue;
+
+            const matchesRef = p.external_reference === pending.id;
+            const desc = (p.description || '').toLowerCase();
+            const matchesDesc = desc.includes('perfil vip') && Math.abs(Number(p.transaction_amount) - PROFILE_VIP_PRICE) < 0.1;
+
+            if (matchesRef || matchesDesc) {
+              approvedPayment = p;
+              break;
+            }
+          }
+        }
+      }
+
+      if (approvedPayment) {
+        const paymentId = String(approvedPayment.id);
+        const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+
+        await supabase.from('user_vip_profiles').upsert([{
+          user_nick: pending.user_nick,
+          avatar_url: pending.avatar_url,
+          frame_id: pending.frame_id,
+          status: 'active',
+          expires_at: expiresAt,
+          renewed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }], { onConflict: 'user_nick' });
+
+        await supabase.from('profile_payments').insert([{
+          user_nick: pending.user_nick,
+          mp_payment_id: paymentId,
+          mp_preference_id: preferenceId || pending.mp_preference_id,
+          frame_id: pending.frame_id,
+          status: 'approved',
+          amount: PROFILE_VIP_PRICE,
+          tipo: 'assinatura'
+        }]);
+
+        await supabase.from('profile_pending_payments').update({
+          status: 'approved',
+          mp_payment_id: paymentId
+        }).eq('id', pending.id);
+
+        syncVipProfilesCache(true).catch(() => {});
+
+        return res.json({ status: 'approved', avatar_url: pending.avatar_url, frame_id: pending.frame_id });
+      }
+    } catch (mpErr) {
+      console.warn('[MP VIP check err]', mpErr.message);
+    }
+
+    res.json({ status: pending.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/profile/vip/update — Atualizar foto ou moldura (para quem já tem assinatura ativa)
+app.post('/api/profile/vip/update', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { avatar_url, frame_id } = req.body || {};
+
+    const { data: profile } = await supabase
+      .from('user_vip_profiles')
+      .select('*')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    const now = Date.now();
+    const isVip = profile && profile.status === 'active' && (!profile.expires_at || new Date(profile.expires_at).getTime() > now);
+
+    if (!isVip && !req.isAdmin) {
+      return res.status(403).json({ error: 'Você precisa de uma assinatura VIP ativa para personalizar seu perfil.' });
+    }
+
+    if (avatar_url && typeof avatar_url === 'string') {
+      if (avatar_url.length > 4.5 * 1024 * 1024) {
+        return res.status(400).json({ error: 'A foto excede o limite de 3MB.' });
+      }
+    }
+
+    const updates = {
+      updated_at: new Date().toISOString()
+    };
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (frame_id && VALID_VIP_FRAMES.includes(frame_id)) updates.frame_id = frame_id;
+
+    const { error: upErr } = await supabase
+      .from('user_vip_profiles')
+      .update(updates)
+      .ilike('user_nick', nick);
+
+    if (upErr) return res.status(500).json({ error: upErr.message });
+
+    syncVipProfilesCache(true).catch(() => {});
+    res.json({ success: true, message: 'Perfil VIP atualizado com sucesso!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4059,7 +4447,18 @@ app.get('/api/kingdoms/messages', requireAuth, async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(60);
 
-    res.json((messages || []).reverse());
+    await syncVipProfilesCache();
+    const mapped = (messages || []).reverse().map(m => {
+      const lowerNick = (m.author_nick || '').toLowerCase().trim();
+      const vip = vipProfilesCache.get(lowerNick);
+      return {
+        ...m,
+        vip_avatar: vip ? vip.avatar_url : null,
+        vip_frame: vip ? vip.frame_id : null
+      };
+    });
+
+    res.json(mapped);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
