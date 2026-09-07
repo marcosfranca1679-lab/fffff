@@ -5592,22 +5592,44 @@
       } catch (_) {}
     }
 
-    // ── MERCADO PAGO: Monitoramento de Pagamento Pendente ──────────────────────
+    // ── MERCADO PAGO: Monitoramento Inteligente (Supabase Realtime + Polling Leve) ──
     let reinoPaymentPollingInterval = null;
     let reinoActivePreferenceId = null;
+    let reinoRealtimeChannel = null;
 
     function iniciarMonitoramentoPagamentoReino(preferenceId) {
       if (!preferenceId) return;
       reinoActivePreferenceId = preferenceId;
       if (reinoPaymentPollingInterval) clearInterval(reinoPaymentPollingInterval);
+      if (reinoRealtimeChannel && typeof supabaseClient !== 'undefined') {
+        supabaseClient.removeChannel(reinoRealtimeChannel);
+        reinoRealtimeChannel = null;
+      }
 
+      // 1. Escuta via Supabase Realtime (Consumo ZERO na Vercel!)
+      if (typeof supabaseClient !== 'undefined' && supabaseClient.channel) {
+        reinoRealtimeChannel = supabaseClient
+          .channel(`kingdom_payment_${preferenceId}`)
+          .on('postgres_changes', {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'kingdom_pending_payments',
+            filter: `mp_preference_id=eq.${preferenceId}`
+          }, async payload => {
+            if (payload.new && payload.new.status === 'approved') {
+              finalizarAprovacaoPagamentoReino(payload.new.nome, payload.new.tag);
+            }
+          })
+          .subscribe();
+      }
+
+      // 2. Polling leve de fallback (A cada 15 segundos, poupando a cota da Vercel)
       let tentativas = 0;
       reinoPaymentPollingInterval = setInterval(async () => {
         tentativas++;
-        if (tentativas > 180) { // 15 minutos (180 x 5s)
-          clearInterval(reinoPaymentPollingInterval);
-          reinoPaymentPollingInterval = null;
-          mostrarFeedback('Tempo limite de verificação atingido. Caso tenha pago, atualize a página.', 'amber');
+        if (tentativas > 40) { // 10 minutos (40 x 15s)
+          pararMonitoramentoPagamento();
+          mostrarFeedback('Tempo limite de espera atingido. Se já concluiu o pagamento, recarregue a página.', 'amber');
           return;
         }
 
@@ -5616,18 +5638,32 @@
           if (!res.ok) return;
           const data = await res.json();
           if (data.status === 'approved') {
-            clearInterval(reinoPaymentPollingInterval);
-            reinoPaymentPollingInterval = null;
-            reinoActivePreferenceId = null;
-
-            const aguardoBox = document.getElementById('reino-pagamento-aguardo');
-            if (aguardoBox) aguardoBox.classList.add('hidden');
-
-            mostrarFeedback(`🎉 Pagamento aprovado! Reino [${data.tag}] ${data.nome} fundado com sucesso!`, 'green');
-            await carregarReinoStatus();
+            finalizarAprovacaoPagamentoReino(data.nome, data.tag);
           }
         } catch (_) {}
-      }, 5000);
+      }, 15000);
+    }
+
+    function pararMonitoramentoPagamento() {
+      if (reinoPaymentPollingInterval) {
+        clearInterval(reinoPaymentPollingInterval);
+        reinoPaymentPollingInterval = null;
+      }
+      if (reinoRealtimeChannel && typeof supabaseClient !== 'undefined') {
+        supabaseClient.removeChannel(reinoRealtimeChannel);
+        reinoRealtimeChannel = null;
+      }
+    }
+
+    async function finalizarAprovacaoPagamentoReino(nome, tag) {
+      pararMonitoramentoPagamento();
+      reinoActivePreferenceId = null;
+
+      const aguardoBox = document.getElementById('reino-pagamento-aguardo');
+      if (aguardoBox) aguardoBox.classList.add('hidden');
+
+      mostrarFeedback(`🎉 Pagamento aprovado! Reino [${tag || 'TAG'}] ${nome || ''} fundado com sucesso!`, 'green');
+      await carregarReinoStatus();
     }
 
     async function verificarStatusPagamentoReinoManual() {
@@ -5682,11 +5718,11 @@
           window.open(data.paymentUrl, '_blank');
           mostrarFeedback('💳 Link de renovação aberto! Conclua o pagamento para renovar o plano.', 'green');
 
-          // Monitora renovação
+          // Monitora renovação de forma leve (a cada 15s)
           let polls = 0;
           const pollRenew = setInterval(async () => {
             polls++;
-            if (polls > 120) { clearInterval(pollRenew); return; }
+            if (polls > 40) { clearInterval(pollRenew); return; }
             try {
               const stRes = await apiFetch('/api/kingdoms/status');
               const stData = await stRes.json();
@@ -5696,7 +5732,7 @@
                 await carregarReinoStatus();
               }
             } catch (_) {}
-          }, 5000);
+          }, 15000);
         } else {
           mostrarFeedback(data.error || 'Erro ao gerar renovação.', 'red');
         }
