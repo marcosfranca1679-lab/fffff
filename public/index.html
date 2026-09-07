@@ -2477,22 +2477,22 @@
     });
 
     function iniciarAutoRefresh() {
-      // 1. Chat da Comunidade: Supabase Realtime entrega mensagens em 10ms via WebSocket;
-      //    O polling atua apenas como contingência leve a cada 35s se o usuário estiver ativo na aba
+      // 1. Chat da Comunidade: Supabase Realtime entrega mensagens instantaneamente via WebSocket;
+      //    O polling atua como contingência leve a cada 60s apenas se o usuário estiver ativo na aba
       setInterval(() => {
         if (!document.hidden && isUserActive && currentChannel === 'chat') {
           carregarChat();
         }
-      }, 35000);
+      }, 60000);
 
-      // 2. Bans: apenas quando visualizando o mural de bans e usuário ativo (a cada 45s)
+      // 2. Bans: apenas quando visualizando o mural de bans e usuário ativo (a cada 90s)
       setInterval(() => {
         if (!document.hidden && isUserActive && currentChannel === 'bans') {
           carregarBans();
         }
-      }, 45000);
+      }, 90000);
 
-      // 3. Ranking: apenas na aba de ranking e usuário ativo (a cada 90s)
+      // 3. Ranking: apenas na aba de ranking e usuário ativo (a cada 120s)
       setInterval(() => {
         if (!document.hidden && isUserActive && currentChannel === 'ranking-horas') {
           carregarRankingHoras(true);
@@ -2500,24 +2500,24 @@
         if (!document.hidden && isUserActive && currentChannel === 'ranking-reinos') {
           carregarRankingReinos(true);
         }
-      }, 90000);
+      }, 120000);
 
-      // 3.5. Reino Privado: entregue via Supabase Realtime WebSockets; contingência suave a cada 35s
+      // 3.5. Reino Privado: entregue via Supabase Realtime WebSockets; contingência a cada 60s
       let _inviteCheckTick = 0;
       setInterval(() => {
         if (!document.hidden && isUserActive && currentChannel === 'reinos' && meuReinoAtual) {
           carregarMensagensReinoSilencioso();
         }
         _inviteCheckTick++;
-        if (_inviteCheckTick >= 3 && !document.hidden && isUserActive && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
+        if (_inviteCheckTick >= 4 && !document.hidden && isUserActive && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
           _inviteCheckTick = 0;
           apiFetch('/api/kingdoms/status').then(r => r.json()).then(d => {
             if (d && d.success) atualizarBadgeConvites((d.myInvites || []).length);
           }).catch(() => {});
         }
-      }, 35000);
+      }, 60000);
 
-      // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin
+      // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin (a cada 30s)
       setInterval(() => {
         if (!document.hidden && isUserActive && isUserAdmin && currentChannel === 'admin') {
           if (adminModulo === 'online') {
@@ -2531,21 +2531,21 @@
             carregarAdminVidas();
           }
         }
-      }, 15000);
+      }, 30000);
 
-      // 5. Console do Servidor: apenas se admin, ativo e com console aberto
+      // 5. Console do Servidor: apenas se admin, ativo e com console aberto (a cada 15s)
       setInterval(() => {
         if (!document.hidden && isUserActive && isUserAdmin && currentChannel === 'console') {
           carregarConsoleLogs(true);
         }
-      }, 10000);
+      }, 15000);
 
-      // 6. Sessão do usuário: renovação suave a cada 180s
+      // 6. Sessão do usuário: renovação suave a cada 300s (5 minutos)
       setInterval(() => {
         if (!document.hidden && isUserActive && currentUser) {
           atualizarMeuStatusSilencioso();
         }
-      }, 180000);
+      }, 300000);
     }
 
     // ── Submenu Lateral ──────────────────────────────────────────────────────
@@ -6871,13 +6871,12 @@
     }
 
     function iniciarMonitoramentoPagamentoVip(preferenceId) {
-      if (vipPollInterval) clearInterval(vipPollInterval);
+      if (vipPollInterval) clearTimeout(vipPollInterval);
 
       let tentativas = 0;
-      vipPollInterval = setInterval(async () => {
+      const verificar = async () => {
         tentativas++;
-        if (tentativas > 120) { // 120 x 3s = 6 minutos
-          clearInterval(vipPollInterval);
+        if (tentativas > 45) { // ~5 minutos com backoff
           vipPollInterval = null;
           mostrarFeedback('Tempo limite de verificação automática excedido. Se já pagou, clique em "Verificar Agora".', 'yellow');
           return;
@@ -6885,22 +6884,31 @@
 
         try {
           const res = await apiFetch(`/api/profile/vip/payment/status?preference_id=${encodeURIComponent(preferenceId)}`);
-          if (!res.ok) return;
-          const data = await res.json();
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'approved') {
+              vipPollInterval = null;
+              const aguardoBox = document.getElementById('vip-pagamento-aguardo');
+              if (aguardoBox) aguardoBox.classList.add('hidden');
+              tempVipAvatarData = null;
 
-          if (data.status === 'approved') {
-            clearInterval(vipPollInterval);
-            vipPollInterval = null;
-            const aguardoBox = document.getElementById('vip-pagamento-aguardo');
-            if (aguardoBox) aguardoBox.classList.add('hidden');
-            tempVipAvatarData = null;
-
-            mostrarFeedback('🎉 PAGAMENTO APROVADO! Seu Perfil VIP foi ativado com sucesso! 💎✨', 'green');
-            await carregarStatusPerfilVip();
-            if (typeof carregarChat === 'function') carregarChat(true);
+              mostrarFeedback('🎉 PAGAMENTO APROVADO! Seu Perfil VIP foi ativado com sucesso! 💎✨', 'green');
+              await carregarStatusPerfilVip();
+              if (typeof carregarChat === 'function') carregarChat(true);
+              return;
+            }
           }
         } catch (_) {}
-      }, 3000);
+
+        // Backoff progressivo: 3s no primeiro minuto, 5s no segundo minuto, 8s em seguida
+        let proximoDelay = 3000;
+        if (tentativas > 12) proximoDelay = 5000;
+        if (tentativas > 25) proximoDelay = 8000;
+
+        vipPollInterval = setTimeout(verificar, proximoDelay);
+      };
+
+      vipPollInterval = setTimeout(verificar, 3000);
     }
 
     async function verificarStatusPagamentoVipManual() {
@@ -6933,7 +6941,7 @@
 
     function cancelarTentativaPagamentoVip() {
       if (vipPollInterval) {
-        clearInterval(vipPollInterval);
+        clearTimeout(vipPollInterval);
         vipPollInterval = null;
       }
       const aguardoBox = document.getElementById('vip-pagamento-aguardo');
