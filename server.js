@@ -2919,17 +2919,20 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
     const nick = (req.user.nick || '').trim();
     const lowerNick = nick.toLowerCase();
 
-    // 1. Verifica se é admin (admin tem permissão total)
-    let isAllowedToCreate = !!req.isAdmin;
+    // 1. Verifica se tem permissão do Administrador para criar GRATUITAMENTE (sem pagar taxa)
+    let hasFreePermission = !!req.isAdmin;
 
-    if (!isAllowedToCreate) {
+    if (!hasFreePermission) {
       const { data: perm } = await supabase
         .from('kingdom_permissions')
         .select('allowed')
         .ilike('user_nick', nick)
         .maybeSingle();
-      if (perm && perm.allowed) isAllowedToCreate = true;
+      if (perm && perm.allowed) hasFreePermission = true;
     }
+
+    // Qualquer jogador pode criar pagando pelo Mercado Pago, a menos que já tenha reino ou limite atingido
+    const isAllowedToCreate = true;
 
     // 2. Busca convites pendentes recebidos por este jogador (com fallback seguro se a tabela ainda não existir no Supabase)
     let myInvites = [];
@@ -3164,6 +3167,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
     res.json({
       success: true,
       allowedToCreate: isAllowedToCreate,
+      hasFreePermission,
       totalKingdoms,
       maxKingdoms,
       isLimitReached,
@@ -3186,15 +3190,6 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
 app.post('/api/kingdoms/payment/initiate', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-
-    // Verifica permissão do admin
-    let allowed = !!req.isAdmin;
-    if (!allowed) {
-      const { data: perm } = await supabase
-        .from('kingdom_permissions').select('allowed').ilike('user_nick', nick).maybeSingle();
-      if (perm && perm.allowed) allowed = true;
-    }
-    if (!allowed) return res.status(403).json({ error: 'Você não tem permissão do Administrador para criar um Reino.' });
 
     // Verifica se já está num reino
     const { data: existing } = await supabase
