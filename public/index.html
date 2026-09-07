@@ -6271,6 +6271,7 @@
     let tempVipAvatarData = null;
     let vipPollInterval = null;
     let currentVipPendingId = null;
+    let currentVipPrefId = null;
 
     function renderAvatarComMoldura(avatarUrl, nick, frameId, sizeClass = 'w-8 h-8', fallbackColor = 'bg-gradient-to-tr from-purple-600 to-indigo-600') {
       const initial = escapeHtml((nick || 'J').substring(0, 1).toUpperCase());
@@ -6449,9 +6450,11 @@
         const badgeVip = document.getElementById('profile-vip-badge');
         const btnActionText = document.getElementById('btn-vip-action-text');
         const btnRemover = document.getElementById('btn-remover-foto-vip');
-        const statusLabel = document.getElementById('vip-file-status-label');
+        const isVipActive = Boolean(data.is_active || data.is_vip || data.isActive || data.status === 'active');
+        currentVipProfile.is_active = isVipActive;
+        currentVipProfile.is_vip = isVipActive;
 
-        if (data.is_active) {
+        if (isVipActive) {
           const exp = data.expires_at ? new Date(data.expires_at).toLocaleDateString('pt-BR') : '30 dias';
           if (badgeSub) {
             badgeSub.className = 'px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 self-start sm:self-auto flex items-center gap-1.5 shadow-sm';
@@ -6523,7 +6526,7 @@
       const avatarToSend = tempVipAvatarData !== null ? tempVipAvatarData : (currentVipProfile.avatar_url || '');
 
       // Caso 1: Usuário já é VIP ativo -> Atualizar gratuitamente foto e moldura
-      if (currentVipProfile.is_active) {
+      if (currentVipProfile.is_active || currentVipProfile.is_vip || currentVipProfile.status === 'active') {
         try {
           mostrarFeedback('Salvando personalizações do Perfil VIP...', 'yellow');
           const res = await apiFetch('/api/profile/vip/update', {
@@ -6565,8 +6568,9 @@
         }
 
         currentVipPendingId = data.pending_id || data.pendingId;
+        currentVipPrefId = data.preference_id || data.preferenceId;
         const urlPagamento = data.payment_url || data.paymentUrl;
-        const prefId = data.preference_id || data.preferenceId;
+        const prefId = currentVipPrefId;
 
         const aguardoBox = document.getElementById('vip-pagamento-aguardo');
         const linkAbrir = document.getElementById('link-abrir-pagamento-vip');
@@ -6619,13 +6623,14 @@
     }
 
     async function verificarStatusPagamentoVipManual() {
-      if (!currentVipPendingId) {
+      if (!currentVipPrefId && !currentVipPendingId) {
         mostrarFeedback('Nenhum pagamento pendente encontrado.', 'yellow');
         return;
       }
       mostrarFeedback('Verificando status do pagamento junto ao Mercado Pago...', 'yellow');
       try {
-        const res = await apiFetch('/api/profile/vip/payment/status');
+        const pid = currentVipPrefId || '';
+        const res = await apiFetch(`/api/profile/vip/payment/status?preference_id=${encodeURIComponent(pid)}`);
         const data = await res.json();
         if (data.status === 'approved') {
           if (vipPollInterval) clearInterval(vipPollInterval);
