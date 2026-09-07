@@ -1015,11 +1015,32 @@
             </div>
           </div>
 
-          <!-- Lista de Jogadores com Permissão -->
+          <!-- Lista de Jogadores com Permissão de Isenção -->
           <div class="space-y-1.5">
-            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jogadores com Registro de Permissão</div>
-            <div id="admin-reino-permissions-list" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-              <div class="text-center py-6 text-slate-400 text-xs italic">Carregando permissões...</div>
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jogadores com Isenção / Permissão Admin</div>
+            <div id="admin-reino-permissions-list" class="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              <div class="text-center py-4 text-slate-400 text-xs italic">Carregando permissões...</div>
+            </div>
+          </div>
+
+          <!-- ── SEÇÃO: TODOS OS REINOS CRIADOS (Com botão de Excluir do Supabase) ── -->
+          <div class="pt-3 border-t border-white/[0.08] space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🏰 Reinos Ativos no Servidor</span>
+                  <span id="admin-reinos-count-badge" class="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono font-bold">0/12</span>
+                </div>
+                <div class="text-[10px] text-slate-400">Exclua reinos permanentemente (remove membros, chat, pagamentos e dados do Supabase)</div>
+              </div>
+              <button onclick="carregarAdminReinosAtivos()" class="text-[11px] text-cyan-300 hover:text-cyan-200 font-bold bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/30 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                <span>🔄</span> <span>Atualizar</span>
+              </button>
+            </div>
+
+            <!-- Lista de Reinos Ativos com Botão Excluir -->
+            <div id="admin-reinos-ativos-list" class="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div class="text-center py-6 text-slate-400 text-xs italic">Carregando reinos...</div>
             </div>
           </div>
         </div>
@@ -5558,6 +5579,7 @@
     // ── ADMIN: Gerenciar Permissões de Criação de Reino ───────────────────────
     async function carregarAdminPermissoesReino() {
       if (!isUserAdmin) return;
+      carregarAdminReinosAtivos();
       const list = document.getElementById('admin-reino-permissions-list');
       if (!list) return;
 
@@ -5822,6 +5844,92 @@
         }
       } catch (_) {
         mostrarFeedback('Erro de conexão ao renovar plano.', 'red');
+      }
+    }
+
+    // ── ADMIN: Listar e Excluir Reinos Ativos (Supabase) ─────────────────────
+    async function carregarAdminReinosAtivos() {
+      if (!isUserAdmin) return;
+      const list = document.getElementById('admin-reinos-ativos-list');
+      const countBadge = document.getElementById('admin-reinos-count-badge');
+      if (!list) return;
+
+      try {
+        const res = await apiFetch('/api/admin/kingdoms/all');
+        if (!res.ok) {
+          list.innerHTML = '<div class="text-center py-6 text-rose-400 text-xs italic">Erro ao carregar reinos.</div>';
+          return;
+        }
+        const data = await res.json();
+        const kingdoms = data.kingdoms || [];
+
+        if (countBadge) countBadge.textContent = `${kingdoms.length}/12`;
+
+        if (kingdoms.length === 0) {
+          list.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic">Nenhum reino criado no momento.</div>';
+          return;
+        }
+
+        list.innerHTML = kingdoms.map(k => {
+          const sub = k.subscription_status || 'active';
+          const expDate = k.subscription_expires_at ? new Date(k.subscription_expires_at).toLocaleDateString('pt-BR') : 'Sem data';
+          const membrosCount = (k.kingdom_members || []).length;
+          const safeNome = escapeHtml(k.nome || '');
+          const safeTag = escapeHtml(k.tag || '');
+          const safeOwner = escapeHtml(k.owner_nick || '');
+
+          return `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-black/60 border border-white/[0.08] hover:border-cyan-500/40 transition gap-2.5">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style="background: ${k.cor || '#f59e0b'}22; border: 1px solid ${k.cor || '#f59e0b'}55;">
+                  ${escapeHtml(k.logo || '👑')}
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    ${renderTagReino(k.tag, k.logo, k.cor)}
+                    <span class="font-black text-xs md:text-sm text-white truncate">${safeNome}</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded font-bold ${sub === 'active' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}">${sub.toUpperCase()}</span>
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">
+                    Líder: <b class="text-cyan-300">${safeOwner}</b> &middot; ${membrosCount} membros &middot; Vence: <span class="text-slate-300 font-mono">${expDate}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                <button onclick="deletarReinoAdmin('${k.id}', '${safeNome.replace(/'/g, "\\'")}', '${safeTag.replace(/'/g, "\\'")}')"
+                  class="px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm active:scale-95 cursor-pointer" title="Excluir reino e todos os dados do Supabase">
+                  <span>🗑️</span> <span>Excluir Reino</span>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        list.innerHTML = '<div class="text-center py-6 text-rose-400 text-xs italic">Erro de conexão ao buscar reinos.</div>';
+      }
+    }
+
+    async function deletarReinoAdmin(kingdomId, nome, tag) {
+      if (!confirm(`⚠️ ATENÇÃO: Tem certeza que deseja EXCLUIR PERMANENTEMENTE o reino [${tag}] "${nome}"?\n\nIsso apagará do Supabase:\n• Todos os membros do reino\n• Todo o chat e histórico do reino\n• Todos os convites pendentes\n• Todos os registros de pagamentos/PIX vinculados\n• Baselines de estatísticas\n\nEssa ação NÃO PODE ser desfeita!`)) return;
+
+      try {
+        const res = await apiFetch(`/api/admin/kingdoms/${kingdomId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || 'Reino excluído com sucesso do Supabase!', 'green');
+          await carregarAdminReinosAtivos();
+          if (typeof carregarReinoStatus === 'function') {
+            await carregarReinoStatus();
+          }
+          if (typeof carregarRankingReinos === 'function') {
+            await carregarRankingReinos();
+          }
+        } else {
+          mostrarFeedback(data.error || 'Erro ao excluir reino.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao excluir reino.', 'red');
       }
     }
   </script>
