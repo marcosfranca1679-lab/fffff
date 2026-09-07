@@ -1,15 +1,30 @@
 {
-    "builds":  [
-                   {
-                       "src":  "server.js",
-                       "use":  "@vercel/node"
-                   }
-               ],
-    "routes":  [
-                   {
-                       "src":  "/(.*)",
-                       "dest":  "server.js"
-                   }
-               ],
-    "version":  2
+  "version": 2,
+  "builds": [
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "server.js"
+    },
+    {
+      "src": "/public/(.*)",
+      "dest": "/public/$1"
+    },
+    {
+      "src": "/(.*\\.(html|js|css|jpg|jpeg|png|gif|ico|svg|webp|woff2?|ttf|otf|eot|apk|jar|zip|rar|mp4|webm|mp3|pdf))",
+      "dest": "/public/$1",
+      "headers": {
+        "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"
+      }
+    },
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ]
 }
