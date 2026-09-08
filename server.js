@@ -2365,6 +2365,45 @@ app.get('/api/plugin/sync', async (req, res) => {
     // 4. Comandos de console pendentes
     const commandsToRun = pendingConsoleCommands.splice(0);
 
+    // 5. Proteções de Terreno dos Reinos
+    const kingdomProtections = [];
+    try {
+      const { data: kRows } = await supabase
+        .from('kingdoms')
+        .select('id, nome, tag, owner_nick, land_protection');
+
+      const { data: kMembers } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, user_nick');
+
+      for (const k of (kRows || [])) {
+        if (k.land_protection && k.land_protection.enabled !== false && typeof k.land_protection.centerX === 'number') {
+          const mList = (kMembers || [])
+            .filter(m => m.kingdom_id === k.id)
+            .map(m => (m.user_nick || '').toLowerCase().trim())
+            .filter(Boolean);
+
+          if (k.owner_nick) {
+            const ownerLower = k.owner_nick.toLowerCase().trim();
+            if (!mList.includes(ownerLower)) mList.push(ownerLower);
+          }
+
+          kingdomProtections.push({
+            id: k.id,
+            nome: k.nome,
+            tag: k.tag,
+            world: k.land_protection.world || 'world',
+            centerX: parseInt(k.land_protection.centerX, 10) || 0,
+            centerZ: parseInt(k.land_protection.centerZ, 10) || 0,
+            radius: Math.min(200, Math.max(1, parseInt(k.land_protection.radius, 10) || 50)),
+            members: mList
+          });
+        }
+      }
+    } catch (kErr) {
+      console.error('[Sync] Erro ao carregar proteções de reinos:', kErr.message);
+    }
+
     res.json({
       success: true,
       timestamp: Date.now(),
@@ -2372,9 +2411,11 @@ app.get('/api/plugin/sync', async (req, res) => {
       bans,
       ipBans,
       lives: livesMap,
-      commands: commandsToRun
+      commands: commandsToRun,
+      kingdomProtections
     });
   } catch (err) {
+
     res.status(500).json({ error: err.message });
   }
 });
@@ -4650,6 +4691,103 @@ app.delete('/api/kingdoms', requireAuth, async (req, res) => {
     syncKingdomsCache(true).catch(() => {});
 
     res.json({ success: true, message: 'Reino dissolvido com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/kingdoms/land-protection — Salvar / Atualizar Proteção de Terreno do Reino
+app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { data: myMember } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role, kingdoms ( id, nome, tag, owner_nick )')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+      return res.status(403).json({ error: 'Apenas o líder ou administrador pode alterar a proteção de terreno do reino.' });
+    }
+
+    const { centerX, centerZ, world, radius, enabled } = req.body;
+
+    if (centerX === undefined || centerZ === undefined) {
+      return res.status(400).json({ error: 'Coordenadas centrais X e Z são obrigatórias.' });
+    }
+
+    const parsedX = parseInt(centerX, 10);
+    const parsedZ = parseInt(centerZ, 10);
+    if (isNaN(parsedX) || isNaN(parsedZ)) {
+      return res.status(400).json({ error: 'Coordenadas devem ser números inteiros válidos.' });
+    }
+
+    let parsedRadius = parseInt(radius, 10);
+    if (isNaN(parsedRadius) || parsedRadius < 1) parsedRadius = 50;
+    if (parsedRadius > 200) parsedRadius = 200; // Máximo de 200 blocos para cada lado
+
+    const worldName = (world || 'world').trim();
+    const isEnabled = enabled !== false;
+
+    const landProtection = {
+      enabled: isEnabled,
+      centerX: parsedX,
+      centerZ: parsedZ,
+      world: worldName,
+      radius: parsedRadius,
+      updatedAt: new Date().toISOString(),
+      updatedBy: nick
+    };
+
+    const { error: updateErr } = await supabase
+      .from('kingdoms')
+      .update({
+        land_protection: landProtection,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', myMember.kingdom_id);
+
+    if (updateErr) {
+      return res.status(500).json({ error: 'Erro ao salvar proteção no banco de dados: ' + updateErr.message });
+    }
+
+    registrarConsoleLog('info', `[Reino ${myMember.kingdoms?.tag || ''}] Proteção de terreno definida por ${nick}: Centro X=${parsedX}, Z=${parsedZ}, Raio=${parsedRadius} (${worldName})`, 'Reinos');
+
+    res.json({
+      success: true,
+      message: `Proteção de terreno configurada com sucesso! (Centro: ${parsedX}, ${parsedZ} | Raio: ${parsedRadius} blocos)`,
+      landProtection
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/kingdoms/land-protection — Desativar Proteção de Terreno
+app.delete('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user.nick || '').trim();
+    const { data: myMember } = await supabase
+      .from('kingdom_members')
+      .select('kingdom_id, role, kingdoms ( id, tag )')
+      .ilike('user_nick', nick)
+      .maybeSingle();
+
+    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+      return res.status(403).json({ error: 'Apenas o líder pode desativar a proteção de terreno.' });
+    }
+
+    await supabase
+      .from('kingdoms')
+      .update({
+        land_protection: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', myMember.kingdom_id);
+
+    registrarConsoleLog('warn', `[Reino ${myMember.kingdoms?.tag || ''}] Proteção de terreno desativada por ${nick}`, 'Reinos');
+
+    res.json({ success: true, message: 'Proteção de terreno desativada com sucesso.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
