@@ -24,8 +24,8 @@ const SITE_URL = 'https://fffff-autoforge.vercel.app';
 
 // ─── Middlewares ─────────────────────────────────────────────────────────────
 app.use(cors());
-app.use(express.json({ limit: '6mb' }));
-app.use(express.urlencoded({ limit: '6mb', extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Helper Seguro para Operações Supabase (evita .catch is not a function) ───
@@ -2873,11 +2873,22 @@ app.get('/api/tickets/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/tickets/:id/messages — enviar mensagem no ticket
+// POST /api/tickets/:id/messages — enviar mensagem no ticket (com suporte a texto e imagem máx 5MB)
 app.post('/api/tickets/:id/messages', requireAuth, async (req, res) => {
   try {
-    const { mensagem } = req.body;
-    if (!mensagem || !mensagem.trim()) return res.status(400).json({ error: 'Mensagem vazia.' });
+    const { mensagem, imagem_url } = req.body;
+    const msgTexto = (mensagem || '').trim();
+    const hasImage = typeof imagem_url === 'string' && imagem_url.startsWith('data:image/');
+
+    if (!msgTexto && !hasImage) {
+      return res.status(400).json({ error: 'Envie um texto ou uma imagem.' });
+    }
+
+    // Validação de tamanho da imagem (máx ~5MB em base64 = ~7.000.000 caracteres)
+    if (hasImage && imagem_url.length > 7200000) {
+      return res.status(400).json({ error: 'A imagem deve ter no máximo 5MB.' });
+    }
+
     const { data: ticket, error: tErr } = await supabase.from('tickets')
       .select('id, user_id, status').eq('id', req.params.id).single();
     if (tErr || !ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
@@ -2886,13 +2897,17 @@ app.post('/api/tickets/:id/messages', requireAuth, async (req, res) => {
     if (!req.isAdmin && ticket.user_id !== userId) {
       return res.status(403).json({ error: 'Acesso negado.' });
     }
+
     const { data, error } = await supabase.from('ticket_messages').insert([{
       ticket_id: ticket.id,
       autor_nick: req.user.nick,
       is_admin: req.isAdmin || false,
-      mensagem: mensagem.trim().slice(0, 1000)
+      mensagem: msgTexto.slice(0, 1000),
+      imagem_url: hasImage ? imagem_url : null
     }]).select().single();
+
     if (error) return res.status(500).json({ error: error.message });
+
     // atualiza updated_at do ticket
     await supabase.from('tickets').update({ updated_at: new Date().toISOString() }).eq('id', ticket.id);
     res.json({ success: true, message: data });
@@ -2901,16 +2916,21 @@ app.post('/api/tickets/:id/messages', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/tickets/:id — fecha e apaga ticket (somente admin)
+// DELETE /api/tickets/:id — fecha e apaga ticket e todas as imagens/mensagens (somente admin)
 app.delete('/api/tickets/:id', requireAdmin, async (req, res) => {
   try {
     const { data: ticket, error: tErr } = await supabase.from('tickets')
       .select('id').eq('id', req.params.id).single();
     if (tErr || !ticket) return res.status(404).json({ error: 'Ticket não encontrado.' });
-    // ON DELETE CASCADE apaga ticket_messages automaticamente
+
+    // 1. Exclui explicitamente todas as mensagens e imagens do ticket no Supabase
+    await safeDb(supabase.from('ticket_messages').delete().eq('ticket_id', req.params.id));
+
+    // 2. Exclui o ticket permanentemente do Supabase
     const { error } = await supabase.from('tickets').delete().eq('id', req.params.id);
     if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, message: '✅ Ticket encerrado e excluído com sucesso.' });
+
+    res.json({ success: true, message: '✅ Ticket, imagens e mensagens foram apagados com sucesso do Supabase.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
