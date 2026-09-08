@@ -1530,14 +1530,32 @@
           <!-- mensagens inseridas via JS -->
         </div>
 
-        <!-- Input de resposta -->
-        <div id="tv-reply-area" class="p-3 border-t border-white/[0.08]">
+        <!-- Input de resposta e Upload de Imagem -->
+        <div id="tv-reply-area" class="p-3 border-t border-white/[0.08] space-y-2">
+          <!-- Pré-visualização de imagem anexada -->
+          <div id="tv-image-preview-container" class="hidden relative inline-block">
+            <img id="tv-image-preview-img" src="" alt="Anexo" class="max-h-24 max-w-xs rounded-xl border border-orange-500/40 object-cover shadow-md" />
+            <button type="button" onclick="removerImagemTicket()" class="absolute -top-1.5 -right-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-lg" title="Remover imagem">
+              ✕
+            </button>
+            <span class="block text-[9px] text-orange-300 font-mono mt-0.5" id="tv-image-size-label">Imagem pronta para envio</span>
+          </div>
+
           <div class="flex items-center gap-2">
+            <!-- Botão de Anexar Imagem (Máx 5MB) -->
+            <label for="tv-file-input" class="cursor-pointer p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-slate-300 hover:text-orange-300 transition flex items-center justify-center flex-shrink-0" title="Anexar imagem (máx 5MB)">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+              </svg>
+            </label>
+            <input id="tv-file-input" type="file" accept="image/*" class="hidden" onchange="selecionarImagemTicket(event)" />
+
             <input id="tv-reply-input" type="text" maxlength="1000" placeholder="Responder no ticket..."
-              class="flex-1 bg-black/50 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 min-w-0" />
-            <button onclick="enviarMensagemTicket()"
-              class="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 to-red-500 text-white font-bold text-xs px-3 py-2 rounded-xl transition flex-shrink-0">
-              Enviar
+              class="flex-1 bg-black/50 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 min-w-0" 
+              onkeydown="if(event.key==='Enter') enviarMensagemTicket()" />
+            <button id="tv-reply-btn" onclick="enviarMensagemTicket()"
+              class="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 to-red-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex-shrink-0 shadow-sm flex items-center gap-1.5">
+              <span>Enviar</span>
             </button>
           </div>
         </div>
@@ -1574,7 +1592,7 @@
             <span>Reino</span>
           </div>
           <div class="flex items-center gap-4">
-            <span class="hidden sm:inline">Kills / Horas</span>
+            <span class="hidden sm:inline">Estatísticas</span>
             <span>Pontos Totais</span>
           </div>
         </div>
@@ -4659,6 +4677,46 @@
       }
     }
 
+    let tempTicketImageData = null;
+
+    function selecionarImagemTicket(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      // Limite de 5MB
+      if (file.size > 5 * 1024 * 1024) {
+        mostrarFeedback('A imagem excede o limite máximo de 5MB.', 'red');
+        event.target.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        tempTicketImageData = e.target.result;
+        const previewCont = document.getElementById('tv-image-preview-container');
+        const previewImg = document.getElementById('tv-image-preview-img');
+        const sizeLabel = document.getElementById('tv-image-size-label');
+
+        if (previewImg) previewImg.src = tempTicketImageData;
+        if (sizeLabel) {
+          const mb = (file.size / (1024 * 1024)).toFixed(2);
+          sizeLabel.textContent = `Imagem selecionada: ${file.name} (${mb} MB)`;
+        }
+        if (previewCont) previewCont.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removerImagemTicket() {
+      tempTicketImageData = null;
+      const fileInput = document.getElementById('tv-file-input');
+      if (fileInput) fileInput.value = '';
+      const previewCont = document.getElementById('tv-image-preview-container');
+      if (previewCont) previewCont.classList.add('hidden');
+      const previewImg = document.getElementById('tv-image-preview-img');
+      if (previewImg) previewImg.src = '';
+    }
+
     function renderizarMensagensTicket(messages) {
       const container = document.getElementById('tv-messages');
       if (!container) return;
@@ -4667,20 +4725,29 @@
         return;
       }
 
-      // Evita piscar a tela caso as mensagens sejam idênticas
       const newHtml = messages.map(m => {
         const hora = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         const isAdmin = m.is_admin;
+        const safeText = m.mensagem ? m.mensagem.replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+        const imageHtml = m.imagem_url ? `
+          <div class="mt-1.5 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+            <a href="${m.imagem_url}" target="_blank" rel="noopener noreferrer" title="Clique para expandir em tamanho real">
+              <img src="${m.imagem_url}" alt="Imagem do ticket" class="max-h-56 max-w-full rounded-lg object-contain hover:opacity-95 transition cursor-pointer" loading="lazy" />
+            </a>
+          </div>
+        ` : '';
+
         return `
           <div class="flex ${isAdmin ? 'justify-start' : 'justify-end'}">
-            <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs ${isAdmin
+            <div class="max-w-[85%] sm:max-w-[70%] rounded-xl px-3 py-2 text-xs ${isAdmin
               ? 'bg-orange-500/20 border border-orange-500/30 text-white'
-              : 'bg-white/[0.08] border border-white/[0.06] text-slate-200'}">
+              : 'bg-white/[0.08] border border-white/[0.06] text-slate-200'} shadow-sm">
               <div class="font-bold text-[10px] mb-0.5 ${isAdmin ? 'text-orange-300' : 'text-slate-400'}">
                 ${isAdmin ? '🛡️ Admin' : m.autor_nick}
               </div>
-              <div class="whitespace-pre-wrap leading-relaxed">${m.mensagem.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-              <div class="text-[9px] text-slate-500 text-right mt-0.5">${hora}</div>
+              ${safeText ? `<div class="whitespace-pre-wrap leading-relaxed">${safeText}</div>` : ''}
+              ${imageHtml}
+              <div class="text-[9px] text-slate-500 text-right mt-1">${hora}</div>
             </div>
           </div>`;
       }).join('');
@@ -4697,11 +4764,15 @@
     async function enviarMensagemTicket() {
       if (!ticketAtualId) return;
       const input = document.getElementById('tv-reply-input');
-      const msg = input.value.trim();
-      if (!msg) return;
-      input.value = '';
+      const msg = input ? input.value.trim() : '';
+      const imgToSend = tempTicketImageData;
 
-      // Adiciona temporariamente a mensagem na interface imediatamente (UI otimista, sem gastar request para renderizar)
+      if (!msg && !imgToSend) return;
+
+      if (input) input.value = '';
+      removerImagemTicket();
+
+      // UI otimista temporária
       const container = document.getElementById('tv-messages');
       if (container) {
         const tempNick = (currentUser && currentUser.nick) || 'Eu';
@@ -4709,13 +4780,20 @@
         const tempHora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         const msgNode = document.createElement('div');
         msgNode.className = `flex ${tempIsAdmin ? 'justify-start' : 'justify-end'}`;
+        const tempImgHtml = imgToSend ? `
+          <div class="mt-1.5 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+            <img src="${imgToSend}" alt="Enviando anexo..." class="max-h-48 max-w-full rounded-lg object-contain opacity-70" />
+          </div>
+        ` : '';
+
         msgNode.innerHTML = `
-          <div class="max-w-[85%] rounded-xl px-3 py-2 text-xs ${tempIsAdmin ? 'bg-orange-500/20 border border-orange-500/30 text-white' : 'bg-white/[0.08] border border-white/[0.06] text-slate-200'}">
+          <div class="max-w-[85%] sm:max-w-[70%] rounded-xl px-3 py-2 text-xs ${tempIsAdmin ? 'bg-orange-500/20 border border-orange-500/30 text-white' : 'bg-white/[0.08] border border-white/[0.06] text-slate-200'}">
             <div class="font-bold text-[10px] mb-0.5 ${tempIsAdmin ? 'text-orange-300' : 'text-slate-400'}">
               ${tempIsAdmin ? '🛡️ Admin' : tempNick}
             </div>
-            <div class="whitespace-pre-wrap leading-relaxed">${msg.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div class="text-[9px] text-slate-500 text-right mt-0.5">${tempHora} (enviando...)</div>
+            ${msg ? `<div class="whitespace-pre-wrap leading-relaxed">${msg.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
+            ${tempImgHtml}
+            <div class="text-[9px] text-slate-500 text-right mt-1">${tempHora} (enviando...)</div>
           </div>`;
         container.appendChild(msgNode);
         container.scrollTop = container.scrollHeight;
@@ -4724,14 +4802,13 @@
       try {
         const res = await apiFetch(`/api/tickets/${ticketAtualId}/messages`, {
           method: 'POST',
-          body: JSON.stringify({ mensagem: msg })
+          body: JSON.stringify({ mensagem: msg, imagem_url: imgToSend })
         });
         const data = await res.json();
         if (!res.ok) {
           mostrarFeedback(data.error || 'Erro ao enviar.', 'red');
           return;
         }
-        // Atualiza a lista de mensagens de forma silenciosa e suave
         await abrirTicket(ticketAtualId, true);
       } catch (err) {
         mostrarFeedback('Erro de conexão ao enviar mensagem.', 'red');
@@ -5807,16 +5884,24 @@
 
         let podiumHtml = '';
 
-        // 2º Lugar
+        // 2º Lugar (Prata)
         if (second) {
           podiumHtml += `
             <div class="flex flex-col items-center">
-              <div class="text-sm font-bold text-slate-300 mb-1">🥈 #2</div>
-              <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-slate-400/40 bg-black/40">
-                ${renderTagReino(second.tag, second.logo, second.cor, 'margin-bottom:4px;')}
-                <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(second.nome)}</div>
-                <div class="text-xs font-mono font-bold text-cyan-300 mt-0.5">${second.totalPoints} pts</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">${second.kills} kills &middot; ${second.playtimeFormatted || (second.hoursPlayed + 'h')}</div>
+              <div class="flex items-center gap-1 text-xs font-black text-slate-300 mb-1.5 uppercase tracking-wider">
+                <span>🥈</span> 2º Lugar
+              </div>
+              <div class="glass-card w-full rounded-2xl p-3 md:p-3.5 text-center border border-slate-400/30 bg-gradient-to-b from-slate-900/60 to-black/80 shadow-lg hover:border-slate-400/60 transition-all duration-300 group">
+                <div class="flex justify-center mb-1.5">
+                  ${renderTagReino(second.tag, second.logo, second.cor, 'font-size:11px; padding:2px 7px;')}
+                </div>
+                <div class="font-extrabold text-xs md:text-sm text-slate-100 truncate mt-1 tracking-tight">${escapeHtml(second.nome)}</div>
+                <div class="text-sm md:text-base font-mono font-black text-cyan-400 mt-1">${second.totalPoints} <span class="text-[10px] font-sans font-semibold text-slate-400">pts</span></div>
+                <div class="flex items-center justify-center gap-2 text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                  <span>⚔️ <b>${second.kills}</b> kills</span>
+                  <span>&middot;</span>
+                  <span>👥 <b>${second.membersCount}</b> membros</span>
+                </div>
               </div>
             </div>
           `;
@@ -5824,31 +5909,47 @@
           podiumHtml += `<div class="hidden sm:block"></div>`;
         }
 
-        // 1º Lugar (Ouro)
+        // 1º Lugar (Ouro / Campeão)
         if (first) {
           podiumHtml += `
             <div class="flex flex-col items-center">
-              <div class="text-base font-bold text-amber-300 mb-1">👑 #1</div>
-              <div class="glass-card w-full rounded-2xl p-3 md:p-4 text-center border-2 border-amber-400/70 bg-gradient-to-b from-amber-950/30 to-black/60 shadow-xl">
-                ${renderTagReino(first.tag, first.logo, first.cor, 'margin-bottom:4px; font-size:12px; padding:2px 8px;')}
-                <div class="font-black text-sm md:text-base text-amber-300 truncate mt-1">${escapeHtml(first.nome)}</div>
-                <div class="text-sm md:text-base font-mono font-black text-amber-200 mt-0.5">${first.totalPoints} pts</div>
-                <div class="text-[11px] text-slate-300 mt-0.5">${first.kills} kills &middot; ${first.playtimeFormatted || (first.hoursPlayed + 'h')} &middot; ${first.membersCount} membros</div>
+              <div class="flex items-center gap-1.5 text-xs md:text-sm font-black text-amber-300 mb-1.5 uppercase tracking-wider animate-pulse">
+                <span>👑</span> Campeão
+              </div>
+              <div class="glass-card w-full rounded-2xl p-3.5 md:p-4 text-center border-2 border-amber-400/80 bg-gradient-to-b from-amber-950/40 via-purple-950/20 to-black/90 shadow-2xl hover:border-amber-300 transition-all duration-300 transform -translate-y-1">
+                <div class="flex justify-center mb-2">
+                  ${renderTagReino(first.tag, first.logo, first.cor, 'font-size:12px; padding:3px 9px;')}
+                </div>
+                <div class="font-black text-sm md:text-base text-amber-200 truncate mt-1 tracking-tight">${escapeHtml(first.nome)}</div>
+                <div class="text-base md:text-xl font-mono font-black text-amber-400 mt-1 drop-shadow-sm">${first.totalPoints} <span class="text-xs font-sans font-semibold text-amber-200/80">pts</span></div>
+                <div class="flex items-center justify-center gap-2 text-[11px] text-slate-300 mt-2 pt-1.5 border-t border-amber-500/20">
+                  <span>⚔️ <b class="text-white">${first.kills}</b> kills</span>
+                  <span>&middot;</span>
+                  <span>👥 <b class="text-white">${first.membersCount}</b> membros</span>
+                </div>
               </div>
             </div>
           `;
         }
 
-        // 3º Lugar
+        // 3º Lugar (Bronze)
         if (third) {
           podiumHtml += `
             <div class="flex flex-col items-center">
-              <div class="text-sm font-bold text-amber-600 mb-1">🥉 #3</div>
-              <div class="glass-card w-full rounded-2xl p-2.5 md:p-3 text-center border border-amber-700/40 bg-black/40">
-                ${renderTagReino(third.tag, third.logo, third.cor, 'margin-bottom:4px;')}
-                <div class="font-extrabold text-xs md:text-sm text-white truncate mt-1">${escapeHtml(third.nome)}</div>
-                <div class="text-xs font-mono font-bold text-amber-400 mt-0.5">${third.totalPoints} pts</div>
-                <div class="text-[10px] text-slate-400 mt-0.5">${third.kills} kills &middot; ${third.playtimeFormatted || (third.hoursPlayed + 'h')}</div>
+              <div class="flex items-center gap-1 text-xs font-black text-amber-600 mb-1.5 uppercase tracking-wider">
+                <span>🥉</span> 3º Lugar
+              </div>
+              <div class="glass-card w-full rounded-2xl p-3 md:p-3.5 text-center border border-amber-700/40 bg-gradient-to-b from-amber-950/30 to-black/80 shadow-lg hover:border-amber-600/60 transition-all duration-300">
+                <div class="flex justify-center mb-1.5">
+                  ${renderTagReino(third.tag, third.logo, third.cor, 'font-size:11px; padding:2px 7px;')}
+                </div>
+                <div class="font-extrabold text-xs md:text-sm text-slate-200 truncate mt-1 tracking-tight">${escapeHtml(third.nome)}</div>
+                <div class="text-sm md:text-base font-mono font-black text-amber-400 mt-1">${third.totalPoints} <span class="text-[10px] font-sans font-semibold text-slate-400">pts</span></div>
+                <div class="flex items-center justify-center gap-2 text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                  <span>⚔️ <b>${third.kills}</b> kills</span>
+                  <span>&middot;</span>
+                  <span>👥 <b>${third.membersCount}</b> membros</span>
+                </div>
               </div>
             </div>
           `;
@@ -5885,7 +5986,7 @@
 
               <div class="text-right flex-shrink-0">
                 <div class="font-mono font-black text-xs md:text-sm text-cyan-300">${k.totalPoints} pts</div>
-                <div class="text-[10px] text-slate-400 font-mono">${k.kills} kills &middot; ${k.playtimeFormatted || (k.hoursPlayed + 'h')}</div>
+                <div class="text-[10px] text-slate-400 font-mono">⚔️ ${k.kills} kills &middot; 👥 ${k.membersCount} membros</div>
               </div>
             </div>
           `;
