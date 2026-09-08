@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>5DAY MC — Servidor Oficial 1.21+ • Bedrock & Java</title>
   <link rel="icon" type="image/jpeg" href="/logo.jpg" />
+  <link rel="apple-touch-icon" href="/logo.jpg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/logo.jpg" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="5DAY MC" />
+  <meta name="theme-color" content="#0b0718" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Cinzel:wght@700;900&display=swap" rel="stylesheet" />
@@ -623,6 +630,29 @@
                 </div>
               </div>
               <div class="text-cyan-400 font-black text-lg group-hover:translate-x-1 transition-transform">
+                ➔
+              </div>
+            </div>
+          </button>
+
+          <!-- Botão App iPhone (iOS Web App / WebView) -->
+          <button onclick="abrirModalDownloadIos()"
+            class="w-full group relative overflow-hidden rounded-2xl p-[2px] focus:outline-none transition-transform duration-200 active:scale-95 shadow-xl hover:shadow-purple-500/25">
+            <div class="absolute inset-0 bg-gradient-to-r from-purple-500 via-violet-600 to-pink-600"></div>
+            <div class="relative px-5 py-3.5 bg-slate-950/90 rounded-[14px] flex items-center justify-between gap-3 group-hover:bg-slate-900/90 transition-colors">
+              <div class="flex items-center gap-3 text-left">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-600 flex items-center justify-center text-xl shadow-lg border-t border-white/40">
+                  🍎
+                </div>
+                <div>
+                  <div class="text-xs md:text-sm font-black text-white tracking-wide flex items-center gap-1.5">
+                    Instalar no iPhone (iOS)
+                    <span class="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30">Web App</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 font-medium">Tela cheia nativa sem bordas no Safari do iPhone</div>
+                </div>
+              </div>
+              <div class="text-purple-400 font-black text-lg group-hover:translate-x-1 transition-transform">
                 ➔
               </div>
             </div>
@@ -2186,6 +2216,76 @@
   </div>
 
   <!-- ══════════════════════════════════════════════════════════════════════════
+       MODAL EXPLICATIVO: APP IPHONE (iOS WEBVIEW / PWA)
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-download-ios" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="glass-card border border-purple-500/30 rounded-2xl w-full max-w-lg p-5 md:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      
+      <!-- Cabeçalho -->
+      <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-600 flex items-center justify-center text-xl shadow-lg border-t border-white/40">
+            🍎
+          </div>
+          <div>
+            <h3 class="font-extrabold text-base md:text-lg text-white">5DAY MC para iPhone (iOS)</h3>
+            <p class="text-xs text-purple-300 font-semibold">Web App Nativo &middot; Tela Cheia &middot; Sem Bordas</p>
+          </div>
+        </div>
+        <button onclick="fecharModalDownloadIos()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition text-lg">
+          ✕
+        </button>
+      </div>
+
+      <!-- Destaques -->
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div class="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center">
+          <span class="text-purple-400 font-bold block">✨ Sem App Store</span>
+          <span class="text-slate-400 text-[11px]">Instalação direta</span>
+        </div>
+        <div class="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2.5 text-center">
+          <span class="text-purple-400 font-bold block">📱 Tela Cheia</span>
+          <span class="text-slate-400 text-[11px]">Experiência de App nativo</span>
+        </div>
+      </div>
+
+      <!-- Instruções Passo a Passo -->
+      <div class="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3.5 space-y-3 text-xs text-slate-300">
+        <div class="font-semibold text-purple-300 flex items-center gap-1.5">
+          <span>📲</span> Como adicionar o App na tela de início do seu iPhone:
+        </div>
+        <ol class="space-y-2.5 text-[12px] text-slate-200">
+          <li class="flex items-start gap-2">
+            <span class="w-5 h-5 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+            <span>Abra este site no <strong>Safari</strong> do seu iPhone.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="w-5 h-5 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+            <span>Toque no botão <strong>Compartilhar</strong> (ícone de um quadrado com uma seta para cima <span class="text-base leading-none">⬆️</span>) na barra inferior do Safari.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="w-5 h-5 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+            <span>Role para baixo e toque em <strong class="text-white bg-white/10 px-1.5 py-0.5 rounded">"Adicionar à Tela de Início"</strong>.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="w-5 h-5 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">4</span>
+            <span>Toque em <strong class="text-purple-300">"Adicionar"</strong> no canto superior direito. Pronto! O ícone oficial do 5DAY MC aparecerá como aplicativo nativo.</span>
+          </li>
+        </ol>
+      </div>
+
+      <!-- Botões de Ação -->
+      <div class="flex flex-col sm:flex-row gap-2.5 pt-1">
+        <button onclick="fecharModalDownloadIos()" 
+                class="w-full py-3 px-4 rounded-xl font-extrabold text-xs md:text-sm bg-gradient-to-r from-purple-600 via-violet-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white text-center shadow-lg hover:shadow-purple-500/30 transition-all duration-200 active:scale-95">
+          Entendi, vou adicionar! ✨
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
        MODAL DE INSPEÇÃO DE JOGADOR (Admin)
   ══════════════════════════════════════════════════════════════════════════ -->
   <div id="inspect-modal" class="hidden fixed inset-0 bg-black/90 backdrop-blur-md flex items-start justify-center z-50 p-3 overflow-y-auto">
@@ -2717,6 +2817,12 @@
         fecharModalDownloadAndroid();
         return "handled";
       }
+      // 3.5. Fechar modal de download iOS se aberto
+      const iosModal = document.getElementById('modal-download-ios');
+      if (iosModal && !iosModal.classList.contains('hidden')) {
+        fecharModalDownloadIos();
+        return "handled";
+      }
       // 4. Fechar modal de download windows se aberto
       const winModal = document.getElementById('modal-download-windows');
       if (winModal && !winModal.classList.contains('hidden')) {
@@ -2753,6 +2859,7 @@
       }
       return "root";
     };
+    window.handleAppBack = window.handleAndroidBack;
 
     // ── Sessão ───────────────────────────────────────────────────────────────
     async function verificarSessao() {
@@ -4351,6 +4458,16 @@
 
     function fecharModalDownloadWindows() {
       const m = document.getElementById('modal-download-windows');
+      if (m) m.classList.add('hidden');
+    }
+
+    function abrirModalDownloadIos() {
+      const m = document.getElementById('modal-download-ios');
+      if (m) m.classList.remove('hidden');
+    }
+
+    function fecharModalDownloadIos() {
+      const m = document.getElementById('modal-download-ios');
       if (m) m.classList.add('hidden');
     }
 
