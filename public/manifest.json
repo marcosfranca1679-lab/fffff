@@ -1,0 +1,24 @@
+{
+  "name": "5DAY MC - Servidor Oficial",
+  "short_name": "5DAY MC",
+  "description": "App Oficial do Servidor 5DAY MC - Java & Bedrock 1.21+",
+  "start_url": "/?source=pwa_ios",
+  "display": "standalone",
+  "background_color": "#0b0718",
+  "theme_color": "#0b0718",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
