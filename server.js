@@ -42,6 +42,27 @@ app.get(['/logo.jpg', '/public/logo.jpg'], (req, res) => {
   res.status(404).send('Logo não encontrado');
 });
 
+// Rota para o Web App Manifest (PWA / iOS / Android)
+app.get(['/manifest.json', '/public/manifest.json'], (req, res) => {
+  const fs = require('fs');
+  const p1 = path.join(__dirname, 'public', 'manifest.json');
+  const p2 = path.join(__dirname, 'manifest.json');
+  const target = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+  if (target) {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    return res.sendFile(target);
+  }
+  res.json({
+    name: "5DAY MC - Servidor Oficial",
+    short_name: "5DAY MC",
+    start_url: "/?source=pwa_ios",
+    display: "standalone",
+    background_color: "#0b0718",
+    theme_color: "#0b0718",
+    icons: [{ src: "/logo.jpg", sizes: "192x192", type: "image/jpeg" }]
+  });
+});
+
 // ─── Helper Seguro para Operações Supabase (evita .catch is not a function) ───
 function safeDb(op) {
   return Promise.resolve(op).catch(() => {});
