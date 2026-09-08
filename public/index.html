@@ -6825,6 +6825,15 @@
             if (statusLabel) statusLabel.textContent = 'Nenhuma foto selecionada';
             if (btnRemover) btnRemover.classList.add('hidden');
           }
+
+          // Se for VIP ativo e a whitelist ainda constava como 'Aguardando', aprova visualmente na hora!
+          const wlBox = document.getElementById('whitelist-status-box');
+          const wlDesc = document.getElementById('whitelist-status-desc');
+          if (wlBox && wlBox.textContent.includes('Aguardando')) {
+            wlBox.className = 'px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-md';
+            wlBox.innerHTML = '✅ Whitelist Aprovada (VIP)';
+            if (wlDesc) wlDesc.innerHTML = 'Sua assinatura VIP garante acesso liberado! Abra o Minecraft e jogue agora.';
+          }
         } else {
           if (badgeSub) {
             badgeSub.className = 'px-2.5 py-1 rounded-xl text-[11px] font-bold bg-white/10 text-slate-300 border border-white/10 self-start sm:self-auto flex items-center gap-1.5';
