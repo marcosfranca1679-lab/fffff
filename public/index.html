@@ -1972,7 +1972,7 @@
       </button>
       <div class="text-center space-y-1">
         <div class="flex justify-center mb-1">
-          <img src="/logo.jpg" alt="5DAY MC" class="w-14 h-14 rounded-2xl border-2 border-amber-400/60 shadow-lg object-cover" />
+          <img src="/logo.jpg?v=3" alt="5DAY MC" class="w-14 h-14 rounded-2xl border-2 border-amber-400/60 shadow-lg object-cover bg-slate-900" onerror="if(!this.dataset.retry){this.dataset.retry='1';this.src='/logo.jpg?t='+Date.now();}else if(this.dataset.retry==='1'){this.dataset.retry='2';this.src='logo.jpg';}else if(this.dataset.retry==='2'){this.dataset.retry='3';this.src='/public/logo.jpg';}else{this.style.display='none';this.parentElement.innerHTML='<div class=\'w-14 h-14 rounded-2xl border-2 border-amber-400/60 shadow-lg bg-gradient-to-tr from-purple-900 to-slate-900 flex items-center justify-center font-black text-base text-amber-400\'>5D</div>';}" />
         </div>
         <h2 class="font-extrabold text-lg text-white tracking-tight">5DAY MC</h2>
         <p class="text-xs text-slate-400">Entre na sua conta ou cadastre-se para a Whitelist</p>
