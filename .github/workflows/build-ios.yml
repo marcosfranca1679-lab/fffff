@@ -22,7 +22,7 @@ jobs:
 
       - name: Compilar App iOS (.app)
         run: |
-          xcodebuild build \
+          xcodebuild clean build \
             -project ios_app/5DayMC.xcodeproj \
             -scheme 5DayMC \
             -configuration Release \
@@ -30,12 +30,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            BUILD_DIR=build
+            SYMROOT="$PWD/build"
 
       - name: Empacotar em arquivo .ipa (Sideload / AltStore / Scarlet / TrollStore)
         run: |
           mkdir -p Payload
-          cp -r build/Release-iphoneos/5DayMC.app Payload/
+          APP_PATH=$(find build -name "*.app" -type d | head -n 1)
+          echo "App encontrado em: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
           zip -r 5DayMC.ipa Payload
           rm -rf Payload
 
