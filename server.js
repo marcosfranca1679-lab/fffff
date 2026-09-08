@@ -28,6 +28,20 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Rota explícita com fallback seguro para o logo do servidor (evita falha em WebViews mobile)
+app.get(['/logo.jpg', '/public/logo.jpg'], (req, res) => {
+  const fs = require('fs');
+  const p1 = path.join(__dirname, 'public', 'logo.jpg');
+  const p2 = path.join(__dirname, 'logo.jpg');
+  const target = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+  if (target) {
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.sendFile(target);
+  }
+  res.status(404).send('Logo não encontrado');
+});
+
 // ─── Helper Seguro para Operações Supabase (evita .catch is not a function) ───
 function safeDb(op) {
   return Promise.resolve(op).catch(() => {});
