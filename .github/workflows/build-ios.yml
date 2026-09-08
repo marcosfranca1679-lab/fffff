@@ -1,0 +1,47 @@
+name: Build 5DAY MC - iOS App (IPA)
+
+on:
+  push:
+    paths:
+      - 'ios_app/**'
+      - '.github/workflows/build-ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Selecionar versão do Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Compilar App iOS (.app)
+        run: |
+          xcodebuild build \
+            -project ios_app/5DayMC.xcodeproj \
+            -scheme 5DayMC \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            BUILD_DIR=build
+
+      - name: Empacotar em arquivo .ipa (Sideload / AltStore / Scarlet / TrollStore)
+        run: |
+          mkdir -p Payload
+          cp -r build/Release-iphoneos/5DayMC.app Payload/
+          zip -r 5DayMC.ipa Payload
+          rm -rf Payload
+
+      - name: Fazer Upload do IPA (.ipa)
+        uses: actions/upload-artifact@v4
+        with:
+          name: 5DayMC-iOS-IPA
+          path: 5DayMC.ipa
+          retention-days: 30
