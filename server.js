@@ -222,6 +222,20 @@ app.get('/api/auth/me', async (req, res) => {
         status = p.status || 'pending';
         banReason = p.ban_reason || null;
       }
+
+      // Se não for banido, verifica se o jogador possui assinatura VIP ativa
+      if (status !== 'banned') {
+        await syncVipProfilesCache();
+        const vipInfo = vipProfilesCache.get((user.nick || '').toLowerCase().trim());
+        if (vipInfo && vipInfo.status === 'active') {
+          // Jogador VIP tem aprovação imediata automática!
+          status = 'approved';
+          // Sincroniza a tabela players para 'approved' se ainda estava pendente
+          if (p && p.status !== 'approved') {
+            safeDb(supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', user.nick));
+          }
+        }
+      }
     } catch (_) {}
 
     // Lookup kingdom tag from in-memory cache (zero Supabase cost)
@@ -2057,7 +2071,15 @@ app.get('/api/check/:nick', async (req, res) => {
       });
     }
 
-    const allowed = player.status === 'approved';
+    let allowed = player.status === 'approved';
+    if (!allowed) {
+      await syncVipProfilesCache();
+      const vipInfo = vipProfilesCache.get(nick.toLowerCase());
+      if (vipInfo && vipInfo.status === 'active') {
+        allowed = true;
+        safeDb(supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', nick));
+      }
+    }
     if (!allowed) return res.json({ allowed: false, banned: false, notFound: true, nick });
 
     // Verifica vidas: se jogador aprovado mas sem vidas, bloqueia entrada
@@ -2238,6 +2260,15 @@ app.get('/api/plugin/sync', async (req, res) => {
             remaining: banInfo.remaining,
             isPermanent: banInfo.isPermanent
           });
+        }
+      }
+    // Garante que VIPs com assinatura ativa entrem imediatamente na lista approved
+    await syncVipProfilesCache();
+    for (const [vNick, vData] of vipProfilesCache.entries()) {
+      if (vData && vData.status === 'active') {
+        const lower = vNick.toLowerCase().trim();
+        if (!approved.includes(lower) && !bans.some(b => b.nick === lower)) {
+          approved.push(lower);
         }
       }
     }
