@@ -7,16 +7,27 @@ import com.google.gson.JsonParser;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
+import org.bukkit.Location;
 import org.bukkit.Statistic;
+import org.bukkit.block.Block;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
@@ -33,8 +44,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -58,11 +71,59 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         "marcosfranca1679"
     );
 
+    // ── Proteção de Terreno de Reino ─────────────────────────────────────────
+    public static class KingdomArea {
+        public final String id;
+        public final String nome;
+        public final String tag;
+        public final String world;
+        public final int centerX;
+        public final int centerZ;
+        public final int radius;
+        public final Set<String> members = ConcurrentHashMap.newKeySet();
+
+        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members) {
+            this.id = id;
+            this.nome = nome != null ? nome : "Reino";
+            this.tag = tag != null ? tag : "REI";
+            this.world = world != null ? world : "world";
+            this.centerX = centerX;
+            this.centerZ = centerZ;
+            this.radius = Math.min(200, Math.max(1, radius));
+            if (members != null) {
+                for (String m : members) {
+                    if (m != null && !m.isBlank()) {
+                        this.members.add(m.toLowerCase().trim());
+                    }
+                }
+            }
+        }
+
+        public boolean isInside(Location loc) {
+            if (loc == null || loc.getWorld() == null) return false;
+            String wName = loc.getWorld().getName().toLowerCase();
+            String targetW = this.world.toLowerCase();
+            if (!wName.equals(targetW) && !wName.contains(targetW) && !targetW.contains(wName)) {
+                return false;
+            }
+            int x = loc.getBlockX();
+            int z = loc.getBlockZ();
+            return Math.abs(x - centerX) <= radius && Math.abs(z - centerZ) <= radius;
+        }
+
+        public boolean isMember(String nick) {
+            if (nick == null) return false;
+            return members.contains(nick.toLowerCase().trim());
+        }
+    }
+
     // ── Dados Locais em Memória (Sincronizados com o dados.yml) ──────────────
     private final Set<String> localWhitelist = ConcurrentHashMap.newKeySet();
     private final Map<String, BanEntry> localBans = new ConcurrentHashMap<>();
     private final Map<String, String> localIpBans = new ConcurrentHashMap<>();
     private final Map<String, Integer> localLives = new ConcurrentHashMap<>();
+    private final Map<String, KingdomArea> kingdomProtections = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastProtectionNotice = new ConcurrentHashMap<>();
 
     public record BanEntry(String reason, String remaining) {}
 
@@ -163,8 +224,30 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 }
             }
 
+            kingdomProtections.clear();
+            ConfigurationSection landsSec = yaml.getConfigurationSection("kingdom_protections");
+            if (landsSec != null) {
+                for (String kid : landsSec.getKeys(false)) {
+                    String nome = landsSec.getString(kid + ".nome", "Reino");
+                    String tag = landsSec.getString(kid + ".tag", "REI");
+                    String world = landsSec.getString(kid + ".world", "world");
+                    int cx = landsSec.getInt(kid + ".centerX", 0);
+                    int cz = landsSec.getInt(kid + ".centerZ", 0);
+                    int r = landsSec.getInt(kid + ".radius", 50);
+                    List<String> memList = landsSec.getStringList(kid + ".members");
+                    Set<String> memSet = ConcurrentHashMap.newKeySet();
+                    if (memList != null) {
+                        for (String m : memList) {
+                            if (m != null && !m.isBlank()) memSet.add(m.toLowerCase().trim());
+                        }
+                    }
+                    kingdomProtections.put(kid, new KingdomArea(kid, nome, tag, world, cx, cz, r, memSet));
+                }
+            }
+
             log.info("[LocalData] Carregados do disco: " + localWhitelist.size() + " whitelist, " 
-                + localBans.size() + " bans, " + localIpBans.size() + " bans IP, " + localLives.size() + " vidas.");
+                + localBans.size() + " bans, " + localIpBans.size() + " bans IP, " + localLives.size() + " vidas, "
+                + kingdomProtections.size() + " proteções de reino.");
         } catch (Exception e) {
             log.warning("[LocalData] Erro ao carregar dados.yml: " + e.getMessage());
         }
@@ -189,6 +272,18 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
             for (Map.Entry<String, Integer> e : localLives.entrySet()) {
                 yaml.set("lives." + e.getKey(), e.getValue());
+            }
+
+            for (Map.Entry<String, KingdomArea> e : kingdomProtections.entrySet()) {
+                KingdomArea a = e.getValue();
+                String path = "kingdom_protections." + e.getKey();
+                yaml.set(path + ".nome", a.nome);
+                yaml.set(path + ".tag", a.tag);
+                yaml.set(path + ".world", a.world);
+                yaml.set(path + ".centerX", a.centerX);
+                yaml.set(path + ".centerZ", a.centerZ);
+                yaml.set(path + ".radius", a.radius);
+                yaml.set(path + ".members", new ArrayList<>(a.members));
             }
 
             yaml.save(file);
@@ -373,6 +468,123 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         } catch (Exception ignored) {}
     }
 
+    // ── Sistema de Proteção de Terreno de Reino ───────────────────────────────
+    public KingdomArea getProtectedAreaAt(Location loc) {
+        if (loc == null || loc.getWorld() == null) return null;
+        for (KingdomArea area : kingdomProtections.values()) {
+            if (area.isInside(loc)) {
+                return area;
+            }
+        }
+        return null;
+    }
+
+    public boolean canPlayerInteractAt(Player player, Location loc, KingdomArea[] matchedArea) {
+        if (player == null || loc == null) return true;
+        String lower = cleanNick(player.getName()).toLowerCase().trim();
+        if (BYPASS.contains(lower) || player.isOp()) return true;
+
+        KingdomArea area = getProtectedAreaAt(loc);
+        if (area == null) return true;
+        if (matchedArea != null && matchedArea.length > 0) matchedArea[0] = area;
+
+        return area.isMember(lower);
+    }
+
+    private void sendProtectionNotice(Player player, KingdomArea area) {
+        if (player == null || area == null) return;
+        long now = System.currentTimeMillis();
+        Long last = lastProtectionNotice.get(player.getUniqueId());
+        if (last != null && (now - last) < 2000L) return; // Evita spam
+        lastProtectionNotice.put(player.getUniqueId(), now);
+
+        player.sendActionBar(Component.text("§c❌ Terreno protegido pelo Reino [" + area.tag + "] (" + area.nome + ")!"));
+        player.sendMessage(Component.text("§c❌ [Reinos] Área protegida pelo Reino §e[" + area.tag + "]§c. Apenas membros podem interagir!"));
+    }
+
+    // Bloqueia quebrar blocos na área de outro reino
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockBreak(BlockBreakEvent event) {
+        Player player = event.getPlayer();
+        KingdomArea[] matched = new KingdomArea[1];
+        if (!canPlayerInteractAt(player, event.getBlock().getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(player, matched[0]);
+        }
+    }
+
+    // Bloqueia colocar blocos na área de outro reino
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockPlace(BlockPlaceEvent event) {
+        Player player = event.getPlayer();
+        KingdomArea[] matched = new KingdomArea[1];
+        if (!canPlayerInteractAt(player, event.getBlock().getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(player, matched[0]);
+        }
+    }
+
+    // Bloqueia interagir com portas, baús, alavancas, botões, alçapões, barris, fornalhas, etc.
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerInteract(PlayerInteractEvent event) {
+        Player player = event.getPlayer();
+        Block clicked = event.getClickedBlock();
+        Location targetLoc = clicked != null ? clicked.getLocation() : player.getLocation();
+
+        if (clicked != null || event.getAction() == Action.PHYSICAL) {
+            KingdomArea[] matched = new KingdomArea[1];
+            if (!canPlayerInteractAt(player, targetLoc, matched)) {
+                event.setCancelled(true);
+                sendProtectionNotice(player, matched[0]);
+            }
+        }
+    }
+
+    // Bloqueia abertura de baús, funis, fornalhas e inventários em território de outro reino
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onInventoryOpen(InventoryOpenEvent event) {
+        if (!(event.getPlayer() instanceof Player player)) return;
+        Location invLoc = event.getInventory().getLocation();
+        if (invLoc != null) {
+            KingdomArea[] matched = new KingdomArea[1];
+            if (!canPlayerInteractAt(player, invLoc, matched)) {
+                event.setCancelled(true);
+                sendProtectionNotice(player, matched[0]);
+            }
+        }
+    }
+
+    // Bloqueia interagir com entidades (molduras, suportes de armaduras, barcos com baú)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
+        Player player = event.getPlayer();
+        Entity entity = event.getRightClicked();
+        KingdomArea[] matched = new KingdomArea[1];
+        if (!canPlayerInteractAt(player, entity.getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(player, matched[0]);
+        }
+    }
+
+    // Bloqueia danificar entidades no território (molduras, suportes de armaduras, animais)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
+        Player damager = null;
+        if (event.getDamager() instanceof Player p) {
+            damager = p;
+        } else if (event.getDamager() instanceof Projectile proj && proj.getShooter() instanceof Player p) {
+            damager = p;
+        }
+        if (damager == null) return;
+
+        KingdomArea[] matched = new KingdomArea[1];
+        if (!canPlayerInteractAt(damager, event.getEntity().getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(damager, matched[0]);
+        }
+    }
+
+
     // ── Sincronização Robusta com o Site (Usando GSON) ────────────────────────
     public void syncWithWeb() {
         try {
@@ -450,6 +662,37 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             // 5. Executa Comandos Remotos do Console Web
             if (root.has("commands") && root.get("commands").isJsonArray()) {
                 processCommandsJson(body);
+            }
+
+            // 6. Sincroniza Proteções de Terreno dos Reinos
+            if (root.has("kingdomProtections") && root.get("kingdomProtections").isJsonArray()) {
+                JsonArray kpArr = root.getAsJsonArray("kingdomProtections");
+                Map<String, KingdomArea> updatedAreas = new ConcurrentHashMap<>();
+                for (JsonElement el : kpArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject o = el.getAsJsonObject();
+                        String kid = o.has("id") ? o.get("id").getAsString() : "";
+                        if (kid.isEmpty()) continue;
+                        String nome = o.has("nome") ? o.get("nome").getAsString() : "Reino";
+                        String tag = o.has("tag") ? o.get("tag").getAsString() : "REI";
+                        String world = o.has("world") ? o.get("world").getAsString() : "world";
+                        int cx = o.has("centerX") ? o.get("centerX").getAsInt() : 0;
+                        int cz = o.has("centerZ") ? o.get("centerZ").getAsInt() : 0;
+                        int r = o.has("radius") ? o.get("radius").getAsInt() : 50;
+
+                        Set<String> mSet = ConcurrentHashMap.newKeySet();
+                        if (o.has("members") && o.get("members").isJsonArray()) {
+                            for (JsonElement mel : o.getAsJsonArray("members")) {
+                                String mn = mel.getAsString().toLowerCase().trim();
+                                if (!mn.isEmpty()) mSet.add(mn);
+                            }
+                        }
+                        updatedAreas.put(kid, new KingdomArea(kid, nome, tag, world, cx, cz, r, mSet));
+                    }
+                }
+                kingdomProtections.clear();
+                kingdomProtections.putAll(updatedAreas);
+                log.info("[Sync] 🏰 " + kingdomProtections.size() + " áreas de proteção de reinos sincronizadas.");
             }
 
             // Salva dados atualizados no dados.yml
