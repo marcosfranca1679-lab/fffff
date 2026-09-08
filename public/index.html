@@ -1884,6 +1884,110 @@
             </div>
           </div>
 
+          <!-- Painel de Proteção de Terreno do Reino -->
+          <div id="reino-terreno-card" class="bg-black/60 border border-emerald-500/25 rounded-2xl p-3.5 md:p-4 space-y-3.5 shadow-lg relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-36 h-36 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center text-base font-black shadow-md flex-shrink-0">
+                  🏰
+                </div>
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <h3 class="text-xs md:text-sm font-black text-white">Proteção de Terreno do Reino</h3>
+                    <span id="reino-terreno-status-badge" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-500/20 text-slate-300 border border-slate-500/30">Não Configurada</span>
+                    <span id="reino-terreno-dim-badge" class="hidden text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">100x100</span>
+                  </div>
+                  <p class="text-[10px] text-slate-300 mt-0.5">
+                    Apenas membros do reino podem quebrar, construir, abrir portas, baús ou interagir nesta área.
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <button id="btn-remover-terreno" onclick="removerProtecaoTerrenoReino()"
+                  class="hidden text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1">
+                  <span>🗑️</span> <span>Desativar</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Formulário de Coordenadas e Raio -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                  <span>📍 Centro X</span>
+                  <span class="text-slate-400 font-normal">(Bloco)</span>
+                </label>
+                <input id="reino-terreno-x" type="number" step="1" placeholder="Ex: 100"
+                  class="w-full bg-black/70 border border-white/[0.12] rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 transition" />
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                  <span>📍 Centro Z</span>
+                  <span class="text-slate-400 font-normal">(Bloco)</span>
+                </label>
+                <input id="reino-terreno-z" type="number" step="1" placeholder="Ex: -250"
+                  class="w-full bg-black/70 border border-white/[0.12] rounded-xl px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-emerald-500 transition" />
+              </div>
+
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-300 flex items-center gap-1">
+                  <span>🌍 Mundo</span>
+                </label>
+                <select id="reino-terreno-world"
+                  class="w-full bg-black/70 border border-white/[0.12] rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition">
+                  <option value="world">Superfície (Overworld)</option>
+                  <option value="world_nether">Nether</option>
+                  <option value="world_the_end">The End</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Controle do Raio (Slider + Display) -->
+            <div class="bg-black/40 border border-white/[0.06] rounded-xl p-3 space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-[11px] font-bold text-slate-200 flex items-center gap-1.5">
+                  <span>📏</span> <span>Área de Proteção (Raio em Blocos)</span>
+                </span>
+                <span id="reino-terreno-raio-display" class="font-mono font-extrabold text-emerald-400 text-xs">
+                  50 blocos para cada lado (100×100)
+                </span>
+              </div>
+              <div class="flex items-center gap-3">
+                <input id="reino-terreno-radius-slider" type="range" min="5" max="200" step="5" value="50"
+                  oninput="atualizarDisplayRaioTerreno(this.value)"
+                  class="flex-1 accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg" />
+                <div class="flex items-center gap-1 bg-black/60 border border-white/[0.1] px-2.5 py-1 rounded-lg">
+                  <input id="reino-terreno-radius-num" type="number" min="1" max="200" value="50"
+                    oninput="atualizarDisplayRaioTerreno(this.value)"
+                    class="w-12 bg-transparent text-center font-mono font-bold text-xs text-white focus:outline-none" />
+                  <span class="text-[10px] text-slate-400 font-bold">bl</span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between text-[9px] text-slate-400 font-mono px-0.5">
+                <span>Mín: 5 blocos</span>
+                <span>Padrão: 50 blocos (100×100)</span>
+                <span class="text-amber-400/80 font-bold">Máx: 200 blocos (400×400)</span>
+              </div>
+            </div>
+
+            <!-- Botão Salvar (Apenas Líder / Admin) -->
+            <div id="reino-terreno-botoes-box" class="flex items-center justify-between flex-wrap gap-2 pt-1">
+              <div id="reino-terreno-aviso-nao-lider" class="hidden text-[10px] text-amber-300 italic flex items-center gap-1">
+                <span>🛡️</span> Modo visualização: apenas o Líder pode modificar as coordenadas do reino.
+              </div>
+              <div id="reino-terreno-lider-actions" class="flex items-center gap-2 ml-auto">
+                <button id="btn-salvar-terreno" onclick="salvarProtecaoTerrenoReino()"
+                  class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition shadow-md flex items-center gap-1.5 active:scale-95">
+                  <span>💾</span> <span id="btn-salvar-terreno-texto">Salvar Proteção de Terreno</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Ações do Reino (Líder / Membro) -->
           <div class="flex items-center justify-between flex-wrap gap-2 text-xs pt-1">
             <div class="text-[11px] text-slate-400">
@@ -5647,6 +5751,68 @@
         }
       }
 
+      // ── RENDERIZAÇÃO DA PROTEÇÃO DE TERRENO DO REINO ──
+      const land = reino.land_protection || null;
+      const tStatusBadge = document.getElementById('reino-terreno-status-badge');
+      const tDimBadge = document.getElementById('reino-terreno-dim-badge');
+      const tDisplay = document.getElementById('reino-terreno-raio-display');
+      const inputX = document.getElementById('reino-terreno-x');
+      const inputZ = document.getElementById('reino-terreno-z');
+      const selectWorld = document.getElementById('reino-terreno-world');
+      const sliderR = document.getElementById('reino-terreno-radius-slider');
+      const numR = document.getElementById('reino-terreno-radius-num');
+      const btnRemoverT = document.getElementById('btn-remover-terreno');
+      const avisoNaoLider = document.getElementById('reino-terreno-aviso-nao-lider');
+      const liderActions = document.getElementById('reino-terreno-lider-actions');
+
+      const isLandConfigured = land && land.enabled !== false && typeof land.centerX === 'number';
+
+      if (tStatusBadge) {
+        if (isLandConfigured) {
+          tStatusBadge.textContent = '✅ Ativa';
+          tStatusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        } else {
+          tStatusBadge.textContent = 'Não Configurada';
+          tStatusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-500/20 text-slate-400 border border-slate-500/30';
+        }
+      }
+
+      const curRadius = isLandConfigured ? (land.radius || 50) : 50;
+      const curDim = curRadius * 2;
+
+      if (tDimBadge) {
+        if (isLandConfigured) {
+          tDimBadge.textContent = `${curDim}×${curDim} blocos`;
+          tDimBadge.classList.remove('hidden');
+        } else {
+          tDimBadge.classList.add('hidden');
+        }
+      }
+
+      if (inputX) inputX.value = isLandConfigured ? land.centerX : '';
+      if (inputZ) inputZ.value = isLandConfigured ? land.centerZ : '';
+      if (selectWorld) selectWorld.value = (land && land.world) ? land.world : 'world';
+      if (sliderR) sliderR.value = curRadius;
+      if (numR) numR.value = curRadius;
+      if (tDisplay) tDisplay.textContent = `${curRadius} blocos para cada lado (${curDim}×${curDim})`;
+
+      // Permissões de edição apenas para Líder ou Admin
+      if (inputX) inputX.disabled = !isLider;
+      if (inputZ) inputZ.disabled = !isLider;
+      if (selectWorld) selectWorld.disabled = !isLider;
+      if (sliderR) sliderR.disabled = !isLider;
+      if (numR) numR.disabled = !isLider;
+
+      if (btnRemoverT) {
+        btnRemoverT.classList.toggle('hidden', !(isLider && isLandConfigured));
+      }
+      if (avisoNaoLider) {
+        avisoNaoLider.classList.toggle('hidden', isLider);
+      }
+      if (liderActions) {
+        liderActions.classList.toggle('hidden', !isLider);
+      }
+
       // Lista de Membros
       const listaEl = document.getElementById('reino-lista-membros');
       if (listaEl) {
@@ -5741,6 +5907,92 @@
             `;
           }).join('');
         }
+      }
+    }
+
+    function atualizarDisplayRaioTerreno(val) {
+      const num = parseInt(val, 10);
+      if (isNaN(num)) return;
+      const clamped = Math.min(200, Math.max(1, num));
+      const slider = document.getElementById('reino-terreno-radius-slider');
+      const inputNum = document.getElementById('reino-terreno-radius-num');
+      const display = document.getElementById('reino-terreno-raio-display');
+
+      if (slider && slider.value != clamped) slider.value = clamped;
+      if (inputNum && inputNum.value != clamped) inputNum.value = clamped;
+      const dim = clamped * 2;
+      if (display) display.textContent = `${clamped} blocos para cada lado (${dim}×${dim})`;
+    }
+
+    async function salvarProtecaoTerrenoReino() {
+      const inputX = document.getElementById('reino-terreno-x');
+      const inputZ = document.getElementById('reino-terreno-z');
+      const selectWorld = document.getElementById('reino-terreno-world');
+      const numR = document.getElementById('reino-terreno-radius-num');
+      const btn = document.getElementById('btn-salvar-terreno');
+      const btnTxt = document.getElementById('btn-salvar-terreno-texto');
+
+      const xVal = inputX ? inputX.value.trim() : '';
+      const zVal = inputZ ? inputZ.value.trim() : '';
+      if (xVal === '' || zVal === '') {
+        mostrarFeedback('Por favor, informe as coordenadas centrais X e Z.', 'amber');
+        return;
+      }
+
+      const centerX = parseInt(xVal, 10);
+      const centerZ = parseInt(zVal, 10);
+      if (isNaN(centerX) || isNaN(centerZ)) {
+        mostrarFeedback('As coordenadas X e Z devem ser números válidos.', 'amber');
+        return;
+      }
+
+      const world = selectWorld ? selectWorld.value : 'world';
+      const radius = Math.min(200, Math.max(1, parseInt(numR ? numR.value : 50, 10) || 50));
+
+      if (btn) btn.disabled = true;
+      if (btnTxt) btnTxt.textContent = 'Salvando no Servidor...';
+
+      try {
+        const res = await apiFetch('/api/kingdoms/land-protection', {
+          method: 'POST',
+          body: JSON.stringify({
+            centerX,
+            centerZ,
+            world,
+            radius,
+            enabled: true
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || 'Proteção de terreno configurada com sucesso!', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao salvar proteção de terreno.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao salvar terreno.', 'red');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (btnTxt) btnTxt.textContent = 'Salvar Proteção de Terreno';
+      }
+    }
+
+    async function removerProtecaoTerrenoReino() {
+      if (!confirm('Deseja realmente desativar a proteção de terreno deste reino?\n\n⚠️ Qualquer jogador poderá quebrar blocos e interagir na área.')) return;
+      try {
+        const res = await apiFetch('/api/kingdoms/land-protection', {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback('Proteção de terreno desativada com sucesso.', 'green');
+          await carregarReinoStatus();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao desativar proteção.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão ao desativar proteção.', 'red');
       }
     }
 
