@@ -2262,6 +2262,8 @@ app.get('/api/plugin/sync', async (req, res) => {
           });
         }
       }
+    }
+
     // Garante que VIPs com assinatura ativa entrem imediatamente na lista approved
     await syncVipProfilesCache();
     for (const [vNick, vData] of vipProfilesCache.entries()) {
