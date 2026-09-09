@@ -4832,6 +4832,23 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
     const worldName = (world || 'world').trim();
     const isEnabled = enabled !== false;
 
+    // ── BUSCAR DADO ATUAL DO REINO (changeCount + validação) ──────────────────
+    const { data: currentKingdomData } = await supabase
+      .from('kingdoms')
+      .select('land_protection')
+      .eq('id', targetKingdomId)
+      .maybeSingle();
+
+    const existingLand = currentKingdomData?.land_protection || {};
+    const currentChangeCount = typeof existingLand.changeCount === 'number' ? existingLand.changeCount : 0;
+
+    // ── LIMITE DE 2 ALTERAÇÕES (apenas para não-admins) ──────────────────────
+    if (!req.isAdmin && currentChangeCount >= 2) {
+      return res.status(403).json({
+        error: '⛔ Limite atingido! Você já alterou a proteção de terreno 2 vezes. O limite máximo foi atingido. Entre em contato com o administrador se precisar de ajuda.'
+      });
+    }
+
     // ── VALIDAÇÃO DE COLISÃO / SOBREPOSIÇÃO DE RAIO ENTRE REINOS ──────────────
     // Conta os blocos de cada lado (Centro ± Raio) para garantir que não haja duas proteções na mesma área
     if (isEnabled) {
@@ -4885,12 +4902,16 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
       }
     }
 
+    // Incrementa o changeCount (admins não contam como alteração)
+    const newChangeCount = req.isAdmin ? currentChangeCount : currentChangeCount + 1;
+
     const landProtection = {
       enabled: isEnabled,
       centerX: parsedX,
       centerZ: parsedZ,
       world: worldName,
       radius: parsedRadius,
+      changeCount: newChangeCount,
       updatedAt: new Date().toISOString(),
       updatedBy: nick
     };
