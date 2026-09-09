@@ -3142,31 +3142,57 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       myInvites = [];
     }
 
-    // 3. Busca reino atual do jogador
-    const { data: member } = await supabase
-      .from('kingdom_members')
-      .select('role, kingdom_id, kingdoms ( * )')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    // 3. Busca reino atual do jogador (ou o reino selecionado pelo Administrador)
+    let currentKingdom = null;
+    let currentRole = 'membro';
+    let currentKingdomId = null;
+
+    if (req.isAdmin && req.query.kingdomId) {
+      const { data: targetK } = await supabase
+        .from('kingdoms')
+        .select('*')
+        .eq('id', req.query.kingdomId)
+        .maybeSingle();
+
+      if (targetK) {
+        currentKingdom = targetK;
+        currentKingdomId = targetK.id;
+        currentRole = 'lider'; // Administrador tem poderes totais no reino acessado
+      }
+    }
+
+    if (!currentKingdom) {
+      const { data: member } = await supabase
+        .from('kingdom_members')
+        .select('role, kingdom_id, kingdoms ( * )')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (member && member.kingdoms) {
+        currentKingdom = member.kingdoms;
+        currentKingdomId = member.kingdom_id;
+        currentRole = member.role;
+      }
+    }
 
     let myKingdom = null;
     let members = [];
     let candidates = [];
     let sentInvites = [];
 
-    if (member && member.kingdoms) {
+    if (currentKingdom && currentKingdomId) {
       myKingdom = {
-        ...member.kingdoms,
-        myRole: member.role
+        ...currentKingdom,
+        myRole: currentRole
       };
       // Busca membros do reino
       const { data: mList } = await supabase
         .from('kingdom_members')
         .select('id, user_nick, role, joined_at')
-        .eq('kingdom_id', member.kingdom_id)
+        .eq('kingdom_id', currentKingdomId)
         .order('joined_at', { ascending: true });
 
-      const isLiderOrAdmin = (member.role === 'lider' || req.isAdmin);
+      const isLiderOrAdmin = (currentRole === 'lider' || req.isAdmin);
 
       if (isLiderOrAdmin && mList && mList.length > 0) {
         // Apenas o líder e admin recebem os dados detalhados do que cada membro fez enquanto esteve no reino
@@ -3179,7 +3205,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
         (baselines || []).forEach(b => {
           try {
             const j = JSON.parse(b.content);
-            if (j.kingdom_id === member.kingdom_id) {
+            if (j.kingdom_id === currentKingdomId) {
               baselineMap.set((b.author_nick || '').toLowerCase().trim(), j);
             }
           } catch (_) {}
@@ -3281,7 +3307,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       }
 
       // Se for líder ou admin, busca jogadores com Whitelist aprovada para convidar
-      if (member.role === 'lider' || req.isAdmin) {
+      if (currentRole === 'lider' || req.isAdmin) {
         const { data: appPlayers } = await supabase
           .from('players')
           .select('nick, platform')
@@ -3300,7 +3326,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
           const { data: outInvites, error: outErr } = await supabase
             .from('kingdom_invites')
             .select('id, invited_nick, created_at')
-            .eq('kingdom_id', member.kingdom_id)
+            .eq('kingdom_id', currentKingdomId)
             .eq('status', 'pending');
           if (!outErr && outInvites) sentInvites = outInvites;
         } catch (_) {
@@ -3358,6 +3384,33 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
     const maxKingdoms = 12;
     const isLimitReached = totalKingdoms >= maxKingdoms;
 
+    // Se for Administrador, busca todos os reinos criados no servidor
+    let allCreatedKingdoms = [];
+    if (req.isAdmin) {
+      try {
+        const { data: kList } = await supabase
+          .from('kingdoms')
+          .select('id, nome, tag, logo, cor, descricao, owner_nick, pontos, kills, created_at, land_protection')
+          .order('created_at', { ascending: false });
+
+        const { data: kmCount } = await supabase
+          .from('kingdom_members')
+          .select('kingdom_id');
+
+        const countMap = {};
+        (kmCount || []).forEach(m => {
+          countMap[m.kingdom_id] = (countMap[m.kingdom_id] || 0) + 1;
+        });
+
+        allCreatedKingdoms = (kList || []).map(k => ({
+          ...k,
+          memberCount: countMap[k.id] || 1
+        }));
+      } catch (errK) {
+        console.error('Erro ao buscar lista de reinos para admin:', errK);
+      }
+    }
+
     res.json({
       success: true,
       allowedToCreate: isAllowedToCreate,
@@ -3368,6 +3421,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
       usedLogos,
       usedColors,
       myKingdom,
+      allKingdoms: allCreatedKingdoms,
       members,
       candidates,
       myInvites: myInvites || [],
@@ -4416,15 +4470,21 @@ app.post('/api/kingdoms/invites/send', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Você não pode convidar a si mesmo.' });
     }
 
-    // 1. Obtém o reino do solicitante e confirma se é o líder
-    const { data: member } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role, kingdoms ( id, nome, tag, owner_nick )')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    // 1. Obtém o reino do solicitante e confirma se é o líder ou admin
+    let targetKingdomId = null;
+    if (req.isAdmin && req.body.kingdomId) {
+      targetKingdomId = req.body.kingdomId;
+    } else {
+      const { data: member } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role, kingdoms ( id, nome, tag, owner_nick )')
+        .ilike('user_nick', nick)
+        .maybeSingle();
 
-    if (!member || (member.role !== 'lider' && !req.isAdmin)) {
-      return res.status(403).json({ error: 'Apenas o Dono/Líder do reino pode convidar membros.' });
+      if (!member || (member.role !== 'lider' && !req.isAdmin)) {
+        return res.status(403).json({ error: 'Apenas o Dono/Líder do reino pode convidar membros.' });
+      }
+      targetKingdomId = member.kingdom_id;
     }
 
     // 2. Verifica se o jogador alvo é aprovado na Whitelist
@@ -4453,7 +4513,7 @@ app.post('/api/kingdoms/invites/send', requireAuth, async (req, res) => {
     const { data: existingInvite } = await supabase
       .from('kingdom_invites')
       .select('id')
-      .eq('kingdom_id', member.kingdom_id)
+      .eq('kingdom_id', targetKingdomId)
       .ilike('invited_nick', cleanTarget)
       .eq('status', 'pending')
       .maybeSingle();
@@ -4466,7 +4526,7 @@ app.post('/api/kingdoms/invites/send', requireAuth, async (req, res) => {
     const { data: newInvite, error: invErr } = await supabase
       .from('kingdom_invites')
       .insert([{
-        kingdom_id: member.kingdom_id,
+        kingdom_id: targetKingdomId,
         invited_nick: targetPlayer.nick,
         invited_by: nick,
         status: 'pending'
@@ -4497,25 +4557,31 @@ app.post('/api/kingdoms/invites/send', requireAuth, async (req, res) => {
 app.post('/api/kingdoms/invites/cancel', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { inviteId } = req.body || {};
+    const { inviteId, kingdomId } = req.body || {};
 
     if (!inviteId) return res.status(400).json({ error: 'ID do convite obrigatório.' });
 
-    const { data: member } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
+    if (req.isAdmin && kingdomId) {
+      targetKingdomId = kingdomId;
+    } else {
+      const { data: member } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role')
+        .ilike('user_nick', nick)
+        .maybeSingle();
 
-    if (!member || (member.role !== 'lider' && !req.isAdmin)) {
-      return res.status(403).json({ error: 'Apenas o líder pode cancelar convites.' });
+      if (!member || (member.role !== 'lider' && !req.isAdmin)) {
+        return res.status(403).json({ error: 'Apenas o líder pode cancelar convites.' });
+      }
+      targetKingdomId = member.kingdom_id;
     }
 
     await supabase
       .from('kingdom_invites')
       .delete()
       .eq('id', inviteId)
-      .eq('kingdom_id', member.kingdom_id);
+      .eq('kingdom_id', targetKingdomId);
 
     res.json({ success: true, message: 'Convite cancelado.' });
   } catch (err) {
@@ -4624,31 +4690,39 @@ app.post('/api/kingdoms/invites/respond', requireAuth, async (req, res) => {
 app.post('/api/kingdoms/members/remove', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { targetNick } = req.body || {};
+    const { targetNick, kingdomId } = req.body || {};
     const cleanTarget = (targetNick || nick).trim();
 
-    const { data: myMember } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
+    let isRemovingSelf = cleanTarget.toLowerCase() === nick.toLowerCase();
 
-    if (!myMember) return res.status(400).json({ error: 'Você não faz parte de nenhum reino.' });
+    if (req.isAdmin && kingdomId) {
+      targetKingdomId = kingdomId;
+      isRemovingSelf = false;
+    } else {
+      const { data: myMember } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role')
+        .ilike('user_nick', nick)
+        .maybeSingle();
 
-    // Se estiver removendo outra pessoa, tem que ser líder ou admin
-    const isRemovingSelf = cleanTarget.toLowerCase() === nick.toLowerCase();
-    if (!isRemovingSelf && myMember.role !== 'lider' && !req.isAdmin) {
-      return res.status(403).json({ error: 'Apenas o líder pode expulsar membros.' });
-    }
+      if (!myMember) return res.status(400).json({ error: 'Você não faz parte de nenhum reino.' });
 
-    if (isRemovingSelf && myMember.role === 'lider') {
-      return res.status(400).json({ error: 'O Dono/Líder não pode simplesmente sair. Use a opção de dissolver o reino.' });
+      // Se estiver removendo outra pessoa, tem que ser líder ou admin
+      if (!isRemovingSelf && myMember.role !== 'lider' && !req.isAdmin) {
+        return res.status(403).json({ error: 'Apenas o líder pode expulsar membros.' });
+      }
+
+      if (isRemovingSelf && myMember.role === 'lider') {
+        return res.status(400).json({ error: 'O Dono/Líder não pode simplesmente sair. Use a opção de dissolver o reino.' });
+      }
+      targetKingdomId = myMember.kingdom_id;
     }
 
     // 1. Remove da tabela de membros do reino
     await supabase.from('kingdom_members')
       .delete()
-      .eq('kingdom_id', myMember.kingdom_id)
+      .eq('kingdom_id', targetKingdomId)
       .ilike('user_nick', cleanTarget);
 
     // 2. Apaga as informações e baseline gerados enquanto o jogador esteve no reino
@@ -4666,7 +4740,7 @@ app.post('/api/kingdoms/members/remove', requireAuth, async (req, res) => {
       : `⛔ ${cleanTarget} foi expulso do reino por ${nick}.`;
 
     await supabase.from('kingdom_messages').insert([{
-      kingdom_id: myMember.kingdom_id,
+      kingdom_id: targetKingdomId,
       author_nick: 'Sistema',
       author_role: 'system',
       content: exitMsg
@@ -4687,18 +4761,25 @@ app.post('/api/kingdoms/members/remove', requireAuth, async (req, res) => {
 app.delete('/api/kingdoms', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { data: myMember } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role, kingdoms ( id, nome )')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
 
-    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
-      return res.status(403).json({ error: 'Apenas o líder pode dissolver o reino.' });
+    if (req.isAdmin && (req.body?.kingdomId || req.query?.kingdomId)) {
+      targetKingdomId = req.body?.kingdomId || req.query?.kingdomId;
+    } else {
+      const { data: myMember } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role, kingdoms ( id, nome )')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+        return res.status(403).json({ error: 'Apenas o líder pode dissolver o reino.' });
+      }
+      targetKingdomId = myMember.kingdom_id;
     }
 
-    await supabase.from('kingdoms').delete().eq('id', myMember.kingdom_id);
-    await safeDb(supabase.from('messages').delete().eq('author_role', 'kingdom_member_baseline').like('content', `%"kingdom_id":"${myMember.kingdom_id}"%`));
+    await supabase.from('kingdoms').delete().eq('id', targetKingdomId);
+    await safeDb(supabase.from('messages').delete().eq('author_role', 'kingdom_member_baseline').like('content', `%"kingdom_id":"${targetKingdomId}"%`));
     syncKingdomsCache(true).catch(() => {});
 
     res.json({ success: true, message: 'Reino dissolvido com sucesso.' });
@@ -4711,14 +4792,25 @@ app.delete('/api/kingdoms', requireAuth, async (req, res) => {
 app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { data: myMember } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role, kingdoms ( id, nome, tag, owner_nick )')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
+    let targetTag = '';
 
-    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
-      return res.status(403).json({ error: 'Apenas o líder ou administrador pode alterar a proteção de terreno do reino.' });
+    if (req.isAdmin && req.body.kingdomId) {
+      targetKingdomId = req.body.kingdomId;
+      const { data: kRow } = await supabase.from('kingdoms').select('tag').eq('id', targetKingdomId).maybeSingle();
+      targetTag = kRow?.tag || '';
+    } else {
+      const { data: myMember } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role, kingdoms ( id, nome, tag, owner_nick )')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+        return res.status(403).json({ error: 'Apenas o líder ou administrador pode alterar a proteção de terreno do reino.' });
+      }
+      targetKingdomId = myMember.kingdom_id;
+      targetTag = myMember.kingdoms?.tag || '';
     }
 
     const { centerX, centerZ, world, radius, enabled } = req.body;
@@ -4746,7 +4838,7 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
       const { data: otherKingdoms } = await supabase
         .from('kingdoms')
         .select('id, nome, tag, land_protection')
-        .neq('id', myMember.kingdom_id);
+        .neq('id', targetKingdomId);
 
       const curWorld = worldName.toLowerCase();
       const myMinX = parsedX - parsedRadius;
@@ -4809,13 +4901,13 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
         land_protection: landProtection,
         updated_at: new Date().toISOString()
       })
-      .eq('id', myMember.kingdom_id);
+      .eq('id', targetKingdomId);
 
     if (updateErr) {
       return res.status(500).json({ error: 'Erro ao salvar proteção no banco de dados: ' + updateErr.message });
     }
 
-    registrarConsoleLog('info', `[Reino ${myMember.kingdoms?.tag || ''}] Proteção de terreno definida por ${nick}: Centro X=${parsedX}, Z=${parsedZ}, Raio=${parsedRadius} (${worldName})`, 'Reinos');
+    registrarConsoleLog('info', `[Reino ${targetTag}] Proteção de terreno definida por ${nick}: Centro X=${parsedX}, Z=${parsedZ}, Raio=${parsedRadius} (${worldName})`, 'Reinos');
 
     res.json({
       success: true,
@@ -4831,14 +4923,25 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
 app.delete('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { data: myMember } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role, kingdoms ( id, tag )')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
+    let targetTag = '';
 
-    if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
-      return res.status(403).json({ error: 'Apenas o líder pode desativar a proteção de terreno.' });
+    if (req.isAdmin && (req.query.kingdomId || req.body?.kingdomId)) {
+      targetKingdomId = req.query.kingdomId || req.body?.kingdomId;
+      const { data: kRow } = await supabase.from('kingdoms').select('tag').eq('id', targetKingdomId).maybeSingle();
+      targetTag = kRow?.tag || '';
+    } else {
+      const { data: myMember } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role, kingdoms ( id, tag )')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (!myMember || (myMember.role !== 'lider' && !req.isAdmin)) {
+        return res.status(403).json({ error: 'Apenas o líder pode desativar a proteção de terreno.' });
+      }
+      targetKingdomId = myMember.kingdom_id;
+      targetTag = myMember.kingdoms?.tag || '';
     }
 
     await supabase
@@ -4847,9 +4950,9 @@ app.delete('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
         land_protection: null,
         updated_at: new Date().toISOString()
       })
-      .eq('id', myMember.kingdom_id);
+      .eq('id', targetKingdomId);
 
-    registrarConsoleLog('warn', `[Reino ${myMember.kingdoms?.tag || ''}] Proteção de terreno desativada por ${nick}`, 'Reinos');
+    registrarConsoleLog('warn', `[Reino ${targetTag}] Proteção de terreno desativada por ${nick}`, 'Reinos');
 
     res.json({ success: true, message: 'Proteção de terreno desativada com sucesso.' });
   } catch (err) {
@@ -4861,20 +4964,27 @@ app.delete('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
 app.get('/api/kingdoms/messages', requireAuth, async (req, res) => {
   try {
     const nick = (req.user.nick || '').trim();
-    const { data: member } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
 
-    if (!member) {
-      return res.status(403).json({ error: 'Apenas membros de um reino têm acesso a este bate-papo.' });
+    if (req.isAdmin && req.query.kingdomId) {
+      targetKingdomId = req.query.kingdomId;
+    } else {
+      const { data: member } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (!member) {
+        return res.status(403).json({ error: 'Apenas membros de um reino têm acesso a este bate-papo.' });
+      }
+      targetKingdomId = member.kingdom_id;
     }
 
     const { data: messages } = await supabase
       .from('kingdom_messages')
       .select('*')
-      .eq('kingdom_id', member.kingdom_id)
+      .eq('kingdom_id', targetKingdomId)
       .order('created_at', { ascending: false })
       .limit(60);
 
@@ -4902,28 +5012,38 @@ app.post('/api/kingdoms/messages', requireAuth, async (req, res) => {
     const content = (req.body.content || '').trim();
     if (!content) return res.status(400).json({ error: 'Mensagem vazia.' });
 
-    const { data: member } = await supabase
-      .from('kingdom_members')
-      .select('kingdom_id, role')
-      .ilike('user_nick', nick)
-      .maybeSingle();
+    let targetKingdomId = null;
+    let authorRole = 'membro';
 
-    if (!member) {
-      return res.status(403).json({ error: 'Você precisa pertencer a um reino para conversar aqui.' });
+    if (req.isAdmin && req.body.kingdomId) {
+      targetKingdomId = req.body.kingdomId;
+      authorRole = 'admin';
+    } else {
+      const { data: member } = await supabase
+        .from('kingdom_members')
+        .select('kingdom_id, role')
+        .ilike('user_nick', nick)
+        .maybeSingle();
+
+      if (!member) {
+        return res.status(403).json({ error: 'Você precisa pertencer a um reino para conversar aqui.' });
+      }
+      targetKingdomId = member.kingdom_id;
+      authorRole = member.role;
     }
 
     const { data: msg, error } = await supabase
       .from('kingdom_messages')
       .insert([{
-        kingdom_id: member.kingdom_id,
+        kingdom_id: targetKingdomId,
         author_nick: nick,
-        author_role: member.role || 'membro',
-        content: content.slice(0, 500)
+        author_role: authorRole,
+        content
       }])
       .select()
       .single();
 
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) throw error;
     res.json({ success: true, message: msg });
   } catch (err) {
     res.status(500).json({ error: err.message });
