@@ -4740,6 +4740,59 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
     const worldName = (world || 'world').trim();
     const isEnabled = enabled !== false;
 
+    // ── VALIDAÇÃO DE COLISÃO / SOBREPOSIÇÃO DE RAIO ENTRE REINOS ──────────────
+    // Conta os blocos de cada lado (Centro ± Raio) para garantir que não haja duas proteções na mesma área
+    if (isEnabled) {
+      const { data: otherKingdoms } = await supabase
+        .from('kingdoms')
+        .select('id, nome, tag, land_protection')
+        .neq('id', myMember.kingdom_id);
+
+      const curWorld = worldName.toLowerCase();
+      const myMinX = parsedX - parsedRadius;
+      const myMaxX = parsedX + parsedRadius;
+      const myMinZ = parsedZ - parsedRadius;
+      const myMaxZ = parsedZ + parsedRadius;
+
+      for (const other of (otherKingdoms || [])) {
+        const oLand = other.land_protection;
+        if (oLand && oLand.enabled !== false && typeof oLand.centerX === 'number') {
+          const oWorld = (oLand.world || 'world').trim().toLowerCase();
+
+          // Só há sobreposição se for no mesmo mundo do Minecraft
+          if (oWorld === curWorld) {
+            const oRadius = Math.min(200, Math.max(1, parseInt(oLand.radius, 10) || 50));
+            const oCenterX = parseInt(oLand.centerX, 10) || 0;
+            const oCenterZ = parseInt(oLand.centerZ, 10) || 0;
+
+            const oMinX = oCenterX - oRadius;
+            const oMaxX = oCenterX + oRadius;
+            const oMinZ = oCenterZ - oRadius;
+            const oMaxZ = oCenterZ + oRadius;
+
+            // Dois territórios colidem se sobrepuserem simultaneamente nos eixos X e Z
+            const overlapX = (myMinX <= oMaxX) && (myMaxX >= oMinX);
+            const overlapZ = (myMinZ <= oMaxZ) && (myMaxZ >= oMinZ);
+
+            if (overlapX && overlapZ) {
+              const distX = Math.abs(parsedX - oCenterX);
+              const distZ = Math.abs(parsedZ - oCenterZ);
+              const distTotal = Math.round(Math.hypot(distX, distZ));
+              const distNecessaria = parsedRadius + oRadius;
+
+              return res.status(400).json({
+                error: `⚠️ Conflito de Território! As coordenadas informadas invadem a área protegida do Reino [${other.tag}] (${other.nome}).\n` +
+                       `• Sua área: X=[${myMinX} até ${myMaxX}], Z=[${myMinZ} até ${myMaxZ}] (Raio: ${parsedRadius} blocos para cada lado)\n` +
+                       `• Reino [${other.tag}]: X=[${oMinX} até ${oMaxX}], Z=[${oMinZ} até ${oMaxZ}] (Raio: ${oRadius} blocos para cada lado)\n` +
+                       `• Distância entre centros: ${distTotal} blocos (mínimo necessário para não colidir: ${distNecessaria + 1} blocos).\n` +
+                       `Por favor, escolha outras coordenadas ou reduza o raio.`
+              });
+            }
+          }
+        }
+      }
+    }
+
     const landProtection = {
       enabled: isEnabled,
       centerX: parsedX,
