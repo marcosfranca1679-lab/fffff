@@ -6019,7 +6019,15 @@
       if (tDisplay) tDisplay.textContent = `${curRadius} blocos para cada lado (${curDim}×${curDim})`;
 
       // ── LIMITE DE ALTERAÇÕES DA PROTEÇÃO DE TERRENO ──
-      const changeCount = typeof land?.changeCount === 'number' ? land.changeCount : 0;
+      // Espelha a lógica do backend: proteção existente sem changeCount = 1 usado
+      let changeCount;
+      if (typeof land?.changeCount === 'number') {
+        changeCount = land.changeCount;
+      } else if (isLandConfigured) {
+        changeCount = 1; // já tinha proteção mas sem contador → considera 1 usado
+      } else {
+        changeCount = 0;
+      }
       const changeLimit = 2;
       const limiteAtingido = !isUserAdmin && changeCount >= changeLimit;
 
