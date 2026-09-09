@@ -5968,6 +5968,9 @@
           mostrarFeedback(data.message || 'Proteção de terreno configurada com sucesso!', 'green');
           await carregarReinoStatus();
         } else {
+          if (data.error && (data.error.includes('Conflito') || data.error.includes('invadem a área'))) {
+            alert(data.error);
+          }
           mostrarFeedback(data.error || 'Erro ao salvar proteção de terreno.', 'red');
         }
       } catch (err) {
