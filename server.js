@@ -4840,7 +4840,21 @@ app.post('/api/kingdoms/land-protection', requireAuth, async (req, res) => {
       .maybeSingle();
 
     const existingLand = currentKingdomData?.land_protection || {};
-    const currentChangeCount = typeof existingLand.changeCount === 'number' ? existingLand.changeCount : 0;
+
+    // Reinos que já têm land_protection salvo mas SEM changeCount são
+    // tratados como se já usaram 1 alteração (restando apenas 1 disponível).
+    // Reinos sem nenhuma proteção configurada ainda partem do zero.
+    let currentChangeCount;
+    if (typeof existingLand.changeCount === 'number') {
+      // Campo já existe — usa o valor real
+      currentChangeCount = existingLand.changeCount;
+    } else if (typeof existingLand.centerX === 'number') {
+      // Proteção existente mas sem contador → considera 1 já usado
+      currentChangeCount = 1;
+    } else {
+      // Nenhuma proteção configurada ainda → começa do zero
+      currentChangeCount = 0;
+    }
 
     // ── LIMITE DE 2 ALTERAÇÕES (apenas para não-admins) ──────────────────────
     if (!req.isAdmin && currentChangeCount >= 2) {
