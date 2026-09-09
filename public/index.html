@@ -2011,10 +2011,10 @@
               Líder: <span id="reino-info-lider" class="text-cyan-300 font-bold">Nick</span>
             </div>
             <div class="flex items-center gap-2">
-              <button id="btn-dissolver-reino" onclick="dissolverReino()" class="hidden text-rose-400 hover:text-rose-300 text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-3 py-1.5 rounded-xl transition">
+              <button id="btn-dissolver-reino" onclick="abrirModalConfirmarDissolver()" class="hidden text-rose-400 hover:text-rose-300 text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-3 py-1.5 rounded-xl transition">
                 💥 Dissolver Reino
               </button>
-              <button id="btn-sair-reino" onclick="sairDoReino()" class="text-slate-400 hover:text-slate-200 text-xs font-bold bg-white/[0.06] hover:bg-white/[0.12] px-3 py-1.5 rounded-xl transition">
+              <button id="btn-sair-reino" onclick="abrirModalConfirmarSairReino()" class="text-slate-400 hover:text-slate-200 text-xs font-bold bg-white/[0.06] hover:bg-white/[0.12] px-3 py-1.5 rounded-xl transition">
                 🚪 Sair do Reino
               </button>
             </div>
@@ -2333,6 +2333,55 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       MODAL CONFIRMAÇÃO: SAIR / DISSOLVER REINO
+  ══════════════════════════════════════════════════════════════════════════ -->
+  <div id="modal-confirmar-acao-reino" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="glass-card border border-rose-500/30 rounded-2xl w-full max-w-md p-5 md:p-6 shadow-2xl space-y-4">
+      
+      <!-- Cabeçalho -->
+      <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div class="flex items-center gap-3">
+          <div id="modal-acao-reino-icone" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-500 to-red-700 flex items-center justify-center text-xl shadow-lg border-t border-white/40">
+            ⚠️
+          </div>
+          <div>
+            <h3 id="modal-acao-reino-titulo" class="font-extrabold text-base md:text-lg text-white">Sair do Reino</h3>
+            <p id="modal-acao-reino-subtitulo" class="text-xs text-rose-300 font-semibold">Esta ação é irreversível</p>
+          </div>
+        </div>
+        <button onclick="fecharModalConfirmarAcaoReino()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition text-lg">
+          ✕
+        </button>
+      </div>
+
+      <!-- Aviso -->
+      <div class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 space-y-2">
+        <div class="flex items-start gap-2.5">
+          <span class="text-xl flex-shrink-0">🚨</span>
+          <div>
+            <div id="modal-acao-reino-aviso-titulo" class="text-xs font-bold text-rose-300 uppercase tracking-wider">Atenção</div>
+            <p id="modal-acao-reino-aviso-corpo" class="text-xs text-slate-300 leading-relaxed mt-1">
+              Tem certeza que deseja sair do reino?
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botões -->
+      <div class="flex gap-3 pt-1">
+        <button onclick="fecharModalConfirmarAcaoReino()"
+                class="flex-1 py-3 px-4 rounded-xl font-bold text-xs bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 hover:text-white transition">
+          ← Cancelar
+        </button>
+        <button id="btn-confirmar-acao-reino" onclick=""
+                class="flex-1 py-3 px-4 rounded-xl font-extrabold text-xs bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white shadow-lg hover:shadow-rose-500/30 transition-all duration-200 active:scale-95">
+          Confirmar
+        </button>
+      </div>
     </div>
   </div>
 
@@ -5969,12 +6018,52 @@
       if (numR) numR.value = curRadius;
       if (tDisplay) tDisplay.textContent = `${curRadius} blocos para cada lado (${curDim}×${curDim})`;
 
-      // Permissões de edição apenas para Líder ou Admin
-      if (inputX) inputX.disabled = !isLider;
-      if (inputZ) inputZ.disabled = !isLider;
-      if (selectWorld) selectWorld.disabled = !isLider;
-      if (sliderR) sliderR.disabled = !isLider;
-      if (numR) numR.disabled = !isLider;
+      // ── LIMITE DE ALTERAÇÕES DA PROTEÇÃO DE TERRENO ──
+      const changeCount = typeof land?.changeCount === 'number' ? land.changeCount : 0;
+      const changeLimit = 2;
+      const limiteAtingido = !isUserAdmin && changeCount >= changeLimit;
+
+      // Badge de alterações usadas (apenas para líder não-admin)
+      const existingChangeBadge = document.getElementById('reino-terreno-change-badge');
+      if (existingChangeBadge) existingChangeBadge.remove();
+      if (isLider && liderActions) {
+        const changeBadge = document.createElement('div');
+        changeBadge.id = 'reino-terreno-change-badge';
+        if (limiteAtingido) {
+          changeBadge.className = 'flex items-center gap-2 bg-rose-500/10 border border-rose-500/30 rounded-xl px-3 py-2 text-xs';
+          changeBadge.innerHTML = `<span class="text-rose-400 font-bold">⛔ Limite atingido!</span><span class="text-slate-400">Você já alterou a proteção ${changeCount}/${changeLimit} vezes. Contate o administrador para mais alterações.</span>`;
+        } else if (!isUserAdmin) {
+          const restantes = changeLimit - changeCount;
+          const cor = changeCount === 1 ? 'amber' : 'emerald';
+          changeBadge.className = `flex items-center gap-2 bg-${cor}-500/10 border border-${cor}-500/30 rounded-xl px-3 py-2 text-xs`;
+          changeBadge.innerHTML = `<span class="text-${cor}-400 font-bold">${changeCount === 1 ? '⚠️' : '🛡️'} ${changeCount}/${changeLimit} alterações usadas</span><span class="text-slate-400">(${restantes} ${restantes === 1 ? 'restante' : 'restantes'})</span>`;
+        }
+        if (!isUserAdmin || limiteAtingido) {
+          liderActions.insertAdjacentElement('beforebegin', changeBadge);
+        }
+      }
+
+      // Permissões de edição apenas para Líder ou Admin; bloqueia se limite atingido
+      const editBlocked = !isLider || limiteAtingido;
+      if (inputX) inputX.disabled = editBlocked;
+      if (inputZ) inputZ.disabled = editBlocked;
+      if (selectWorld) selectWorld.disabled = editBlocked;
+      if (sliderR) sliderR.disabled = editBlocked;
+      if (numR) numR.disabled = editBlocked;
+
+      // Desabilita botão salvar se limite atingido
+      const btnSalvarT = document.getElementById('btn-salvar-terreno');
+      if (btnSalvarT) {
+        if (limiteAtingido) {
+          btnSalvarT.disabled = true;
+          btnSalvarT.title = 'Limite de 2 alterações atingido';
+          btnSalvarT.classList.add('opacity-40', 'cursor-not-allowed');
+        } else {
+          btnSalvarT.disabled = false;
+          btnSalvarT.title = '';
+          btnSalvarT.classList.remove('opacity-40', 'cursor-not-allowed');
+        }
+      }
 
       if (btnRemoverT) {
         btnRemoverT.classList.toggle('hidden', !(isLider && isLandConfigured));
@@ -6260,8 +6349,44 @@
       }
     }
 
-    async function sairDoReino() {
-      if (!confirm('Deseja realmente sair do seu reino?\n\n⚠️ As informações geradas por você no reino serão desvinculadas.\n(Suas horas e kills totais no servidor continuarão preservadas).')) return;
+    // ── Funções de controle do Modal de Confirmação de Ações do Reino ────────
+    function fecharModalConfirmarAcaoReino() {
+      const modal = document.getElementById('modal-confirmar-acao-reino');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function abrirModalConfirmarSairReino() {
+      const modal = document.getElementById('modal-confirmar-acao-reino');
+      if (!modal) return;
+      document.getElementById('modal-acao-reino-titulo').textContent = 'Sair do Reino';
+      document.getElementById('modal-acao-reino-subtitulo').textContent = 'Esta ação irá desvinculá-lo do reino';
+      document.getElementById('modal-acao-reino-aviso-titulo').textContent = 'Tem certeza?';
+      document.getElementById('modal-acao-reino-aviso-corpo').textContent =
+        'Ao sair do reino, suas contribuições (mensagens, participações) serão desvinculadas. ' +
+        'Suas horas e kills totais no servidor continuarão preservadas, mas você perderá acesso ao chat e recursos do reino.';
+      const btnConfirmar = document.getElementById('btn-confirmar-acao-reino');
+      btnConfirmar.textContent = '🚪 Confirmar Saída';
+      btnConfirmar.onclick = executarSairDoReino;
+      modal.classList.remove('hidden');
+    }
+
+    function abrirModalConfirmarDissolver() {
+      const modal = document.getElementById('modal-confirmar-acao-reino');
+      if (!modal) return;
+      document.getElementById('modal-acao-reino-titulo').textContent = 'Dissolver Reino';
+      document.getElementById('modal-acao-reino-subtitulo').textContent = 'Esta ação é PERMANENTE e irreversível';
+      document.getElementById('modal-acao-reino-aviso-titulo').textContent = '⚠️ Atenção — Ação Crítica';
+      document.getElementById('modal-acao-reino-aviso-corpo').textContent =
+        'Ao dissolver o reino, TODOS os membros serão removidos e a TAG do reino será apagada permanentemente do servidor. ' +
+        'Não é possível recuperar o reino após esta ação.';
+      const btnConfirmar = document.getElementById('btn-confirmar-acao-reino');
+      btnConfirmar.textContent = '💥 Confirmar Dissolução';
+      btnConfirmar.onclick = executarDissolver;
+      modal.classList.remove('hidden');
+    }
+
+    async function executarSairDoReino() {
+      fecharModalConfirmarAcaoReino();
       if (!currentUser) return;
       try {
         const res = await apiFetch('/api/kingdoms/members/remove', {
@@ -6280,8 +6405,11 @@
       }
     }
 
-    async function dissolverReino() {
-      if (!confirm('🚨 ATENÇÃO: Deseja realmente DISSOLVER este reino? Todos os membros serão removidos e a TAG apagada permanentemente!')) return;
+    // Mantém alias para compatibilidade com chamadas diretas existentes
+    async function sairDoReino() { abrirModalConfirmarSairReino(); }
+
+    async function executarDissolver() {
+      fecharModalConfirmarAcaoReino();
       try {
         const payload = {};
         if (window.adminViewingKingdomId && isUserAdmin) {
@@ -6305,6 +6433,9 @@
         mostrarFeedback('Erro de conexão.', 'red');
       }
     }
+
+    // Mantém alias para compatibilidade
+    async function dissolverReino() { abrirModalConfirmarDissolver(); }
 
     // ── Bate-Papo / Call Privada do Reino ─────────────────────────────────────
     async function carregarMensagensReinoSilencioso() {
