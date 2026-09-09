@@ -2921,18 +2921,44 @@
     }
 
     async function carregarSubmenuReinosAdminAsync() {
+      const listEl = document.getElementById('submenu-reinos-admin-list');
+      const countEl = document.getElementById('submenu-reinos-admin-count');
       try {
+        let list = null;
+
+        // Tenta buscar via /api/kingdoms/status
         const res = await apiFetch('/api/kingdoms/status');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (Array.isArray(data.allKingdoms)) {
-          window.todosReinosAdminCache = data.allKingdoms;
-          const listEl = document.getElementById('submenu-reinos-admin-list');
-          const countEl = document.getElementById('submenu-reinos-admin-count');
-          if (listEl) listEl.innerHTML = renderSubmenuReinosAdminList();
-          if (countEl) countEl.textContent = data.allKingdoms.length;
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.allKingdoms)) {
+            list = data.allKingdoms;
+          }
         }
-      } catch (_) {}
+
+        // Fallback para /api/admin/kingdoms/all se necessário
+        if (!list) {
+          const resAll = await apiFetch('/api/admin/kingdoms/all');
+          if (resAll.ok) {
+            const dataAll = await resAll.json();
+            const rawList = dataAll.kingdoms || [];
+            list = rawList.map(k => ({
+              ...k,
+              memberCount: (k.kingdom_members || []).length
+            }));
+          }
+        }
+
+        if (list) {
+          window.todosReinosAdminCache = list;
+          if (listEl) listEl.innerHTML = renderSubmenuReinosAdminList();
+          if (countEl) countEl.textContent = list.length;
+        } else {
+          if (listEl) listEl.innerHTML = '<div class="text-center py-3 text-slate-400 text-xs italic">Nenhum reino criado no momento.</div>';
+          if (countEl) countEl.textContent = '0';
+        }
+      } catch (err) {
+        if (listEl) listEl.innerHTML = '<div class="text-center py-3 text-rose-400 text-xs italic">Erro ao carregar reinos. Tente reabrir o menu.</div>';
+      }
     }
 
     function acessarReinoComoAdmin(kingdomId, kingdomNome) {
