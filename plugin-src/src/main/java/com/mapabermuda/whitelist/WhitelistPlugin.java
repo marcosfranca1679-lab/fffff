@@ -26,6 +26,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -114,6 +115,21 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         public boolean isMember(String nick) {
             if (nick == null) return false;
             return members.contains(nick.toLowerCase().trim());
+        }
+
+        public int getMinX() { return centerX - radius; }
+        public int getMaxX() { return centerX + radius; }
+        public int getMinZ() { return centerZ - radius; }
+        public int getMaxZ() { return centerZ + radius; }
+
+        public boolean overlapsWith(KingdomArea other) {
+            if (other == null || other.id.equals(this.id)) return false;
+            String w1 = this.world.toLowerCase();
+            String w2 = other.world.toLowerCase();
+            if (!w1.equals(w2) && !w1.contains(w2) && !w2.contains(w1)) return false;
+
+            return (this.getMinX() <= other.getMaxX()) && (this.getMaxX() >= other.getMinX())
+                && (this.getMinZ() <= other.getMaxZ()) && (this.getMaxZ() >= other.getMinZ());
         }
     }
 
@@ -583,6 +599,32 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             sendProtectionNotice(damager, matched[0]);
         }
     }
+
+    // ── Comando in-game /reino info e verificação de território/sobreposição ──
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
+        String msg = event.getMessage().trim().toLowerCase();
+        if (msg.equals("/reino info") || msg.equals("/reino checar") || msg.equals("/reino") || msg.equals("/terreno")) {
+            event.setCancelled(true);
+            Player player = event.getPlayer();
+            Location loc = player.getLocation();
+            KingdomArea area = getProtectedAreaAt(loc);
+
+            if (area != null) {
+                player.sendMessage(Component.text("§6§l🏰 [5DAY MC] Território Protegido de Reino:"));
+                player.sendMessage(Component.text("§e• Reino: §f" + area.nome + " §7[" + area.tag + "]"));
+                player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
+                player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
+                player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
+                boolean isMem = area.isMember(cleanNick(player.getName()).toLowerCase().trim()) || BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim());
+                player.sendMessage(Component.text("§e• Seu Status: " + (isMem ? "§a✅ Membro autorizado" : "§c❌ Não é membro (Apenas visualização)")));
+            } else {
+                player.sendMessage(Component.text("§a§l🌍 [5DAY MC] Território Livre!"));
+                player.sendMessage(Component.text("§7Nenhum reino possui proteção nesta área (Coordenadas atuais: X=" + loc.getBlockX() + ", Z=" + loc.getBlockZ() + ")."));
+            }
+        }
+    }
+
 
 
     // ── Sincronização Robusta com o Site (Usando GSON) ────────────────────────
