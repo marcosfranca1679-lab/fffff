@@ -1817,6 +1817,23 @@
 
       <!-- ESTADO B: Jogador COM Reino -->
       <div id="reino-membro" class="hidden space-y-3">
+
+        <!-- Banner de Visualização como Administrador -->
+        <div id="admin-viewing-banner" class="hidden p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-purple-600/15 to-cyan-500/15 border border-amber-400/40 flex items-center justify-between gap-3 shadow-md">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="text-xl flex-shrink-0">👑</span>
+            <div class="min-w-0">
+              <div class="text-xs font-black text-amber-300 flex items-center gap-1.5 flex-wrap">
+                <span>Modo Administrador: Acesso Total</span>
+                <span class="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-200 font-mono">Poderes de Líder</span>
+              </div>
+              <div class="text-[10px] text-slate-300 truncate">Você está visualizando e gerenciando este reino com acesso de administrador.</div>
+            </div>
+          </div>
+          <button onclick="selecionarReinoProprio()" class="px-3 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-xs font-bold text-white transition flex-shrink-0 active:scale-95 shadow-sm cursor-pointer">
+            Meu Reino / Voltar ↩
+          </button>
+        </div>
         
         <!-- Header / Banner do Reino -->
         <div class="glass-card rounded-2xl p-4 md:p-5 border border-cyan-500/40 bg-gradient-to-r from-cyan-950/40 via-black/60 to-blue-950/40 shadow-xl space-y-3">
@@ -2796,18 +2813,46 @@
       document.getElementById('submenu-header-title').textContent = data.title;
 
       const container = document.getElementById('submenu-items-container');
-      container.innerHTML = data.channels.map(ch => {
-        const isCurrent = ch.id === currentChannel;
+      let channelsHtml = data.channels.map(ch => {
+        const isCurrent = ch.id === currentChannel && (!window.adminViewingKingdomId);
+        const action = (categoria === 'reinos' && isUserAdmin)
+          ? `selecionarReinoProprio()`
+          : `selecionarCanal('${ch.id}', '${categoria}')`;
+        const displayName = (categoria === 'reinos' && isUserAdmin) ? 'criar-reinos / meu-reino' : ch.name;
         return `
-          <button onclick="selecionarCanal('${ch.id}', '${categoria}')" class="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition ${isCurrent ? 'bg-gradient-to-r from-amber-600 to-yellow-600 text-white shadow-md' : 'text-slate-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]'} text-left">
+          <button onclick="${action}" class="w-full flex items-center justify-between p-2.5 rounded-xl text-xs font-bold transition ${isCurrent ? 'bg-gradient-to-r from-amber-600 to-yellow-600 text-white shadow-md' : 'text-slate-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06]'} text-left cursor-pointer">
             <div class="flex items-center gap-2">
               <span class="${isCurrent ? 'text-white' : 'text-amber-400'} text-sm font-extrabold">#</span>
-              <span>${ch.name}</span>
+              <span>${displayName}</span>
             </div>
             <span class="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded ${isCurrent ? 'bg-white/20 text-white' : 'bg-white/[0.08] text-slate-300'}">${ch.tag}</span>
           </button>
         `;
       }).join('');
+
+      if (categoria === 'reinos' && isUserAdmin) {
+        channelsHtml += `
+          <div class="mt-3 pt-3 border-t border-cyan-500/20 space-y-2">
+            <div class="flex items-center justify-between px-1">
+              <span class="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                <span>👑</span> <span>Reinos Criados (Admin)</span>
+              </span>
+              <span id="submenu-reinos-admin-count" class="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 rounded-full font-bold font-mono">
+                ${Array.isArray(window.todosReinosAdminCache) ? window.todosReinosAdminCache.length : '...'}
+              </span>
+            </div>
+            <div id="submenu-reinos-admin-list" class="space-y-1.5 max-h-[55vh] overflow-y-auto pr-0.5">
+              ${renderSubmenuReinosAdminList()}
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = channelsHtml;
+
+      if (categoria === 'reinos' && isUserAdmin) {
+        carregarSubmenuReinosAdminAsync();
+      }
 
       const panel = document.getElementById('subdivisions-panel');
       panel.classList.remove('-translate-x-[400px]');
@@ -2824,6 +2869,84 @@
 
     function abrirSubmenuAtual() {
       abrirSubmenu(currentCategory);
+    }
+
+    // ── NAVEGAÇÃO DE REINOS DO ADMINISTRADOR ──
+    window.todosReinosAdminCache = window.todosReinosAdminCache || null;
+    window.adminViewingKingdomId = window.adminViewingKingdomId || null;
+
+    function renderSubmenuReinosAdminList() {
+      const list = window.todosReinosAdminCache;
+      if (!list) {
+        return '<div class="text-center py-3 text-slate-400 text-xs italic">Carregando reinos...</div>';
+      }
+      if (list.length === 0) {
+        return '<div class="text-center py-3 text-slate-400 text-xs italic">Nenhum reino criado ainda.</div>';
+      }
+
+      return list.map(k => {
+        const isCurrentViewing = (window.adminViewingKingdomId === k.id);
+        const safeNome = escapeHtml(k.nome || 'Reino');
+        const safeTag = escapeHtml(k.tag || '');
+        const safeOwner = escapeHtml(k.owner_nick || '–');
+        const cor = k.cor || '#06b6d4';
+        const logo = escapeHtml(k.logo || '🏰');
+        const membrosCount = k.memberCount || 1;
+
+        return `
+          <button onclick="acessarReinoComoAdmin('${k.id}', '${safeNome.replace(/'/g, "\\'")}')"
+            class="w-full flex items-center justify-between p-2 rounded-xl text-xs font-bold transition text-left cursor-pointer ${isCurrentViewing ? 'bg-gradient-to-r from-amber-600/30 via-cyan-600/30 to-purple-600/30 border border-amber-400 text-white shadow-md ring-1 ring-amber-400/40' : 'text-slate-200 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-cyan-500/30'}">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 shadow-sm"
+                style="background: ${cor}25; border: 1px solid ${cor}55;">
+                ${logo}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-1.5 truncate">
+                  <span class="font-black text-white text-[11px] truncate">${safeNome}</span>
+                  <span class="text-[8px] font-mono px-1 py-0.2 rounded font-black flex-shrink-0"
+                    style="background: ${cor}33; color: ${cor}; border: 1px solid ${cor}55;">[${safeTag}]</span>
+                </div>
+                <div class="text-[9px] text-slate-400 truncate mt-0.5">
+                  Líder: <b class="text-cyan-300 font-semibold">${safeOwner}</b> &middot; ${membrosCount} ${membrosCount === 1 ? 'membro' : 'membros'}
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 flex-shrink-0 pl-1">
+              ${isCurrentViewing ? '<span class="text-[9px] bg-amber-500/30 text-amber-200 border border-amber-400/40 px-1.5 py-0.5 rounded font-black">Ativo</span>' : '<span class="text-xs text-amber-400 font-black">→</span>'}
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+
+    async function carregarSubmenuReinosAdminAsync() {
+      try {
+        const res = await apiFetch('/api/kingdoms/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.allKingdoms)) {
+          window.todosReinosAdminCache = data.allKingdoms;
+          const listEl = document.getElementById('submenu-reinos-admin-list');
+          const countEl = document.getElementById('submenu-reinos-admin-count');
+          if (listEl) listEl.innerHTML = renderSubmenuReinosAdminList();
+          if (countEl) countEl.textContent = data.allKingdoms.length;
+        }
+      } catch (_) {}
+    }
+
+    function acessarReinoComoAdmin(kingdomId, kingdomNome) {
+      window.adminViewingKingdomId = kingdomId;
+      fecharSubmenu();
+      selecionarCanal('reinos', 'reinos');
+      carregarReinoStatus(kingdomId);
+    }
+
+    function selecionarReinoProprio() {
+      window.adminViewingKingdomId = null;
+      fecharSubmenu();
+      selecionarCanal('reinos', 'reinos');
+      carregarReinoStatus(null);
     }
 
     window.appNavigationHistory = window.appNavigationHistory || [];
@@ -5115,17 +5238,23 @@
       preview.textContent = clean ? `[${clean}]` : '---';
     }
 
-    async function carregarReinoStatus() {
+    async function carregarReinoStatus(optionalKingdomId) {
+      const targetKingdomId = (optionalKingdomId !== undefined) ? optionalKingdomId : window.adminViewingKingdomId;
       const loading = document.getElementById('reino-loading');
       const naoMembro = document.getElementById('reino-nao-membro');
       const membro = document.getElementById('reino-membro');
+      const adminBanner = document.getElementById('admin-viewing-banner');
 
       if (loading) loading.classList.remove('hidden');
       if (naoMembro) naoMembro.classList.add('hidden');
       if (membro) membro.classList.add('hidden');
 
       try {
-        const res = await apiFetch('/api/kingdoms/status');
+        const url = (targetKingdomId && isUserAdmin)
+          ? `/api/kingdoms/status?kingdomId=${encodeURIComponent(targetKingdomId)}`
+          : '/api/kingdoms/status';
+
+        const res = await apiFetch(url);
         const data = await res.json();
 
         if (loading) loading.classList.add('hidden');
@@ -5133,6 +5262,16 @@
         if (!data.success) {
           mostrarFeedback(data.error || 'Erro ao carregar dados do reino.', 'red');
           return;
+        }
+
+        if (Array.isArray(data.allKingdoms)) {
+          window.todosReinosAdminCache = data.allKingdoms;
+          const countEl = document.getElementById('submenu-reinos-admin-count');
+          if (countEl) countEl.textContent = data.allKingdoms.length;
+          const listEl = document.getElementById('submenu-reinos-admin-list');
+          if (listEl && typeof renderSubmenuReinosAdminList === 'function') {
+            listEl.innerHTML = renderSubmenuReinosAdminList();
+          }
         }
 
         allowedToCreateReino = data.allowedToCreate !== false;
@@ -5147,8 +5286,16 @@
         // Renderiza convites recebidos pendentes
         renderConvitesRecebidos(data.myInvites || []);
 
+        if (adminBanner) {
+          if (window.adminViewingKingdomId && meuReinoAtual) {
+            adminBanner.classList.remove('hidden');
+          } else {
+            adminBanner.classList.add('hidden');
+          }
+        }
+
         if (meuReinoAtual) {
-          // ESTADO: JOGADOR COM REINO
+          // ESTADO: JOGADOR COM REINO (ou Administrador visualizando como membro/líder)
           renderReinoMembro(meuReinoAtual, data.members || [], data.candidates || [], data.sentInvites || []);
           if (membro) membro.classList.remove('hidden');
           carregarMensagensReino();
@@ -5953,15 +6100,20 @@
       if (btnTxt) btnTxt.textContent = 'Salvando no Servidor...';
 
       try {
+        const payload = {
+          centerX,
+          centerZ,
+          world,
+          radius,
+          enabled: true
+        };
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
+
         const res = await apiFetch('/api/kingdoms/land-protection', {
           method: 'POST',
-          body: JSON.stringify({
-            centerX,
-            centerZ,
-            world,
-            radius,
-            enabled: true
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -5984,8 +6136,13 @@
     async function removerProtecaoTerrenoReino() {
       if (!confirm('Deseja realmente desativar a proteção de terreno deste reino?\n\n⚠️ Qualquer jogador poderá quebrar blocos e interagir na área.')) return;
       try {
+        const payload = {};
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
         const res = await apiFetch('/api/kingdoms/land-protection', {
-          method: 'DELETE'
+          method: 'DELETE',
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -6009,9 +6166,13 @@
       }
 
       try {
+        const payload = { targetNick: nick };
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
         const res = await apiFetch('/api/kingdoms/invites/send', {
           method: 'POST',
-          body: JSON.stringify({ targetNick: nick })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -6030,9 +6191,13 @@
     async function cancelarConviteReino(inviteId) {
       if (!confirm('Deseja cancelar este convite?')) return;
       try {
+        const payload = { inviteId };
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
         const res = await apiFetch('/api/kingdoms/invites/cancel', {
           method: 'POST',
-          body: JSON.stringify({ inviteId })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok) {
@@ -6049,9 +6214,13 @@
     async function removerMembroReino(nick) {
       if (!confirm(`Tem certeza que deseja expulsar "${nick}" do reino?\n\n⚠️ Os dados e pontos gerados por ele NO REINO serão apagados e zerados.\n(As horas e estatísticas gerais dele no servidor continuarão salvas normalmente).`)) return;
       try {
+        const payload = { targetNick: nick };
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
         const res = await apiFetch('/api/kingdoms/members/remove', {
           method: 'POST',
-          body: JSON.stringify({ targetNick: nick })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -6088,10 +6257,20 @@
     async function dissolverReino() {
       if (!confirm('🚨 ATENÇÃO: Deseja realmente DISSOLVER este reino? Todos os membros serão removidos e a TAG apagada permanentemente!')) return;
       try {
-        const res = await apiFetch('/api/kingdoms', { method: 'DELETE' });
+        const payload = {};
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
+        const res = await apiFetch('/api/kingdoms', { 
+          method: 'DELETE',
+          body: JSON.stringify(payload)
+        });
         const data = await res.json();
         if (res.ok && data.success) {
           mostrarFeedback('Reino dissolvido com sucesso.', 'green');
+          if (window.adminViewingKingdomId) {
+            window.adminViewingKingdomId = null;
+          }
           await carregarReinoStatus();
         } else {
           mostrarFeedback(data.error || 'Erro ao dissolver reino.', 'red');
@@ -6105,7 +6284,10 @@
     async function carregarMensagensReinoSilencioso() {
       if (!meuReinoAtual) return;
       try {
-        const res = await apiFetch('/api/kingdoms/messages');
+        const url = (window.adminViewingKingdomId && isUserAdmin)
+          ? `/api/kingdoms/messages?kingdomId=${encodeURIComponent(window.adminViewingKingdomId)}`
+          : '/api/kingdoms/messages';
+        const res = await apiFetch(url);
         if (!res.ok) return;
         const msgs = await res.json();
         const hash = JSON.stringify(msgs);
@@ -6118,7 +6300,10 @@
     async function carregarMensagensReino(forceScroll = false) {
       if (!meuReinoAtual) return;
       try {
-        const res = await apiFetch('/api/kingdoms/messages');
+        const url = (window.adminViewingKingdomId && isUserAdmin)
+          ? `/api/kingdoms/messages?kingdomId=${encodeURIComponent(window.adminViewingKingdomId)}`
+          : '/api/kingdoms/messages';
+        const res = await apiFetch(url);
         if (!res.ok) return;
         const msgs = await res.json();
         lastReinoMessagesHash = JSON.stringify(msgs);
@@ -6148,7 +6333,7 @@
           `;
         }
 
-        const isLider = m.author_role === 'lider';
+        const isLider = m.author_role === 'lider' || m.author_role === 'admin';
         const isMe = currentUser && currentUser.nick && currentUser.nick.toLowerCase() === m.author_nick.toLowerCase();
         const initial = m.author_nick.substring(0, 1).toUpperCase();
         const avatarColor = isLider ? 'bg-gradient-to-tr from-amber-500 to-yellow-400 text-black font-black' : 'bg-cyan-800 text-cyan-200 font-bold';
@@ -6166,7 +6351,7 @@
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-extrabold text-xs ${nickColorClass} truncate" ${nickColorStyle ? `style="${nickColorStyle}"` : ''}>${escapeHtml(m.author_nick)}</span>
-                ${isLider ? '<span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">LÍDER</span>' : ''}
+                ${isLider ? `<span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">${m.author_role === 'admin' ? 'ADMIN' : 'LÍDER'}</span>` : ''}
                 <span class="text-[9px] text-slate-400 font-mono">${formatarHora(m.created_at)}</span>
               </div>
               <div class="text-xs text-slate-200 mt-0.5 break-words leading-relaxed">${escapeHtml(m.content)}</div>
@@ -6196,9 +6381,13 @@
       if (btn) { btn.disabled = true; btn.classList.add('opacity-50'); }
 
       try {
+        const payload = { content };
+        if (window.adminViewingKingdomId && isUserAdmin) {
+          payload.kingdomId = window.adminViewingKingdomId;
+        }
         const res = await apiFetch('/api/kingdoms/messages', {
           method: 'POST',
-          body: JSON.stringify({ content })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
