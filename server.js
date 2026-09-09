@@ -63,6 +63,17 @@ app.get(['/manifest.json', '/public/manifest.json'], (req, res) => {
   });
 });
 
+// Rota para download direto do plugin .jar
+app.get(['/MapaBermudaWhitelist.jar', '/download/plugin', '/plugin.jar'], (req, res) => {
+  const fs = require('fs');
+  const p1 = path.join(__dirname, 'MapaBermudaWhitelist.jar');
+  if (fs.existsSync(p1)) {
+    return res.download(p1, 'MapaBermudaWhitelist.jar');
+  }
+  return res.redirect('https://raw.githubusercontent.com/marcosfranca1679-lab/fffff/main/MapaBermudaWhitelist.jar');
+});
+
+
 // ─── Helper Seguro para Operações Supabase (evita .catch is not a function) ───
 function safeDb(op) {
   return Promise.resolve(op).catch(() => {});
