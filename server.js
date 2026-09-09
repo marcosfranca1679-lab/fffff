@@ -3251,7 +3251,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
         const { data: msgRows } = await supabase
           .from('kingdom_messages')
           .select('author_nick')
-          .eq('kingdom_id', member.kingdom_id);
+          .eq('kingdom_id', currentKingdomId);
 
         const msgCountMap = new Map();
         (msgRows || []).forEach(mr => {
