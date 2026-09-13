@@ -5653,7 +5653,24 @@ app.get('/api/terrenos/meus', requireAuth, async (req, res) => {
       };
     });
 
-    res.json({ success: true, terrenos: meus });
+    let whitelistedPlayers = [];
+    try {
+      const { data: appPlayers } = await supabase
+        .from('players')
+        .select('nick, platform')
+        .eq('status', 'approved')
+        .order('nick', { ascending: true });
+      if (appPlayers) {
+        whitelistedPlayers = appPlayers.map(p => ({
+          nick: p.nick,
+          platform: p.platform || 'Java'
+        }));
+      }
+    } catch (pErr) {
+      console.error('[Terrenos] Erro ao buscar whitelisted players:', pErr.message);
+    }
+
+    res.json({ success: true, terrenos: meus, whitelistedPlayers });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
