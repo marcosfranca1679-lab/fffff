@@ -2415,6 +2415,31 @@ app.get('/api/plugin/sync', async (req, res) => {
       console.error('[Sync] Erro ao carregar proteções de reinos:', kErr.message);
     }
 
+    // 6. Proteções de Terreno Criadas pelo Administrador (Tabela admin_protection_zones)
+    const adminProtections = [];
+    try {
+      const { data: aRows, error: aErr } = await supabase
+        .from('admin_protection_zones')
+        .select('*')
+        .eq('enabled', true);
+
+      if (!aErr && aRows) {
+        for (const a of aRows) {
+          adminProtections.push({
+            id: a.id,
+            name: a.name || 'Proteção Admin',
+            world: a.world || 'world',
+            centerX: parseInt(a.center_x, 10) || 0,
+            centerZ: parseInt(a.center_z, 10) || 0,
+            radius: Math.max(1, parseInt(a.radius, 10) || 50),
+            isAdmin: true
+          });
+        }
+      }
+    } catch (aErr) {
+      console.error('[Sync] Tabela admin_protection_zones ainda não criada ou erro:', aErr.message);
+    }
+
     res.json({
       success: true,
       timestamp: Date.now(),
@@ -2423,7 +2448,8 @@ app.get('/api/plugin/sync', async (req, res) => {
       ipBans,
       lives: livesMap,
       commands: commandsToRun,
-      kingdomProtections
+      kingdomProtections,
+      adminProtections
     });
   } catch (err) {
 
@@ -5339,6 +5365,156 @@ app.delete('/api/admin/kingdoms/:id', requireAdmin, async (req, res) => {
     console.log(`🗑️ [ADMIN] Reino [${k.tag}] ${k.nome} (${kingdomId}) excluído permanentemente com todos os dados.`);
 
     res.json({ success: true, message: `Reino [${k.tag}] ${k.nome} e todos os seus dados foram excluídos com sucesso do Supabase!` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PROTEÇÕES DE TERRENO DO ADMINISTRADOR (admin_protection_zones) ───────────
+
+// GET /api/admin/protection-zones — Lista todas as proteções criadas pelo admin
+app.get('/api/admin/protection-zones', requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('admin_protection_zones')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // Se a tabela ainda não foi criada no Supabase pelo usuário, avisa de forma amigável
+      if (error.code === '42P01' || (error.message && error.message.includes('relation "admin_protection_zones" does not exist'))) {
+        return res.json({ 
+          success: true, 
+          zones: [], 
+          tableMissing: true,
+          notice: 'A tabela admin_protection_zones ainda não foi criada no Supabase. Execute o script admin_terrenos_supabase.sql no SQL Editor do Supabase.' 
+        });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, zones: data || [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/protection-zones — Cria ou atualiza uma proteção do admin
+app.post('/api/admin/protection-zones', requireAdmin, async (req, res) => {
+  try {
+    const { id, name, world, centerX, centerZ, radius, enabled } = req.body;
+
+    const cleanName = (name || '').trim();
+    if (!cleanName) {
+      return res.status(400).json({ error: 'O nome da proteção é obrigatório (ex: "Spawn", "Vila Central").' });
+    }
+
+    if (centerX === undefined || centerZ === undefined) {
+      return res.status(400).json({ error: 'Coordenadas centrais X e Z são obrigatórias.' });
+    }
+
+    const parsedX = parseInt(centerX, 10);
+    const parsedZ = parseInt(centerZ, 10);
+    if (isNaN(parsedX) || isNaN(parsedZ)) {
+      return res.status(400).json({ error: 'Coordenadas devem ser números inteiros.' });
+    }
+
+    let parsedRadius = parseInt(radius, 10);
+    if (isNaN(parsedRadius) || parsedRadius < 1) parsedRadius = 50;
+    if (parsedRadius > 2000) parsedRadius = 2000; // Admin pode definir áreas amplas
+
+    const worldName = (world || 'world').trim();
+    const isEnabled = enabled !== false;
+    const author = (req.user && req.user.nick) ? req.user.nick : 'admin';
+
+    let zoneResult = null;
+    if (id) {
+      // Atualização
+      const { data, error } = await supabase
+        .from('admin_protection_zones')
+        .update({
+          name: cleanName,
+          world: worldName,
+          center_x: parsedX,
+          center_z: parsedZ,
+          radius: parsedRadius,
+          enabled: isEnabled,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message });
+      zoneResult = data;
+    } else {
+      // Criação
+      const { data, error } = await supabase
+        .from('admin_protection_zones')
+        .insert([{
+          name: cleanName,
+          world: worldName,
+          center_x: parsedX,
+          center_z: parsedZ,
+          radius: parsedRadius,
+          enabled: isEnabled,
+          created_by: author,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        if (error.code === '42P01' || (error.message && error.message.includes('relation "admin_protection_zones" does not exist'))) {
+          return res.status(400).json({ 
+            error: 'A tabela admin_protection_zones não existe no Supabase. Por favor, execute o script SQL admin_terrenos_supabase.sql no SQL Editor do Supabase primeiro!' 
+          });
+        }
+        return res.status(500).json({ error: error.message });
+      }
+      zoneResult = data;
+    }
+
+    registrarConsoleLog('info', `[ADMIN] Proteção de Terreno Admin "${cleanName}" configurada por ${author}: X=${parsedX}, Z=${parsedZ}, Raio=${parsedRadius} (${worldName})`, 'Proteção Admin');
+
+    res.json({
+      success: true,
+      message: `Proteção "${cleanName}" salva com sucesso! (Centro: ${parsedX}, ${parsedZ} | Raio: ${parsedRadius} blocos)`,
+      zone: zoneResult
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/protection-zones/:id — Exclui uma proteção do admin
+app.delete('/api/admin/protection-zones/:id', requireAdmin, async (req, res) => {
+  try {
+    const zoneId = req.params.id;
+    if (!zoneId) return res.status(400).json({ error: 'ID da zona é obrigatório.' });
+
+    const { data: existing } = await supabase
+      .from('admin_protection_zones')
+      .select('name')
+      .eq('id', zoneId)
+      .maybeSingle();
+
+    const zoneName = existing?.name || zoneId;
+
+    const { error } = await supabase
+      .from('admin_protection_zones')
+      .delete()
+      .eq('id', zoneId);
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    registrarConsoleLog('info', `[ADMIN] Proteção de Terreno Admin "${zoneName}" (${zoneId}) foi excluída.`, 'Proteção Admin');
+
+    res.json({
+      success: true,
+      message: `Proteção "${zoneName}" excluída com sucesso!`
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
