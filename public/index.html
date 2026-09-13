@@ -919,6 +919,33 @@
       </div>
     </section>
 
+    <!-- ── 2.5. SUBDIVISÃO: MEUS TERRENOS PRIVADOS (#meus-terrenos) ───────── -->
+    <section id="view-terrenos" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-4xl w-full mx-auto space-y-3">
+      <!-- Topo -->
+      <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-lg border border-emerald-500/30 bg-black/40">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div>
+            <h2 class="text-xs md:text-sm font-extrabold text-white flex items-center gap-2">
+              <span class="text-base md:text-lg">🏡</span>
+              <span>Meus Terrenos Privados</span>
+              <span id="meus-terrenos-badge" class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-mono font-bold">0 Terrenos</span>
+            </h2>
+            <p class="text-[11px] text-slate-400 mt-0.5">
+              Seja o dono da sua própria área! Adicione amigos para construir e quebrar juntos ou remova o acesso a qualquer momento.
+            </p>
+          </div>
+          <button onclick="carregarMeusTerrenos()" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm flex-shrink-0 cursor-pointer">
+            🔄 Atualizar
+          </button>
+        </div>
+      </div>
+
+      <!-- Container Dinâmico de Terrenos -->
+      <div id="meus-terrenos-container" class="space-y-3">
+        <div class="text-center py-10 text-slate-400 text-xs italic">Carregando seus terrenos...</div>
+      </div>
+    </section>
+
     <!-- ── 3. SUBDIVISÃO: MURAL DE BANIMENTOS (#mural-banidos) ─────────────── -->
     <section id="view-bans" class="hidden flex-1 overflow-y-auto p-2.5 md:p-6 max-w-3xl w-full mx-auto space-y-3">
       <div class="glass-card rounded-2xl p-3.5 md:p-5 shadow-lg">
@@ -1416,8 +1443,17 @@
                   class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
               </div>
 
+              <!-- Dono do Terreno (Opcional) -->
+              <div class="sm:col-span-2 space-y-1">
+                <label class="text-[10px] font-bold text-amber-400 flex items-center gap-1">
+                  <span>👑</span> <span>Dono do Terreno (Nick - Opcional)</span>
+                </label>
+                <input id="admin-prot-owner" type="text" maxlength="30" placeholder="Ex: marcos (Primeiro que adicionar vira dono)"
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+              </div>
+
               <!-- Mundo -->
-              <div class="space-y-1">
+              <div class="sm:col-span-2 space-y-1">
                 <label class="text-[10px] font-bold text-slate-400">Mundo do Minecraft</label>
                 <select id="admin-prot-world"
                   class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
@@ -1428,7 +1464,7 @@
               </div>
 
               <!-- Centro X e Z -->
-              <div class="grid grid-cols-2 gap-1.5">
+              <div class="sm:col-span-2 grid grid-cols-2 gap-1.5">
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-slate-400">Centro X</label>
                   <input id="admin-prot-x" type="number" step="1" placeholder="Ex: 0"
@@ -2714,6 +2750,7 @@
         icon: '👤',
         channels: [
           { id: 'geral', name: 'meu-perfil', tag: 'Perfil VIP', desc: 'Editar Foto, Molduras Animadas & Status' },
+          { id: 'terrenos', name: 'meus-terrenos', tag: 'Terrenos', desc: 'Gerenciar minhas proteções de terreno e amigos' },
           { id: 'bans',  name: 'mural-banidos', tag: 'Bans', desc: 'Mural de jogadores banidos' }
         ]
       },
@@ -3138,7 +3175,7 @@
 
     function selecionarCanal(canalId, categoria) {
       // Canais que exigem login
-      const canaisProtegidos = ['chat', 'admin', 'console', 'reinos'];
+      const canaisProtegidos = ['chat', 'admin', 'console', 'reinos', 'terrenos'];
       if (canaisProtegidos.includes(canalId) && !currentUser) {
         mostrarFeedback('🔒 Faça login para acessar este canal.', 'red');
         abrirModalAuth('login');
@@ -3154,7 +3191,7 @@
       currentCategory = categoria;
       fecharSubmenu();
 
-      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas', 'ranking-reinos', 'denuncias', 'reinos'].forEach(c => {
+      ['home', 'geral', 'chat', 'bans', 'admin', 'console', 'ranking-horas', 'ranking-reinos', 'denuncias', 'reinos', 'terrenos'].forEach(c => {
         const view = document.getElementById(`view-${c}`);
         if (view) view.classList.add('hidden');
       });
@@ -3165,6 +3202,7 @@
       const titles = {
         home: '5DAY MC',
         geral: 'meu-perfil',
+        terrenos: 'meus-terrenos',
         bans:  'mural-banidos',
         chat:  'chat-geral',
         admin: 'gerenciar-whitelist',
@@ -3205,6 +3243,7 @@
       if (canalId === 'ranking-reinos') carregarRankingReinos();
       if (canalId === 'denuncias') carregarTickets();
       if (canalId === 'reinos') carregarReinoStatus();
+      if (canalId === 'terrenos') carregarMeusTerrenos();
       if (canalId === 'geral') { if (typeof carregarStatusPerfilVip === 'function') carregarStatusPerfilVip(); }
     }
 
@@ -7456,38 +7495,83 @@
         }
 
         const dataFormatada = z.created_at ? new Date(z.created_at).toLocaleDateString('pt-BR') : '';
+        const ownerTxt = z.owner_nick ? escapeHtml(z.owner_nick) : '<span class="text-slate-500 italic">Sem dono (Servidor)</span>';
+        const membersList = Array.isArray(z.allowed_players) ? z.allowed_players : [];
 
         return `
-          <div class="glass-card rounded-xl p-3 border border-white/[0.08] hover:border-emerald-500/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/40">
-            <div class="space-y-1.5 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm font-extrabold text-white flex items-center gap-1.5 truncate">
-                  <span class="text-emerald-400">🛡️</span>
-                  <span>${escapeHtml(z.name || 'Proteção')}</span>
-                </span>
-                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${worldColor}">
-                  ${worldLabel}
-                </span>
-                <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                  ${diam}×${diam} blocos
-                </span>
+          <div class="glass-card rounded-xl p-3.5 border border-white/[0.08] hover:border-emerald-500/30 transition space-y-3 bg-black/40">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div class="space-y-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-extrabold text-white flex items-center gap-1.5 truncate">
+                    <span class="text-emerald-400">🛡️</span>
+                    <span>${escapeHtml(z.name || 'Proteção')}</span>
+                  </span>
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${worldColor}">
+                    ${worldLabel}
+                  </span>
+                  <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                    ${diam}×${diam} blocos
+                  </span>
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <span>👑 Dono:</span> <strong>${ownerTxt}</strong>
+                  </span>
+                </div>
+
+                <div class="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
+                  <span>📍 Centro: <strong class="text-white font-mono">X=${z.center_x}, Z=${z.center_z}</strong></span>
+                  <span>•</span>
+                  <span>📐 Raio: <strong class="text-emerald-300 font-mono">${r}</strong> blocos</span>
+                  <span>•</span>
+                  <span class="text-slate-400 text-[10px]">Limites: X=[${minX}..${maxX}], Z=[${minZ}..${maxZ}]</span>
+                  ${dataFormatada ? `<span>•</span><span class="text-slate-500 text-[10px]">Criado em ${dataFormatada}</span>` : ''}
+                </div>
               </div>
 
-              <div class="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
-                <span>📍 Centro: <strong class="text-white font-mono">X=${z.center_x}, Z=${z.center_z}</strong></span>
-                <span>•</span>
-                <span>📐 Raio: <strong class="text-emerald-300 font-mono">${r}</strong> blocos</span>
-                <span>•</span>
-                <span class="text-slate-400 text-[10px]">Limites: X=[${minX}..${maxX}], Z=[${minZ}..${maxZ}]</span>
-                ${dataFormatada ? `<span>•</span><span class="text-slate-500 text-[10px]">Criado em ${dataFormatada}</span>` : ''}
+              <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                <button onclick="removerAdminProtectionZone('${z.id}', '${escapeHtml(z.name || '')}')" 
+                  class="text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                  <span>🗑️</span> <span>Excluir</span>
+                </button>
               </div>
             </div>
 
-            <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
-              <button onclick="removerAdminProtectionZone('${z.id}', '${escapeHtml(z.name || '')}')" 
-                class="text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-                <span>🗑️</span> <span>Excluir</span>
-              </button>
+            <!-- Seção de Jogadores / Amigos Autorizados -->
+            <div class="pt-2 border-t border-white/[0.06] space-y-2">
+              <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span>👥 Jogadores Autorizados a Construir/Quebrar:</span>
+                <span class="text-slate-500 font-normal">O primeiro adicionado vira dono se não houver</span>
+              </div>
+
+              <div class="flex flex-wrap gap-1.5">
+                ${z.owner_nick ? `
+                  <span class="bg-amber-500/20 text-amber-200 border border-amber-500/40 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                    <span>👑 ${escapeHtml(z.owner_nick)}</span>
+                    <button onclick="removerMembroAdminProt('${z.id}', '${escapeHtml(z.owner_nick)}')" class="text-amber-400 hover:text-white font-bold ml-1" title="Remover Dono">✕</button>
+                  </span>
+                ` : ''}
+
+                ${membersList.map(m => `
+                  <span class="bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                    <span>👤 ${escapeHtml(m)}</span>
+                    <button onclick="removerMembroAdminProt('${z.id}', '${escapeHtml(m)}')" class="text-emerald-400 hover:text-rose-300 font-bold ml-1" title="Remover Jogador">✕</button>
+                  </span>
+                `).join('')}
+
+                ${(!z.owner_nick && membersList.length === 0) ? `
+                  <span class="text-[11px] text-slate-500 italic">Nenhum jogador autorizado (apenas administradores).</span>
+                ` : ''}
+              </div>
+
+              <!-- Input para Adicionar Jogador -->
+              <div class="flex items-center gap-2 pt-1">
+                <input id="admin-prot-add-nick-${z.id}" type="text" maxlength="25" placeholder="Nick do jogador..."
+                  class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 flex-1 max-w-xs" />
+                <button onclick="adicionarMembroAdminProt('${z.id}')"
+                  class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                  <span>➕</span> <span>Adicionar Jogador</span>
+                </button>
+              </div>
             </div>
           </div>
         `;
@@ -7496,6 +7580,7 @@
 
     async function salvarAdminProtectionZone() {
       const nomeInput = document.getElementById('admin-prot-nome');
+      const ownerInput = document.getElementById('admin-prot-owner');
       const worldInput = document.getElementById('admin-prot-world');
       const xInput = document.getElementById('admin-prot-x');
       const zInput = document.getElementById('admin-prot-z');
@@ -7509,6 +7594,7 @@
         return;
       }
 
+      const ownerNick = (ownerInput?.value || '').trim();
       const world = (worldInput?.value || 'world').trim();
       const x = parseInt(xInput?.value, 10);
       const z = parseInt(zInput?.value, 10);
@@ -7532,6 +7618,7 @@
           method: 'POST',
           body: JSON.stringify({
             name,
+            ownerNick: ownerNick || null,
             world,
             centerX: x,
             centerZ: z,
@@ -7544,6 +7631,7 @@
         if (res.ok && data.success) {
           mostrarFeedback(data.message || `Proteção "${name}" criada com sucesso!`, 'green');
           if (nomeInput) nomeInput.value = '';
+          if (ownerInput) ownerInput.value = '';
           if (xInput) xInput.value = '';
           if (zInput) zInput.value = '';
           await carregarAdminProtectionZones();
@@ -7581,6 +7669,247 @@
         mostrarFeedback('Erro de conexão com o servidor.', 'red');
       }
     }
+
+    async function adicionarMembroAdminProt(zoneId) {
+      const input = document.getElementById(`admin-prot-add-nick-${zoneId}`);
+      const nick = (input?.value || '').trim();
+      if (!nick) {
+        mostrarFeedback('Digite o nick do jogador para autorizar.', 'red');
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/admin/protection-zones/${zoneId}/members`, {
+          method: 'POST',
+          body: JSON.stringify({ nick, action: 'add' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Jogador "${nick}" autorizado!`, 'green');
+          if (input) input.value = '';
+          await carregarAdminProtectionZones();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao adicionar jogador.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function removerMembroAdminProt(zoneId, nick) {
+      if (!confirm(`Remover autorização de "${nick}" desta proteção?`)) return;
+
+      try {
+        const res = await apiFetch(`/api/admin/protection-zones/${zoneId}/members`, {
+          method: 'POST',
+          body: JSON.stringify({ nick, action: 'remove' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Jogador "${nick}" removido!`, 'green');
+          await carregarAdminProtectionZones();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao remover jogador.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // SUBDIVISÃO: MEUS TERRENOS (ÁREA DO JOGADOR / DONO)
+    // ══════════════════════════════════════════════════════════════════════════
+    async function carregarMeusTerrenos() {
+      const container = document.getElementById('meus-terrenos-container');
+      const badge = document.getElementById('meus-terrenos-badge');
+      if (!container) return;
+
+      try {
+        const res = await apiFetch('/api/terrenos/meus');
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          container.innerHTML = `<div class="text-xs text-rose-400 text-center py-6">${escapeHtml(data.error || 'Erro ao carregar seus terrenos.')}</div>`;
+          return;
+        }
+
+        const terrenos = data.terrenos || [];
+        if (badge) badge.textContent = `${terrenos.length} Terreno${terrenos.length === 1 ? '' : 's'}`;
+        renderMeusTerrenos(terrenos);
+      } catch (err) {
+        container.innerHTML = '<div class="text-xs text-rose-400 text-center py-6">Erro de conexão ao carregar terrenos.</div>';
+      }
+    }
+
+    function renderMeusTerrenos(terrenos) {
+      const container = document.getElementById('meus-terrenos-container');
+      if (!container) return;
+
+      if (!terrenos || terrenos.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card p-8 rounded-2xl text-center border border-white/[0.08] space-y-3 bg-black/40">
+            <div class="text-4xl">🏡</div>
+            <div class="text-sm font-extrabold text-slate-200">Você ainda não possui nenhum terreno privado registrado.</div>
+            <p class="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+              Os terrenos privados são criados pela administração do servidor e repassados para você.
+              Assim que o administrador registrar uma proteção e colocar o seu nick, ela aparecerá aqui automaticamente com controle total para você convidar amigos!
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = terrenos.map(t => {
+        const r = t.radius || 50;
+        const diam = r * 2;
+        const minX = t.centerX - r;
+        const maxX = t.centerX + r;
+        const minZ = t.centerZ - r;
+        const maxZ = t.centerZ + r;
+
+        let worldName = t.world || 'world';
+        let worldLabel = '🌍 Overworld';
+        let worldColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
+        if (worldName.includes('nether')) {
+          worldLabel = '🔥 Nether';
+          worldColor = 'text-rose-400 border-rose-500/30 bg-rose-500/10';
+        } else if (worldName.includes('end')) {
+          worldLabel = '🔮 The End';
+          worldColor = 'text-purple-400 border-purple-500/30 bg-purple-500/10';
+        }
+
+        const isDono = t.isOwner;
+        const cardBorder = isDono ? 'border-amber-500/40 bg-gradient-to-b from-amber-950/20 to-black/40' : 'border-cyan-500/30 bg-black/40';
+        const roleBadge = isDono 
+          ? '<span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1 shadow-sm">👑 Você é o Dono</span>'
+          : '<span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">🛡️ Membro Autorizado</span>';
+
+        const friends = Array.isArray(t.allowedPlayers) ? t.allowedPlayers : [];
+
+        return `
+          <div class="glass-card rounded-2xl p-4 md:p-5 border ${cardBorder} shadow-lg space-y-4">
+            <!-- Cabeçalho do Terreno -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-white/[0.08]">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-base font-extrabold text-white flex items-center gap-1.5">
+                    <span>🏡</span>
+                    <span>${escapeHtml(t.name || 'Meu Terreno')}</span>
+                  </span>
+                  ${roleBadge}
+                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${worldColor}">
+                    ${worldLabel}
+                  </span>
+                  <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    ${diam}×${diam} blocos
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-400 flex items-center gap-2 flex-wrap">
+                  ${!isDono && t.ownerNick ? `<span>Dono: <strong class="text-amber-300 font-bold">${escapeHtml(t.ownerNick)}</strong> &middot;</span>` : ''}
+                  <span>📍 Centro: <strong class="text-white font-mono">X=${t.centerX}, Z=${t.centerZ}</strong></span>
+                  <span>•</span>
+                  <span>Raio: <strong class="text-emerald-300 font-mono">${r}</strong> blocos</span>
+                  <span>•</span>
+                  <span>Limites: X=[${minX}..${maxX}], Z=[${minZ}..${maxZ}]</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Seção de Gerenciamento de Membros (Exclusivo do Dono) -->
+            ${isDono ? `
+              <div class="space-y-2.5 bg-black/50 p-3.5 rounded-xl border border-white/[0.06]">
+                <div class="flex items-center justify-between flex-wrap gap-1">
+                  <div class="text-xs font-extrabold text-amber-300 flex items-center gap-1.5">
+                    <span>👥</span> <span>Amigos com Acesso ao Terreno (${friends.length})</span>
+                  </div>
+                  <span class="text-[10px] text-slate-400">Apenas amigos na lista podem quebrar e construir</span>
+                </div>
+
+                <!-- Lista de Amigos -->
+                <div class="flex flex-wrap gap-2 min-h-[30px] items-center">
+                  ${friends.map(f => `
+                    <div class="bg-white/[0.08] hover:bg-white/[0.12] border border-white/[0.1] px-2.5 py-1 rounded-xl text-xs font-bold text-slate-200 flex items-center gap-2 shadow-sm transition">
+                      <span>👤 ${escapeHtml(f)}</span>
+                      <button onclick="removerAmigoTerreno('${t.id}', '${escapeHtml(f)}')" 
+                        class="text-rose-400 hover:text-rose-200 text-xs font-black transition cursor-pointer" title="Remover amigo">✕</button>
+                    </div>
+                  `).join('')}
+
+                  ${friends.length === 0 ? `
+                    <span class="text-xs text-slate-500 italic">Nenhum amigo adicionado ainda. Adicione amigos abaixo!</span>
+                  ` : ''}
+                </div>
+
+                <!-- Input para Adicionar Novo Amigo -->
+                <div class="flex items-center gap-2 pt-1">
+                  <input id="add-amigo-nick-${t.id}" type="text" maxlength="25" placeholder="Nick exato do amigo no Minecraft..."
+                    class="bg-black/80 border border-white/[0.12] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 flex-1 max-w-sm" />
+                  <button onclick="adicionarAmigoTerreno('${t.id}')"
+                    class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-slate-950 font-black text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 shadow-md active:scale-95 cursor-pointer">
+                    <span>➕</span> <span>Adicionar Amigo</span>
+                  </button>
+                </div>
+              </div>
+            ` : `
+              <div class="bg-black/30 p-3 rounded-xl border border-white/[0.05] text-xs text-slate-400 flex items-center gap-2">
+                <span>🛡️</span>
+                <span>Você é um membro autorizado neste terreno. O dono (<strong class="text-amber-300">${escapeHtml(t.ownerNick || 'Administrador')}</strong>) concedeu acesso para você construir e jogar junto.</span>
+              </div>
+            `}
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function adicionarAmigoTerreno(zoneId) {
+      const input = document.getElementById(`add-amigo-nick-${zoneId}`);
+      const nick = (input?.value || '').trim();
+      if (!nick) {
+        mostrarFeedback('Digite o nick do amigo que você quer autorizar.', 'red');
+        if (input) input.focus();
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/terrenos/${zoneId}/members`, {
+          method: 'POST',
+          body: JSON.stringify({ targetNick: nick, action: 'add' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Amigo "${nick}" adicionado ao seu terreno!`, 'green');
+          if (input) input.value = '';
+          await carregarMeusTerrenos();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao adicionar amigo.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
+    async function removerAmigoTerreno(zoneId, targetNick) {
+      if (!confirm(`⚠️ Remover o acesso de "${targetNick}" ao seu terreno? Ele não conseguirá mais quebrar nem colocar blocos aqui.`)) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/terrenos/${zoneId}/members`, {
+          method: 'POST',
+          body: JSON.stringify({ targetNick, action: 'remove' })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Acesso de "${targetNick}" removido!`, 'green');
+          await carregarMeusTerrenos();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao remover amigo.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão.', 'red');
+      }
+    }
+
 
     // ══════════════════════════════════════════════════════════════════════════
     // PERFIL VIP: FOTO DE PERFIL (MÁX 3MB) & MOLDURAS ANIMADAS DE MINECRAFT
