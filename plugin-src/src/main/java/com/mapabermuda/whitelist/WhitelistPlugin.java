@@ -20,12 +20,23 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockBurnEvent;
+import org.bukkit.event.block.BlockDamageEvent;
+import org.bukkit.event.block.BlockFromToEvent;
+import org.bukkit.event.block.BlockIgniteEvent;
+import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.BlockExplodeEvent;
+import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -72,7 +83,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         "marcosfranca1679"
     );
 
-    // ── Proteção de Terreno de Reino ─────────────────────────────────────────
+    // ── Proteção de Terreno (Reinos e Administrador) ─────────────────────────
     public static class KingdomArea {
         public final String id;
         public final String nome;
@@ -81,23 +92,29 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         public final int centerX;
         public final int centerZ;
         public final int radius;
+        public final boolean isAdminZone;
         public final Set<String> members = ConcurrentHashMap.newKeySet();
 
-        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members) {
+        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members, boolean isAdminZone) {
             this.id = id;
-            this.nome = nome != null ? nome : "Reino";
-            this.tag = tag != null ? tag : "REI";
+            this.nome = nome != null ? nome : (isAdminZone ? "Proteção Admin" : "Reino");
+            this.tag = tag != null ? tag : (isAdminZone ? "ADMIN" : "REI");
             this.world = world != null ? world : "world";
             this.centerX = centerX;
             this.centerZ = centerZ;
-            this.radius = Math.min(200, Math.max(1, radius));
-            if (members != null) {
+            this.radius = Math.max(1, radius);
+            this.isAdminZone = isAdminZone;
+            if (members != null && !isAdminZone) {
                 for (String m : members) {
                     if (m != null && !m.isBlank()) {
                         this.members.add(m.toLowerCase().trim());
                     }
                 }
             }
+        }
+
+        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members) {
+            this(id, nome, tag, world, centerX, centerZ, radius, members, false);
         }
 
         public boolean isInside(Location loc) {
@@ -113,6 +130,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
 
         public boolean isMember(String nick) {
+            if (isAdminZone) return false; // Ninguém comum é membro de zona admin (apenas BYPASS e OP)
             if (nick == null) return false;
             return members.contains(nick.toLowerCase().trim());
         }
@@ -139,6 +157,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private final Map<String, String> localIpBans = new ConcurrentHashMap<>();
     private final Map<String, Integer> localLives = new ConcurrentHashMap<>();
     private final Map<String, KingdomArea> kingdomProtections = new ConcurrentHashMap<>();
+    private final Map<String, KingdomArea> adminProtections = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastProtectionNotice = new ConcurrentHashMap<>();
 
     public record BanEntry(String reason, String remaining) {}
@@ -261,9 +280,23 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 }
             }
 
+            adminProtections.clear();
+            ConfigurationSection adminLandsSec = yaml.getConfigurationSection("admin_protections");
+            if (adminLandsSec != null) {
+                for (String zid : adminLandsSec.getKeys(false)) {
+                    String nome = adminLandsSec.getString(zid + ".nome", "Proteção Admin");
+                    String world = adminLandsSec.getString(zid + ".world", "world");
+                    int cx = adminLandsSec.getInt(zid + ".centerX", 0);
+                    int cz = adminLandsSec.getInt(zid + ".centerZ", 0);
+                    int r = adminLandsSec.getInt(zid + ".radius", 50);
+                    adminProtections.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, null, true));
+                }
+            }
+
             log.info("[LocalData] Carregados do disco: " + localWhitelist.size() + " whitelist, " 
                 + localBans.size() + " bans, " + localIpBans.size() + " bans IP, " + localLives.size() + " vidas, "
-                + kingdomProtections.size() + " proteções de reino.");
+                + kingdomProtections.size() + " proteções de reino, "
+                + adminProtections.size() + " proteções admin.");
         } catch (Exception e) {
             log.warning("[LocalData] Erro ao carregar dados.yml: " + e.getMessage());
         }
@@ -300,6 +333,16 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 yaml.set(path + ".centerZ", a.centerZ);
                 yaml.set(path + ".radius", a.radius);
                 yaml.set(path + ".members", new ArrayList<>(a.members));
+            }
+
+            for (Map.Entry<String, KingdomArea> e : adminProtections.entrySet()) {
+                KingdomArea a = e.getValue();
+                String path = "admin_protections." + e.getKey();
+                yaml.set(path + ".nome", a.nome);
+                yaml.set(path + ".world", a.world);
+                yaml.set(path + ".centerX", a.centerX);
+                yaml.set(path + ".centerZ", a.centerZ);
+                yaml.set(path + ".radius", a.radius);
             }
 
             yaml.save(file);
@@ -484,9 +527,14 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         } catch (Exception ignored) {}
     }
 
-    // ── Sistema de Proteção de Terreno de Reino ───────────────────────────────
+    // ── Sistema de Proteção de Terreno (Reinos e Administrador) ─────────────
     public KingdomArea getProtectedAreaAt(Location loc) {
         if (loc == null || loc.getWorld() == null) return null;
+        for (KingdomArea area : adminProtections.values()) {
+            if (area.isInside(loc)) {
+                return area;
+            }
+        }
         for (KingdomArea area : kingdomProtections.values()) {
             if (area.isInside(loc)) {
                 return area;
@@ -504,6 +552,11 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         if (area == null) return true;
         if (matchedArea != null && matchedArea.length > 0) matchedArea[0] = area;
 
+        if (area.isAdminZone) {
+            // Em área admin, jogadores comuns NUNCA podem modificar ou quebrar
+            return false;
+        }
+
         return area.isMember(lower);
     }
 
@@ -514,11 +567,16 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         if (last != null && (now - last) < 2000L) return; // Evita spam
         lastProtectionNotice.put(player.getUniqueId(), now);
 
-        player.sendActionBar(Component.text("§c❌ Terreno protegido pelo Reino [" + area.tag + "] (" + area.nome + ")!"));
-        player.sendMessage(Component.text("§c❌ [Reinos] Área protegida pelo Reino §e[" + area.tag + "]§c. Apenas membros podem interagir!"));
+        if (area.isAdminZone) {
+            player.sendActionBar(Component.text("§c❌ Terreno protegido: Proteção de \"" + area.nome + "\"!"));
+            player.sendMessage(Component.text("§c❌ [Proteção] Terreno protegido: Proteção de §e\"" + area.nome + "\"§c!"));
+        } else {
+            player.sendActionBar(Component.text("§c❌ Terreno protegido pelo Reino [" + area.tag + "] (" + area.nome + ")!"));
+            player.sendMessage(Component.text("§c❌ [Reinos] Área protegida pelo Reino §e[" + area.tag + "]§c. Apenas membros podem interagir!"));
+        }
     }
 
-    // Bloqueia quebrar blocos na área de outro reino
+    // 1. Bloqueia quebrar blocos na área protegida (mesmo se o jogador estiver fora alcançando a borda)
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
@@ -529,7 +587,18 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // Bloqueia colocar blocos na área de outro reino
+    // 2. Bloqueia dano inicial ao bloco (o bloco nem sequer trinca para quem não tem permissão)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockDamage(BlockDamageEvent event) {
+        Player player = event.getPlayer();
+        KingdomArea[] matched = new KingdomArea[1];
+        if (!canPlayerInteractAt(player, event.getBlock().getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(player, matched[0]);
+        }
+    }
+
+    // 3. Bloqueia colocar blocos na área protegida
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockPlace(BlockPlaceEvent event) {
         Player player = event.getPlayer();
@@ -540,7 +609,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // Bloqueia interagir com portas, baús, alavancas, botões, alçapões, barris, fornalhas, etc.
+    // 4. Bloqueia interagir com blocos, portas, baús, alavancas, botões, alçapões, etc.
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerInteract(PlayerInteractEvent event) {
         Player player = event.getPlayer();
@@ -556,7 +625,126 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // Bloqueia abertura de baús, funis, fornalhas e inventários em território de outro reino
+    // 5. Bloqueia despejar baldes de água, lava ou peixe dentro da proteção
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerBucketEmpty(PlayerBucketEmptyEvent event) {
+        Player player = event.getPlayer();
+        Block clicked = event.getBlockClicked();
+        Block target = clicked.getRelative(event.getBlockFace());
+        KingdomArea[] matched = new KingdomArea[1];
+
+        if (!canPlayerInteractAt(player, target.getLocation(), matched) || !canPlayerInteractAt(player, clicked.getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(player, matched[0]);
+        }
+    }
+
+    // 6. Bloqueia recolher líquidos com balde dentro da proteção
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPlayerBucketFill(PlayerBucketFillEvent event) {
+        Player player = event.getPlayer();
+        Block clicked = event.getBlockClicked();
+        KingdomArea[] matched = new KingdomArea[1];
+
+        if (!canPlayerInteractAt(player, clicked.getLocation(), matched)) {
+            event.setCancelled(true);
+            sendProtectionNotice(player, matched[0]);
+        }
+    }
+
+    // 7. Impede pistões (de dentro ou de fora) de empurrar blocos protegidos
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockPistonExtend(BlockPistonExtendEvent event) {
+        for (Block b : event.getBlocks()) {
+            if (getProtectedAreaAt(b.getLocation()) != null) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+        // Bloco final onde o pistão vai empurrar
+        Block target = event.getBlock().getRelative(event.getDirection(), event.getBlocks().size() + 1);
+        if (getProtectedAreaAt(target.getLocation()) != null) {
+            event.setCancelled(true);
+        }
+    }
+
+    // 8. Impede pistões de puxar blocos protegidos
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockPistonRetract(BlockPistonRetractEvent event) {
+        for (Block b : event.getBlocks()) {
+            if (getProtectedAreaAt(b.getLocation()) != null) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+    }
+
+    // 9. Impede explosões de entidades (TNT, Creeper, Wither, Respawn Anchor) de quebrar blocos na proteção
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityExplode(EntityExplodeEvent event) {
+        event.blockList().removeIf(b -> getProtectedAreaAt(b.getLocation()) != null);
+    }
+
+    // 10. Impede explosões de blocos (Bed no Nether, TNT Block) de quebrar blocos na proteção
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockExplode(BlockExplodeEvent event) {
+        event.blockList().removeIf(b -> getProtectedAreaAt(b.getLocation()) != null);
+    }
+
+    // 11. Impede fogo de queimar blocos dentro da área protegida
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockBurn(BlockBurnEvent event) {
+        if (getProtectedAreaAt(event.getBlock().getLocation()) != null) {
+            event.setCancelled(true);
+        }
+    }
+
+    // 12. Impede fogo de ser ateado ou se espalhar para blocos protegidos
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockIgnite(BlockIgniteEvent event) {
+        if (getProtectedAreaAt(event.getBlock().getLocation()) != null) {
+            if (event.getPlayer() != null) {
+                KingdomArea[] matched = new KingdomArea[1];
+                if (!canPlayerInteractAt(event.getPlayer(), event.getBlock().getLocation(), matched)) {
+                    event.setCancelled(true);
+                    sendProtectionNotice(event.getPlayer(), matched[0]);
+                    return;
+                }
+            } else {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    // 13. Impede água e lava de escorrer para dentro de áreas protegidas
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onBlockFromTo(BlockFromToEvent event) {
+        KingdomArea toArea = getProtectedAreaAt(event.getToBlock().getLocation());
+        if (toArea != null) {
+            KingdomArea fromArea = getProtectedAreaAt(event.getBlock().getLocation());
+            if (fromArea == null || !fromArea.id.equals(toArea.id)) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    // 14. Impede monstros de modificar blocos (Enderman roubar bloco, Silverfish entrar na pedra, etc.)
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onEntityChangeBlock(EntityChangeBlockEvent event) {
+        if (getProtectedAreaAt(event.getBlock().getLocation()) != null) {
+            if (event.getEntity() instanceof Player p) {
+                KingdomArea[] matched = new KingdomArea[1];
+                if (!canPlayerInteractAt(p, event.getBlock().getLocation(), matched)) {
+                    event.setCancelled(true);
+                    sendProtectionNotice(p, matched[0]);
+                }
+            } else {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    // 15. Bloqueia abertura de baús, funis, fornalhas e inventários em território protegido
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInventoryOpen(InventoryOpenEvent event) {
         if (!(event.getPlayer() instanceof Player player)) return;
@@ -570,7 +758,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // Bloqueia interagir com entidades (molduras, suportes de armaduras, barcos com baú)
+    // 16. Bloqueia interagir com entidades (molduras, suportes de armaduras, barcos com baú)
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerInteractEntity(PlayerInteractEntityEvent event) {
         Player player = event.getPlayer();
@@ -582,7 +770,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // Bloqueia danificar entidades no território (molduras, suportes de armaduras, animais)
+    // 17. Bloqueia danificar entidades no território (molduras, suportes de armaduras, animais)
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
         Player damager = null;
@@ -611,13 +799,24 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             KingdomArea area = getProtectedAreaAt(loc);
 
             if (area != null) {
-                player.sendMessage(Component.text("§6§l🏰 [5DAY MC] Território Protegido de Reino:"));
-                player.sendMessage(Component.text("§e• Reino: §f" + area.nome + " §7[" + area.tag + "]"));
-                player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
-                player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
-                player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
-                boolean isMem = area.isMember(cleanNick(player.getName()).toLowerCase().trim()) || BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim());
-                player.sendMessage(Component.text("§e• Seu Status: " + (isMem ? "§a✅ Membro autorizado" : "§c❌ Não é membro (Apenas visualização)")));
+                if (area.isAdminZone) {
+                    player.sendMessage(Component.text("§6§l🛡️ [5DAY MC] Proteção de Terreno do Administrador:"));
+                    player.sendMessage(Component.text("§e• Nome: §fProteção de \"" + area.nome + "\""));
+                    player.sendMessage(Component.text("§e• Mundo: §f" + area.world));
+                    player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
+                    player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
+                    player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
+                    boolean isAdmin = BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim()) || player.isOp();
+                    player.sendMessage(Component.text("§e• Seu Status: " + (isAdmin ? "§a👑 Administrador (Acesso Total)" : "§c❌ Proteção Oficial do Servidor (Apenas visualização)")));
+                } else {
+                    player.sendMessage(Component.text("§6§l🏰 [5DAY MC] Território Protegido de Reino:"));
+                    player.sendMessage(Component.text("§e• Reino: §f" + area.nome + " §7[" + area.tag + "]"));
+                    player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
+                    player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
+                    player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
+                    boolean isMem = area.isMember(cleanNick(player.getName()).toLowerCase().trim()) || BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim());
+                    player.sendMessage(Component.text("§e• Seu Status: " + (isMem ? "§a✅ Membro autorizado" : "§c❌ Não é membro (Apenas visualização)")));
+                }
             } else {
                 player.sendMessage(Component.text("§a§l🌍 [5DAY MC] Território Livre!"));
                 player.sendMessage(Component.text("§7Nenhum reino possui proteção nesta área (Coordenadas atuais: X=" + loc.getBlockX() + ", Z=" + loc.getBlockZ() + ")."));
@@ -735,6 +934,29 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 kingdomProtections.clear();
                 kingdomProtections.putAll(updatedAreas);
                 log.info("[Sync] 🏰 " + kingdomProtections.size() + " áreas de proteção de reinos sincronizadas.");
+            }
+
+            // 7. Sincroniza Proteções de Terreno do Administrador
+            if (root.has("adminProtections") && root.get("adminProtections").isJsonArray()) {
+                JsonArray apArr = root.getAsJsonArray("adminProtections");
+                Map<String, KingdomArea> updatedAdminAreas = new ConcurrentHashMap<>();
+                for (JsonElement el : apArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject o = el.getAsJsonObject();
+                        String zid = o.has("id") ? o.get("id").getAsString() : "";
+                        if (zid.isEmpty()) continue;
+                        String nome = o.has("name") ? o.get("name").getAsString() : "Proteção Admin";
+                        String world = o.has("world") ? o.get("world").getAsString() : "world";
+                        int cx = o.has("centerX") ? o.get("centerX").getAsInt() : 0;
+                        int cz = o.has("centerZ") ? o.get("centerZ").getAsInt() : 0;
+                        int r = o.has("radius") ? o.get("radius").getAsInt() : 50;
+
+                        updatedAdminAreas.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, null, true));
+                    }
+                }
+                adminProtections.clear();
+                adminProtections.putAll(updatedAdminAreas);
+                log.info("[Sync] 🛡️ " + adminProtections.size() + " áreas de proteção do administrador sincronizadas.");
             }
 
             // Salva dados atualizados no dados.yml
