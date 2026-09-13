@@ -1008,6 +1008,10 @@
             class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
             <span>👑 Assinaturas VIP</span>
           </button>
+          <button onclick="mudarModuloAdmin('protecoes')" id="admin-mod-protecoes"
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>🛡️ Proteção de Terreno Admin</span>
+          </button>
         </div>
 
         <!-- ── MÓDULO JOGANDO AGORA (AO VIVO) ─────────────────────── -->
@@ -1365,6 +1369,111 @@
             <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jogadores com Perfil VIP</div>
             <div id="admin-vip-profiles-list" class="space-y-2 max-h-96 overflow-y-auto pr-1">
               <div class="text-center py-6 text-slate-400 text-xs italic">Carregando assinaturas VIP...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── MÓDULO PROTEÇÕES DE TERRENO ADMIN ──────────────────── -->
+        <div id="admin-mod-content-protecoes" class="hidden p-3 md:p-4 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08] gap-2 flex-wrap">
+            <div>
+              <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>🛡️ Proteções de Terreno do Administrador</span>
+                <span id="admin-protecoes-count-badge" class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Crie áreas protegidas exclusivas do servidor (Spawn, Eventos, Cidades). Nenhum jogador comum poderá quebrar, construir ou queimar blocos nessa área.</div>
+            </div>
+            <button onclick="carregarAdminProtectionZones()" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm flex-shrink-0">
+              🔄 Atualizar
+            </button>
+          </div>
+
+          <!-- Banner caso a tabela ainda não tenha sido criada no Supabase -->
+          <div id="admin-protecoes-table-notice" class="hidden bg-amber-500/15 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5 text-amber-300">
+              <span>⚠️</span> Tabela no Supabase Pendente
+            </div>
+            <p class="text-[11px] leading-relaxed text-slate-300">
+              A tabela <code class="text-amber-300 font-mono bg-black/40 px-1 py-0.5 rounded">admin_protection_zones</code> ainda não foi criada no banco de dados. 
+              Copie o conteúdo do script <code class="text-emerald-300 font-mono">admin_terrenos_supabase.sql</code> e execute no <strong>SQL Editor</strong> do seu Supabase para ativar a gravação.
+            </p>
+          </div>
+
+          <!-- Card de Criar Nova Proteção Admin -->
+          <div class="bg-black/40 rounded-xl p-3.5 border border-emerald-500/30 space-y-3 shadow-lg">
+            <div class="flex items-center justify-between">
+              <div class="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider">
+                <span>➕</span> Criar Nova Proteção de Terreno Admin
+              </div>
+              <span class="text-[10px] text-slate-400">Proteção Permanente &middot; Bloqueio Total</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+              <!-- Nome da Proteção -->
+              <div class="sm:col-span-2 space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Nome da Proteção (Exibido in-game)</label>
+                <input id="admin-prot-nome" type="text" maxlength="40" placeholder="Ex: Spawn Principal, Vila de Trocas..."
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
+              </div>
+
+              <!-- Mundo -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Mundo do Minecraft</label>
+                <select id="admin-prot-world"
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+                  <option value="world">🌍 Overworld (world)</option>
+                  <option value="world_nether">🔥 Nether (world_nether)</option>
+                  <option value="world_the_end">🔮 The End (world_the_end)</option>
+                </select>
+              </div>
+
+              <!-- Centro X e Z -->
+              <div class="grid grid-cols-2 gap-1.5">
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-slate-400">Centro X</label>
+                  <input id="admin-prot-x" type="number" step="1" placeholder="Ex: 0"
+                    class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 text-center font-mono" />
+                </div>
+                <div class="space-y-1">
+                  <label class="text-[10px] font-bold text-slate-400">Centro Z</label>
+                  <input id="admin-prot-z" type="number" step="1" placeholder="Ex: 0"
+                    class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 text-center font-mono" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Slider de Raio e Dimensões -->
+            <div class="space-y-1.5 pt-1 border-t border-white/[0.06]">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-[10px] font-bold text-slate-400">Raio de Proteção (Blocos para cada lado a partir do centro)</span>
+                <span id="admin-prot-raio-display" class="font-mono font-extrabold text-emerald-400 text-xs">50 blocos (100×100 total)</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <input id="admin-prot-radius-slider" type="range" min="5" max="500" step="5" value="50"
+                  oninput="atualizarDisplayRaioAdminProt(this.value)"
+                  class="flex-1 accent-emerald-500 cursor-pointer" />
+                <input id="admin-prot-radius-num" type="number" min="1" max="1000" value="50"
+                  oninput="atualizarDisplayRaioAdminProt(this.value)"
+                  class="w-20 bg-black/70 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-center text-emerald-300 font-mono font-bold focus:outline-none focus:border-emerald-500" />
+              </div>
+            </div>
+
+            <!-- Botão de Salvar -->
+            <div class="flex justify-end pt-1">
+              <button id="btn-salvar-admin-prot" onclick="salvarAdminProtectionZone()"
+                class="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all duration-200 active:scale-95 flex items-center gap-2 cursor-pointer">
+                <span>🛡️</span> <span>Criar Proteção Admin</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista de Proteções Admin Cadastradas -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Zonas de Proteção Ativas</div>
+            </div>
+            <div id="admin-protecoes-lista" class="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+              <div class="text-center py-6 text-slate-400 text-xs italic">Carregando proteções admin...</div>
             </div>
           </div>
         </div>
@@ -3446,7 +3555,7 @@
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip'];
+      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip', 'protecoes'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
@@ -3466,6 +3575,7 @@
       if (modulo === 'vidas') carregarAdminVidas();
       if (modulo === 'reinos') carregarAdminPermissoesReino();
       if (modulo === 'vip') carregarAdminVipProfiles();
+      if (modulo === 'protecoes') carregarAdminProtectionZones();
     }
 
     // ── Sistema de Vidas (Admin) ──────────────────────────────────────────────
@@ -7264,6 +7374,211 @@
         }
       } catch (err) {
         mostrarFeedback('Erro de conexão ao excluir registro VIP.', 'red');
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PROTEÇÃO DE TERRENO DO ADMINISTRADOR (admin_protection_zones)
+    // ══════════════════════════════════════════════════════════════════════════
+    function atualizarDisplayRaioAdminProt(val) {
+      const num = parseInt(val, 10) || 50;
+      const slider = document.getElementById('admin-prot-radius-slider');
+      const numInput = document.getElementById('admin-prot-radius-num');
+      const display = document.getElementById('admin-prot-raio-display');
+
+      if (slider && slider.value != num) slider.value = num;
+      if (numInput && numInput.value != num) numInput.value = num;
+      if (display) {
+        const diam = num * 2;
+        display.textContent = `${num} blocos (${diam}×${diam} total)`;
+      }
+    }
+
+    async function carregarAdminProtectionZones() {
+      const listaEl = document.getElementById('admin-protecoes-lista');
+      const badgeEl = document.getElementById('admin-protecoes-count-badge');
+      const noticeEl = document.getElementById('admin-protecoes-table-notice');
+      if (!listaEl) return;
+
+      try {
+        const res = await apiFetch('/api/admin/protection-zones');
+        const data = await res.json();
+
+        if (noticeEl) {
+          noticeEl.classList.toggle('hidden', !data.tableMissing);
+        }
+
+        if (!res.ok || !data.success) {
+          listaEl.innerHTML = `<div class="text-xs text-rose-400 text-center py-4">${escapeHtml(data.error || 'Erro ao carregar proteções admin.')}</div>`;
+          return;
+        }
+
+        const zones = data.zones || [];
+        if (badgeEl) badgeEl.textContent = zones.length;
+        renderAdminProtectionZones(zones);
+      } catch (err) {
+        listaEl.innerHTML = '<div class="text-xs text-rose-400 text-center py-4">Erro de conexão com o servidor.</div>';
+      }
+    }
+
+    function renderAdminProtectionZones(zones) {
+      const listaEl = document.getElementById('admin-protecoes-lista');
+      if (!listaEl) return;
+
+      if (!zones || zones.length === 0) {
+        listaEl.innerHTML = `
+          <div class="glass-card p-6 rounded-2xl text-center border border-white/[0.08] space-y-2">
+            <div class="text-3xl">🛡️</div>
+            <div class="text-xs font-bold text-slate-200">Nenhuma proteção de terreno admin criada ainda.</div>
+            <div class="text-[10px] text-slate-400">Use o formulário acima para proteger o Spawn, cidades ou áreas de eventos do servidor!</div>
+          </div>
+        `;
+        return;
+      }
+
+      listaEl.innerHTML = zones.map(z => {
+        const r = z.radius || 50;
+        const diam = r * 2;
+        const minX = z.center_x - r;
+        const maxX = z.center_x + r;
+        const minZ = z.center_z - r;
+        const maxZ = z.center_z + r;
+
+        let worldName = z.world || 'world';
+        let worldLabel = '🌍 Overworld';
+        let worldColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10';
+        if (worldName.includes('nether')) {
+          worldLabel = '🔥 Nether';
+          worldColor = 'text-rose-400 border-rose-500/30 bg-rose-500/10';
+        } else if (worldName.includes('end')) {
+          worldLabel = '🔮 The End';
+          worldColor = 'text-purple-400 border-purple-500/30 bg-purple-500/10';
+        }
+
+        const dataFormatada = z.created_at ? new Date(z.created_at).toLocaleDateString('pt-BR') : '';
+
+        return `
+          <div class="glass-card rounded-xl p-3 border border-white/[0.08] hover:border-emerald-500/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-black/40">
+            <div class="space-y-1.5 min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm font-extrabold text-white flex items-center gap-1.5 truncate">
+                  <span class="text-emerald-400">🛡️</span>
+                  <span>${escapeHtml(z.name || 'Proteção')}</span>
+                </span>
+                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${worldColor}">
+                  ${worldLabel}
+                </span>
+                <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                  ${diam}×${diam} blocos
+                </span>
+              </div>
+
+              <div class="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
+                <span>📍 Centro: <strong class="text-white font-mono">X=${z.center_x}, Z=${z.center_z}</strong></span>
+                <span>•</span>
+                <span>📐 Raio: <strong class="text-emerald-300 font-mono">${r}</strong> blocos</span>
+                <span>•</span>
+                <span class="text-slate-400 text-[10px]">Limites: X=[${minX}..${maxX}], Z=[${minZ}..${maxZ}]</span>
+                ${dataFormatada ? `<span>•</span><span class="text-slate-500 text-[10px]">Criado em ${dataFormatada}</span>` : ''}
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+              <button onclick="removerAdminProtectionZone('${z.id}', '${escapeHtml(z.name || '')}')" 
+                class="text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                <span>🗑️</span> <span>Excluir</span>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function salvarAdminProtectionZone() {
+      const nomeInput = document.getElementById('admin-prot-nome');
+      const worldInput = document.getElementById('admin-prot-world');
+      const xInput = document.getElementById('admin-prot-x');
+      const zInput = document.getElementById('admin-prot-z');
+      const rInput = document.getElementById('admin-prot-radius-num');
+      const btn = document.getElementById('btn-salvar-admin-prot');
+
+      const name = (nomeInput?.value || '').trim();
+      if (!name) {
+        mostrarFeedback('Digite um nome para a proteção (ex: "Spawn", "Vila").', 'red');
+        if (nomeInput) nomeInput.focus();
+        return;
+      }
+
+      const world = (worldInput?.value || 'world').trim();
+      const x = parseInt(xInput?.value, 10);
+      const z = parseInt(zInput?.value, 10);
+
+      if (isNaN(x) || isNaN(z)) {
+        mostrarFeedback('Preencha as coordenadas X e Z com números inteiros válidos.', 'red');
+        return;
+      }
+
+      let radius = parseInt(rInput?.value, 10);
+      if (isNaN(radius) || radius < 1) radius = 50;
+      if (radius > 2000) radius = 2000;
+
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.classList.add('opacity-50');
+        }
+
+        const res = await apiFetch('/api/admin/protection-zones', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            world,
+            centerX: x,
+            centerZ: z,
+            radius
+          })
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Proteção "${name}" criada com sucesso!`, 'green');
+          if (nomeInput) nomeInput.value = '';
+          if (xInput) xInput.value = '';
+          if (zInput) zInput.value = '';
+          await carregarAdminProtectionZones();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao criar proteção admin.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão com o servidor.', 'red');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50');
+        }
+      }
+    }
+
+    async function removerAdminProtectionZone(id, nome) {
+      if (!confirm(`⚠️ Deseja realmente excluir a proteção de terreno "${nome}"?\n\nOs jogadores comuns voltarão a poder quebrar e construir nesta área.`)) {
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`/api/admin/protection-zones/${id}`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+
+        if (res.ok && data.success) {
+          mostrarFeedback(data.message || `Proteção "${nome}" excluída com sucesso!`, 'green');
+          await carregarAdminProtectionZones();
+        } else {
+          mostrarFeedback(data.error || 'Erro ao excluir proteção.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro de conexão com o servidor.', 'red');
       }
     }
 
