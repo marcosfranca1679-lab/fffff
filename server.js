@@ -5406,7 +5406,17 @@ app.get('/api/admin/protection-zones', requireAdmin, async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    res.json({ success: true, zones: data || [] });
+    let playersList = [];
+    try {
+      const { data: pData } = await supabase
+        .from('players')
+        .select('nick, platform')
+        .eq('status', 'approved')
+        .order('nick', { ascending: true });
+      if (pData) playersList = pData.map(p => ({ nick: p.nick, platform: p.platform || 'Java' }));
+    } catch (_) {}
+
+    res.json({ success: true, zones: data || [], players: playersList });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
