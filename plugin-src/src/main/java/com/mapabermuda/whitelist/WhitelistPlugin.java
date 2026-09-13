@@ -93,9 +93,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         public final int centerZ;
         public final int radius;
         public final boolean isAdminZone;
+        public final String ownerNick;
         public final Set<String> members = ConcurrentHashMap.newKeySet();
 
-        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members, boolean isAdminZone) {
+        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members, boolean isAdminZone, String ownerNick) {
             this.id = id;
             this.nome = nome != null ? nome : (isAdminZone ? "Proteção Admin" : "Reino");
             this.tag = tag != null ? tag : (isAdminZone ? "ADMIN" : "REI");
@@ -104,7 +105,13 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             this.centerZ = centerZ;
             this.radius = Math.max(1, radius);
             this.isAdminZone = isAdminZone;
-            if (members != null && !isAdminZone) {
+            this.ownerNick = (ownerNick != null && !ownerNick.isBlank()) ? ownerNick.trim() : null;
+
+            if (this.ownerNick != null) {
+                this.members.add(this.ownerNick.toLowerCase().trim());
+            }
+
+            if (members != null) {
                 for (String m : members) {
                     if (m != null && !m.isBlank()) {
                         this.members.add(m.toLowerCase().trim());
@@ -113,8 +120,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }
 
+        public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members, boolean isAdminZone) {
+            this(id, nome, tag, world, centerX, centerZ, radius, members, isAdminZone, null);
+        }
+
         public KingdomArea(String id, String nome, String tag, String world, int centerX, int centerZ, int radius, Set<String> members) {
-            this(id, nome, tag, world, centerX, centerZ, radius, members, false);
+            this(id, nome, tag, world, centerX, centerZ, radius, members, false, null);
         }
 
         public boolean isInside(Location loc) {
@@ -130,9 +141,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
 
         public boolean isMember(String nick) {
-            if (isAdminZone) return false; // Ninguém comum é membro de zona admin (apenas BYPASS e OP)
             if (nick == null) return false;
-            return members.contains(nick.toLowerCase().trim());
+            String lower = nick.toLowerCase().trim();
+            if (ownerNick != null && ownerNick.toLowerCase().trim().equals(lower)) return true;
+            return members.contains(lower);
         }
 
         public int getMinX() { return centerX - radius; }
@@ -289,7 +301,15 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                     int cx = adminLandsSec.getInt(zid + ".centerX", 0);
                     int cz = adminLandsSec.getInt(zid + ".centerZ", 0);
                     int r = adminLandsSec.getInt(zid + ".radius", 50);
-                    adminProtections.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, null, true));
+                    String owner = adminLandsSec.getString(zid + ".owner", "");
+                    List<String> memList = adminLandsSec.getStringList(zid + ".members");
+                    Set<String> memSet = ConcurrentHashMap.newKeySet();
+                    if (memList != null) {
+                        for (String m : memList) {
+                            if (m != null && !m.isBlank()) memSet.add(m.toLowerCase().trim());
+                        }
+                    }
+                    adminProtections.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, memSet, true, owner));
                 }
             }
 
@@ -343,6 +363,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 yaml.set(path + ".centerX", a.centerX);
                 yaml.set(path + ".centerZ", a.centerZ);
                 yaml.set(path + ".radius", a.radius);
+                yaml.set(path + ".owner", a.ownerNick != null ? a.ownerNick : "");
+                yaml.set(path + ".members", new ArrayList<>(a.members));
             }
 
             yaml.save(file);
@@ -551,11 +573,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         KingdomArea area = getProtectedAreaAt(loc);
         if (area == null) return true;
         if (matchedArea != null && matchedArea.length > 0) matchedArea[0] = area;
-
-        if (area.isAdminZone) {
-            // Em área admin, jogadores comuns NUNCA podem modificar ou quebrar
-            return false;
-        }
 
         return area.isMember(lower);
     }
@@ -804,10 +821,22 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                     player.sendMessage(Component.text("§e• Nome: §fProteção de \"" + area.nome + "\""));
                     player.sendMessage(Component.text("§e• Mundo: §f" + area.world));
                     player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
-                    player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
                     player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
-                    boolean isAdmin = BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim()) || player.isOp();
-                    player.sendMessage(Component.text("§e• Seu Status: " + (isAdmin ? "§a👑 Administrador (Acesso Total)" : "§c❌ Proteção Oficial do Servidor (Apenas visualização)")));
+                    String pNick = cleanNick(player.getName()).toLowerCase().trim();
+                    boolean isAdmin = BYPASS.contains(pNick) || player.isOp();
+                    boolean isOwner = area.ownerNick != null && area.ownerNick.toLowerCase().trim().equals(pNick);
+                    boolean isMem = area.isMember(pNick) || isAdmin;
+
+                    String donoTxt = (area.ownerNick != null && !area.ownerNick.isBlank()) ? area.ownerNick : "Servidor / Administrador";
+                    player.sendMessage(Component.text("§e• Dono: §f" + donoTxt));
+
+                    String statusTxt;
+                    if (isOwner) statusTxt = "§a👑 Você é o Dono desta Proteção (Acesso Total)";
+                    else if (isAdmin) statusTxt = "§a👑 Administrador (Acesso Total)";
+                    else if (isMem) statusTxt = "§a✅ Amigo / Membro Autorizado";
+                    else statusTxt = "§c❌ Não é membro (Apenas visualização)";
+
+                    player.sendMessage(Component.text("§e• Seu Status: " + statusTxt));
                 } else {
                     player.sendMessage(Component.text("§6§l🏰 [5DAY MC] Território Protegido de Reino:"));
                     player.sendMessage(Component.text("§e• Reino: §f" + area.nome + " §7[" + area.tag + "]"));
@@ -950,8 +979,17 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                         int cx = o.has("centerX") ? o.get("centerX").getAsInt() : 0;
                         int cz = o.has("centerZ") ? o.get("centerZ").getAsInt() : 0;
                         int r = o.has("radius") ? o.get("radius").getAsInt() : 50;
+                        String ownerNick = o.has("ownerNick") ? o.get("ownerNick").getAsString() : "";
 
-                        updatedAdminAreas.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, null, true));
+                        Set<String> mSet = ConcurrentHashMap.newKeySet();
+                        if (o.has("members") && o.get("members").isJsonArray()) {
+                            for (JsonElement mel : o.getAsJsonArray("members")) {
+                                String mn = mel.getAsString().toLowerCase().trim();
+                                if (!mn.isEmpty()) mSet.add(mn);
+                            }
+                        }
+
+                        updatedAdminAreas.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, mSet, true, ownerNick));
                     }
                 }
                 adminProtections.clear();
