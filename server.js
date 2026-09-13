@@ -2425,6 +2425,16 @@ app.get('/api/plugin/sync', async (req, res) => {
 
       if (!aErr && aRows) {
         for (const a of aRows) {
+          const membersList = [];
+          if (a.owner_nick) membersList.push(a.owner_nick.toLowerCase().trim());
+          if (Array.isArray(a.allowed_players)) {
+            for (const p of a.allowed_players) {
+              if (p && !membersList.includes(p.toLowerCase().trim())) {
+                membersList.push(p.toLowerCase().trim());
+              }
+            }
+          }
+
           adminProtections.push({
             id: a.id,
             name: a.name || 'Proteção Admin',
@@ -2432,6 +2442,9 @@ app.get('/api/plugin/sync', async (req, res) => {
             centerX: parseInt(a.center_x, 10) || 0,
             centerZ: parseInt(a.center_z, 10) || 0,
             radius: Math.max(1, parseInt(a.radius, 10) || 50),
+            ownerNick: a.owner_nick || '',
+            allowedPlayers: Array.isArray(a.allowed_players) ? a.allowed_players : [],
+            members: membersList,
             isAdmin: true
           });
         }
@@ -5426,21 +5439,27 @@ app.post('/api/admin/protection-zones', requireAdmin, async (req, res) => {
     const worldName = (world || 'world').trim();
     const isEnabled = enabled !== false;
     const author = (req.user && req.user.nick) ? req.user.nick : 'admin';
+    const cleanOwnerNick = req.body.ownerNick ? req.body.ownerNick.trim() : null;
 
     let zoneResult = null;
     if (id) {
       // Atualização
+      const updateData = {
+        name: cleanName,
+        world: worldName,
+        center_x: parsedX,
+        center_z: parsedZ,
+        radius: parsedRadius,
+        enabled: isEnabled,
+        updated_at: new Date().toISOString()
+      };
+      if (req.body.ownerNick !== undefined) {
+        updateData.owner_nick = cleanOwnerNick;
+      }
+
       const { data, error } = await supabase
         .from('admin_protection_zones')
-        .update({
-          name: cleanName,
-          world: worldName,
-          center_x: parsedX,
-          center_z: parsedZ,
-          radius: parsedRadius,
-          enabled: isEnabled,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -5457,6 +5476,7 @@ app.post('/api/admin/protection-zones', requireAdmin, async (req, res) => {
           center_x: parsedX,
           center_z: parsedZ,
           radius: parsedRadius,
+          owner_nick: cleanOwnerNick,
           enabled: isEnabled,
           created_by: author,
           created_at: new Date().toISOString(),
@@ -5476,7 +5496,7 @@ app.post('/api/admin/protection-zones', requireAdmin, async (req, res) => {
       zoneResult = data;
     }
 
-    registrarConsoleLog('info', `[ADMIN] Proteção de Terreno Admin "${cleanName}" configurada por ${author}: X=${parsedX}, Z=${parsedZ}, Raio=${parsedRadius} (${worldName})`, 'Proteção Admin');
+    registrarConsoleLog('info', `[ADMIN] Proteção de Terreno Admin "${cleanName}" configurada por ${author}: X=${parsedX}, Z=${parsedZ}, Raio=${parsedRadius} (${worldName})${cleanOwnerNick ? ' [Dono: ' + cleanOwnerNick + ']' : ''}`, 'Proteção Admin');
 
     res.json({
       success: true,
@@ -5514,6 +5534,185 @@ app.delete('/api/admin/protection-zones/:id', requireAdmin, async (req, res) => 
     res.json({
       success: true,
       message: `Proteção "${zoneName}" excluída com sucesso!`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/protection-zones/:id/members — Adiciona ou remove jogador da lista autorizada (primeiro vira dono!)
+app.post('/api/admin/protection-zones/:id/members', requireAdmin, async (req, res) => {
+  try {
+    const zoneId = req.params.id;
+    const { nick, action } = req.body;
+
+    const cleanNick = (nick || '').trim();
+    if (!cleanNick) {
+      return res.status(400).json({ error: 'Nick do jogador é obrigatório.' });
+    }
+
+    const { data: zone, error: fetchErr } = await supabase
+      .from('admin_protection_zones')
+      .select('id, name, owner_nick, allowed_players')
+      .eq('id', zoneId)
+      .maybeSingle();
+
+    if (fetchErr || !zone) {
+      return res.status(404).json({ error: 'Zona de proteção não encontrada.' });
+    }
+
+    let list = Array.isArray(zone.allowed_players) ? [...zone.allowed_players] : [];
+    let owner = zone.owner_nick;
+    const lowerNick = cleanNick.toLowerCase();
+
+    if (action === 'set_owner') {
+      owner = cleanNick;
+      list = list.filter(n => n.toLowerCase() !== lowerNick);
+    } else if (action === 'remove') {
+      if (owner && owner.toLowerCase() === lowerNick) {
+        owner = null;
+      }
+      list = list.filter(n => n.toLowerCase() !== lowerNick);
+    } else {
+      // Adicionar: se a zona ainda não tiver dono, o primeiro adicionado VIRA DONO!
+      if (!owner) {
+        owner = cleanNick;
+      } else {
+        const isOwner = owner.toLowerCase() === lowerNick;
+        const alreadyInList = list.some(n => n.toLowerCase() === lowerNick);
+        if (!isOwner && !alreadyInList) {
+          list.push(cleanNick);
+        }
+      }
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from('admin_protection_zones')
+      .update({
+        owner_nick: owner,
+        allowed_players: list,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', zoneId)
+      .select()
+      .single();
+
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+    const acaoTxt = action === 'remove' ? 'removido da' : (owner === cleanNick ? 'definido como DONO da' : 'autorizado na');
+    registrarConsoleLog('info', `[ADMIN] Jogador "${cleanNick}" foi ${acaoTxt} Proteção Admin "${zone.name}".`, 'Proteção Admin');
+
+    res.json({
+      success: true,
+      message: `Jogador "${cleanNick}" ${action === 'remove' ? 'removido' : (owner === cleanNick ? 'adicionado como Dono' : 'adicionado')} com sucesso!`,
+      ownerNick: owner,
+      allowedPlayers: list
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── ENDPOINTS DO JOGADOR: MEUS TERRENOS (DONO E MEMBRO) ──────────────────────
+
+// GET /api/terrenos/meus — Lista os terrenos onde o jogador logado é Dono ou Membro
+app.get('/api/terrenos/meus', requireAuth, async (req, res) => {
+  try {
+    const nick = (req.user && req.user.nick ? req.user.nick : '').trim();
+    if (!nick) return res.status(401).json({ error: 'Não autenticado.' });
+
+    const { data: zones, error } = await supabase
+      .from('admin_protection_zones')
+      .select('*')
+      .eq('enabled', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      if (error.code === '42P01') return res.json({ success: true, terrenos: [] });
+      return res.status(500).json({ error: error.message });
+    }
+
+    const lowerNick = nick.toLowerCase();
+    const meus = (zones || []).filter(z => {
+      const isOwner = z.owner_nick && z.owner_nick.toLowerCase() === lowerNick;
+      const isMember = Array.isArray(z.allowed_players) && z.allowed_players.some(p => p && p.toLowerCase() === lowerNick);
+      return isOwner || isMember || req.isAdmin;
+    }).map(z => {
+      const isOwner = (z.owner_nick && z.owner_nick.toLowerCase() === lowerNick) || req.isAdmin;
+      return {
+        id: z.id,
+        name: z.name,
+        world: z.world || 'world',
+        centerX: z.center_x,
+        centerZ: z.center_z,
+        radius: z.radius,
+        ownerNick: z.owner_nick,
+        allowedPlayers: Array.isArray(z.allowed_players) ? z.allowed_players : [],
+        myRole: isOwner ? 'dono' : 'membro',
+        isOwner: isOwner
+      };
+    });
+
+    res.json({ success: true, terrenos: meus });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/terrenos/:id/members — O Dono do terreno adiciona ou remove amigos
+app.post('/api/terrenos/:id/members', requireAuth, async (req, res) => {
+  try {
+    const userNick = (req.user && req.user.nick ? req.user.nick : '').trim();
+    const zoneId = req.params.id;
+    const { targetNick, action } = req.body;
+
+    const cleanTarget = (targetNick || '').trim();
+    if (!cleanTarget) return res.status(400).json({ error: 'Nick do jogador é obrigatório.' });
+
+    const { data: zone, error: fetchErr } = await supabase
+      .from('admin_protection_zones')
+      .select('*')
+      .eq('id', zoneId)
+      .maybeSingle();
+
+    if (fetchErr || !zone) return res.status(404).json({ error: 'Terreno não encontrado.' });
+
+    const isOwner = (zone.owner_nick && zone.owner_nick.toLowerCase() === userNick.toLowerCase()) || req.isAdmin;
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Apenas o dono deste terreno pode adicionar ou remover membros.' });
+    }
+
+    let list = Array.isArray(zone.allowed_players) ? [...zone.allowed_players] : [];
+    const lowerTarget = cleanTarget.toLowerCase();
+
+    if (action === 'remove') {
+      list = list.filter(n => n.toLowerCase() !== lowerTarget);
+    } else {
+      // Adicionar
+      if (zone.owner_nick && zone.owner_nick.toLowerCase() === lowerTarget) {
+        return res.status(400).json({ error: 'Este jogador já é o dono deste terreno.' });
+      }
+      if (!list.some(n => n.toLowerCase() === lowerTarget)) {
+        list.push(cleanTarget);
+      }
+    }
+
+    const { error: updateErr } = await supabase
+      .from('admin_protection_zones')
+      .update({
+        allowed_players: list,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', zoneId);
+
+    if (updateErr) return res.status(500).json({ error: updateErr.message });
+
+    registrarConsoleLog('info', `[TERRENOS] O Dono "${userNick}" ${action === 'remove' ? 'removeu' : 'adicionou'} "${cleanTarget}" no terreno "${zone.name}".`, 'Terrenos');
+
+    res.json({
+      success: true,
+      message: `Jogador "${cleanTarget}" ${action === 'remove' ? 'removido do' : 'adicionado ao'} seu terreno com sucesso!`,
+      allowedPlayers: list
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
