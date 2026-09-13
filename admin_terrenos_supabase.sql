@@ -10,11 +10,17 @@ CREATE TABLE IF NOT EXISTS admin_protection_zones (
   center_x INTEGER NOT NULL,
   center_z INTEGER NOT NULL,
   radius INTEGER NOT NULL DEFAULT 50,
+  owner_nick TEXT,
+  allowed_players TEXT[] DEFAULT '{}',
   enabled BOOLEAN NOT NULL DEFAULT true,
   created_by TEXT DEFAULT 'admin',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Se você já criou a tabela antes, estes comandos adicionam as novas colunas sem apagar nada:
+ALTER TABLE admin_protection_zones ADD COLUMN IF NOT EXISTS owner_nick TEXT;
+ALTER TABLE admin_protection_zones ADD COLUMN IF NOT EXISTS allowed_players TEXT[] DEFAULT '{}';
 
 -- Permissões / RLS
 ALTER TABLE admin_protection_zones ENABLE ROW LEVEL SECURITY;
