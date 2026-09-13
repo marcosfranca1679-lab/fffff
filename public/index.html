@@ -1443,13 +1443,22 @@
                   class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
               </div>
 
-              <!-- Dono do Terreno (Opcional) -->
+              <!-- Dono do Terreno (Selecionar Jogador da Whitelist ou Digitar) -->
               <div class="sm:col-span-2 space-y-1">
-                <label class="text-[10px] font-bold text-amber-400 flex items-center gap-1">
-                  <span>👑</span> <span>Dono do Terreno (Nick - Opcional)</span>
-                </label>
-                <input id="admin-prot-owner" type="text" maxlength="30" placeholder="Ex: marcos (Primeiro que adicionar vira dono)"
-                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+                <div class="flex items-center justify-between">
+                  <label class="text-[10px] font-bold text-amber-400 flex items-center gap-1">
+                    <span>👑</span> <span>Dono do Terreno (Selecionar ou Digitar)</span>
+                  </label>
+                  <span class="text-[9px] text-slate-400">Opcional</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <select id="admin-prot-select-player" onchange="selecionarJogadorAdminProt(this.value)"
+                    class="w-1/2 bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-amber-300 focus:outline-none focus:border-amber-500 truncate">
+                    <option value="">-- Selecionar Jogador --</option>
+                  </select>
+                  <input id="admin-prot-owner" type="text" maxlength="30" placeholder="Nick do dono..."
+                    class="w-1/2 bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 font-mono" />
+                </div>
               </div>
 
               <!-- Mundo -->
@@ -7433,6 +7442,8 @@
       }
     }
 
+    let cachedAdminPlayers = [];
+
     async function carregarAdminProtectionZones() {
       const listaEl = document.getElementById('admin-protecoes-lista');
       const badgeEl = document.getElementById('admin-protecoes-count-badge');
@@ -7452,12 +7463,30 @@
           return;
         }
 
+        cachedAdminPlayers = data.players || [];
+        atualizarSelectDonoAdminProt();
+
         const zones = data.zones || [];
         if (badgeEl) badgeEl.textContent = zones.length;
         renderAdminProtectionZones(zones);
       } catch (err) {
         listaEl.innerHTML = '<div class="text-xs text-rose-400 text-center py-4">Erro de conexão com o servidor.</div>';
       }
+    }
+
+    function atualizarSelectDonoAdminProt() {
+      const sel = document.getElementById('admin-prot-select-player');
+      if (!sel) return;
+      const currentVal = sel.value;
+      sel.innerHTML = '<option value="">-- Selecionar Jogador da Whitelist --</option>' + (cachedAdminPlayers || []).map(p => `
+        <option value="${escapeHtml(p.nick)}">👤 ${escapeHtml(p.nick)} [${escapeHtml(p.platform || 'Java')}]</option>
+      `).join('');
+      if (currentVal) sel.value = currentVal;
+    }
+
+    function selecionarJogadorAdminProt(nick) {
+      const inp = document.getElementById('admin-prot-owner');
+      if (inp) inp.value = nick || '';
     }
 
     function renderAdminProtectionZones(zones) {
@@ -7563,13 +7592,20 @@
                 ` : ''}
               </div>
 
-              <!-- Input para Adicionar Jogador -->
-              <div class="flex items-center gap-2 pt-1">
-                <input id="admin-prot-add-nick-${z.id}" type="text" maxlength="25" placeholder="Nick do jogador..."
-                  class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 flex-1 max-w-xs" />
+              <!-- Input / Select para Adicionar Jogador -->
+              <div class="flex items-center gap-2 pt-1 flex-wrap">
+                <select id="admin-prot-select-add-${z.id}" onchange="if(this.value){ const inp = document.getElementById('admin-prot-add-nick-${z.id}'); if(inp) inp.value = this.value; }"
+                  class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-emerald-300 focus:outline-none focus:border-emerald-500 max-w-xs">
+                  <option value="">-- Selecionar Jogador da Whitelist --</option>
+                  ${(cachedAdminPlayers || []).map(p => `
+                    <option value="${escapeHtml(p.nick)}">👤 ${escapeHtml(p.nick)} [${escapeHtml(p.platform || 'Java')}]</option>
+                  `).join('')}
+                </select>
+                <input id="admin-prot-add-nick-${z.id}" type="text" maxlength="25" placeholder="Ou digite o nick..."
+                  class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-36" />
                 <button onclick="adicionarMembroAdminProt('${z.id}')"
                   class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
-                  <span>➕</span> <span>Adicionar Jogador</span>
+                  <span>➕</span> <span>Adicionar</span>
                 </button>
               </div>
             </div>
@@ -7632,6 +7668,8 @@
           mostrarFeedback(data.message || `Proteção "${name}" criada com sucesso!`, 'green');
           if (nomeInput) nomeInput.value = '';
           if (ownerInput) ownerInput.value = '';
+          const selOwner = document.getElementById('admin-prot-select-player');
+          if (selOwner) selOwner.value = '';
           if (xInput) xInput.value = '';
           if (zInput) zInput.value = '';
           await carregarAdminProtectionZones();
@@ -7672,9 +7710,10 @@
 
     async function adicionarMembroAdminProt(zoneId) {
       const input = document.getElementById(`admin-prot-add-nick-${zoneId}`);
-      const nick = (input?.value || '').trim();
+      const select = document.getElementById(`admin-prot-select-add-${zoneId}`);
+      const nick = (input?.value || select?.value || '').trim();
       if (!nick) {
-        mostrarFeedback('Digite o nick do jogador para autorizar.', 'red');
+        mostrarFeedback('Selecione ou digite o nick do jogador para autorizar.', 'red');
         return;
       }
 
@@ -7687,6 +7726,7 @@
         if (res.ok && data.success) {
           mostrarFeedback(data.message || `Jogador "${nick}" autorizado!`, 'green');
           if (input) input.value = '';
+          if (select) select.value = '';
           await carregarAdminProtectionZones();
         } else {
           mostrarFeedback(data.error || 'Erro ao adicionar jogador.', 'red');
