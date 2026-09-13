@@ -1430,10 +1430,13 @@
           <div class="bg-black/40 rounded-xl p-3.5 border border-emerald-500/30 space-y-3 shadow-lg">
             <div class="flex items-center justify-between">
               <div class="text-[11px] font-bold text-emerald-300 flex items-center gap-1.5 uppercase tracking-wider">
-                <span>➕</span> Criar Nova Proteção de Terreno Admin
+                <span id="admin-prot-title-icon">➕</span> <span id="admin-prot-title-text">Criar Nova Proteção de Terreno Admin</span>
               </div>
-              <span class="text-[10px] text-slate-400">Proteção Permanente &middot; Bloqueio Total</span>
+              <span id="admin-prot-subtitle-text" class="text-[10px] text-slate-400">Proteção Permanente &middot; Bloqueio Total</span>
             </div>
+
+            <!-- Campo oculto com o ID ao editar -->
+            <input type="hidden" id="admin-prot-id" value="" />
 
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
               <!-- Nome da Proteção -->
@@ -1503,11 +1506,15 @@
               </div>
             </div>
 
-            <!-- Botão de Salvar -->
-            <div class="flex justify-end pt-1">
+            <!-- Botões de Ação (Salvar / Cancelar Edição) -->
+            <div class="flex items-center justify-end gap-2 pt-1 flex-wrap">
+              <button id="btn-cancelar-admin-prot" type="button" onclick="cancelarEdicaoAdminProt()"
+                class="hidden bg-white/[0.08] hover:bg-white/[0.15] text-slate-300 font-bold text-xs px-4 py-2.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                <span>✕</span> <span>Cancelar Edição</span>
+              </button>
               <button id="btn-salvar-admin-prot" onclick="salvarAdminProtectionZone()"
                 class="bg-gradient-to-r from-emerald-600 via-teal-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-lg hover:shadow-emerald-500/30 transition-all duration-200 active:scale-95 flex items-center gap-2 cursor-pointer">
-                <span>🛡️</span> <span>Criar Proteção Admin</span>
+                <span id="admin-prot-btn-icon">🛡️</span> <span id="admin-prot-btn-text">Criar Proteção Admin</span>
               </button>
             </div>
           </div>
@@ -7443,6 +7450,7 @@
     }
 
     let cachedAdminPlayers = [];
+    let cachedAdminZones = [];
 
     async function carregarAdminProtectionZones() {
       const listaEl = document.getElementById('admin-protecoes-lista');
@@ -7467,6 +7475,7 @@
         atualizarSelectDonoAdminProt();
 
         const zones = data.zones || [];
+        cachedAdminZones = zones;
         if (badgeEl) badgeEl.textContent = zones.length;
         renderAdminProtectionZones(zones);
       } catch (err) {
@@ -7487,6 +7496,89 @@
     function selecionarJogadorAdminProt(nick) {
       const inp = document.getElementById('admin-prot-owner');
       if (inp) inp.value = nick || '';
+    }
+
+    function editarAdminProtectionZone(id) {
+      const z = (cachedAdminZones || []).find(item => item.id === id);
+      if (!z) {
+        mostrarFeedback('Proteção não encontrada.', 'red');
+        return;
+      }
+
+      const idInp = document.getElementById('admin-prot-id');
+      const nomeInp = document.getElementById('admin-prot-nome');
+      const ownerInp = document.getElementById('admin-prot-owner');
+      const selPlayer = document.getElementById('admin-prot-select-player');
+      const worldInp = document.getElementById('admin-prot-world');
+      const xInp = document.getElementById('admin-prot-x');
+      const zInp = document.getElementById('admin-prot-z');
+      const slider = document.getElementById('admin-prot-radius-slider');
+      const rNum = document.getElementById('admin-prot-radius-num');
+      const titleIcon = document.getElementById('admin-prot-title-icon');
+      const titleText = document.getElementById('admin-prot-title-text');
+      const btnIcon = document.getElementById('admin-prot-btn-icon');
+      const btnText = document.getElementById('admin-prot-btn-text');
+      const btnCancel = document.getElementById('btn-cancelar-admin-prot');
+
+      if (idInp) idInp.value = z.id;
+      if (nomeInp) nomeInp.value = z.name || '';
+      if (ownerInp) ownerInp.value = z.owner_nick || '';
+      if (selPlayer) selPlayer.value = z.owner_nick || '';
+      if (worldInp) worldInp.value = z.world || 'world';
+      if (xInp) xInp.value = z.center_x !== undefined ? z.center_x : 0;
+      if (zInp) zInp.value = z.center_z !== undefined ? z.center_z : 0;
+
+      const rad = z.radius || 50;
+      if (slider) slider.value = rad;
+      if (rNum) rNum.value = rad;
+      atualizarDisplayRaioAdminProt(rad);
+
+      if (titleIcon) titleIcon.textContent = '✏️';
+      if (titleText) titleText.textContent = `Editar Proteção: "${z.name || 'Terreno'}"`;
+      if (btnIcon) btnIcon.textContent = '💾';
+      if (btnText) btnText.textContent = 'Salvar Alterações';
+      if (btnCancel) btnCancel.classList.remove('hidden');
+
+      mostrarFeedback(`Modo de edição: ajuste o nome, mundo, centro e raio da proteção "${z.name}" e clique em Salvar Alterações.`, 'amber');
+
+      if (nomeInp) {
+        nomeInp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        nomeInp.focus();
+      }
+    }
+
+    function cancelarEdicaoAdminProt() {
+      const idInp = document.getElementById('admin-prot-id');
+      const nomeInp = document.getElementById('admin-prot-nome');
+      const ownerInp = document.getElementById('admin-prot-owner');
+      const selPlayer = document.getElementById('admin-prot-select-player');
+      const worldInp = document.getElementById('admin-prot-world');
+      const xInp = document.getElementById('admin-prot-x');
+      const zInp = document.getElementById('admin-prot-z');
+      const slider = document.getElementById('admin-prot-radius-slider');
+      const rNum = document.getElementById('admin-prot-radius-num');
+      const titleIcon = document.getElementById('admin-prot-title-icon');
+      const titleText = document.getElementById('admin-prot-title-text');
+      const btnIcon = document.getElementById('admin-prot-btn-icon');
+      const btnText = document.getElementById('admin-prot-btn-text');
+      const btnCancel = document.getElementById('btn-cancelar-admin-prot');
+
+      if (idInp) idInp.value = '';
+      if (nomeInp) nomeInp.value = '';
+      if (ownerInp) ownerInp.value = '';
+      if (selPlayer) selPlayer.value = '';
+      if (worldInp) worldInp.value = 'world';
+      if (xInp) xInp.value = '';
+      if (zInp) zInp.value = '';
+      if (slider) slider.value = 50;
+      if (rNum) rNum.value = 50;
+      atualizarDisplayRaioAdminProt(50);
+
+      if (titleIcon) titleIcon.textContent = '➕';
+      if (titleText) titleText.textContent = 'Criar Nova Proteção de Terreno Admin';
+      if (btnIcon) btnIcon.textContent = '🛡️';
+      if (btnText) btnText.textContent = 'Criar Proteção Admin';
+      if (btnCancel) btnCancel.classList.add('hidden');
     }
 
     function renderAdminProtectionZones(zones) {
@@ -7557,7 +7649,11 @@
                 </div>
               </div>
 
-              <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+              <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center flex-wrap">
+                <button onclick="editarAdminProtectionZone('${z.id}')" 
+                  class="text-amber-300 hover:text-amber-100 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-sm" title="Editar nome, mundo, coordenadas ou raio">
+                  <span>✏️</span> <span>Editar</span>
+                </button>
                 <button onclick="removerAdminProtectionZone('${z.id}', '${escapeHtml(z.name || '')}')" 
                   class="text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
                   <span>🗑️</span> <span>Excluir</span>
@@ -7615,6 +7711,7 @@
     }
 
     async function salvarAdminProtectionZone() {
+      const idInput = document.getElementById('admin-prot-id');
       const nomeInput = document.getElementById('admin-prot-nome');
       const ownerInput = document.getElementById('admin-prot-owner');
       const worldInput = document.getElementById('admin-prot-world');
@@ -7623,6 +7720,7 @@
       const rInput = document.getElementById('admin-prot-radius-num');
       const btn = document.getElementById('btn-salvar-admin-prot');
 
+      const editId = (idInput?.value || '').trim() || null;
       const name = (nomeInput?.value || '').trim();
       if (!name) {
         mostrarFeedback('Digite um nome para a proteção (ex: "Spawn", "Vila").', 'red');
@@ -7650,31 +7748,29 @@
           btn.classList.add('opacity-50');
         }
 
+        const payload = {
+          name,
+          ownerNick: ownerNick || null,
+          world,
+          centerX: x,
+          centerZ: z,
+          radius
+        };
+        if (editId) payload.id = editId;
+
         const res = await apiFetch('/api/admin/protection-zones', {
           method: 'POST',
-          body: JSON.stringify({
-            name,
-            ownerNick: ownerNick || null,
-            world,
-            centerX: x,
-            centerZ: z,
-            radius
-          })
+          body: JSON.stringify(payload)
         });
 
         const data = await res.json();
 
         if (res.ok && data.success) {
-          mostrarFeedback(data.message || `Proteção "${name}" criada com sucesso!`, 'green');
-          if (nomeInput) nomeInput.value = '';
-          if (ownerInput) ownerInput.value = '';
-          const selOwner = document.getElementById('admin-prot-select-player');
-          if (selOwner) selOwner.value = '';
-          if (xInput) xInput.value = '';
-          if (zInput) zInput.value = '';
+          mostrarFeedback(data.message || (editId ? `Proteção "${name}" atualizada com sucesso!` : `Proteção "${name}" criada com sucesso!`), 'green');
+          cancelarEdicaoAdminProt();
           await carregarAdminProtectionZones();
         } else {
-          mostrarFeedback(data.error || 'Erro ao criar proteção admin.', 'red');
+          mostrarFeedback(data.error || 'Erro ao salvar proteção admin.', 'red');
         }
       } catch (err) {
         mostrarFeedback('Erro de conexão com o servidor.', 'red');
