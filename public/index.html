@@ -7581,6 +7581,36 @@
       if (btnCancel) btnCancel.classList.add('hidden');
     }
 
+    let openAdminProtZones = new Set();
+
+    function toggleAdminProtCard(id) {
+      const body = document.getElementById(`admin-prot-body-${id}`);
+      const chevron = document.getElementById(`admin-prot-chevron-${id}`);
+      const label = document.getElementById(`admin-prot-label-${id}`);
+      if (!body) return;
+
+      const isHidden = body.classList.contains('hidden');
+      if (isHidden) {
+        body.classList.remove('hidden');
+        openAdminProtZones.add(id);
+        if (chevron) {
+          chevron.textContent = '▲';
+          chevron.classList.add('text-emerald-400');
+          chevron.classList.remove('text-slate-400');
+        }
+        if (label) label.textContent = 'Ocultar detalhes';
+      } else {
+        body.classList.add('hidden');
+        openAdminProtZones.delete(id);
+        if (chevron) {
+          chevron.textContent = '▼';
+          chevron.classList.remove('text-emerald-400');
+          chevron.classList.add('text-slate-400');
+        }
+        if (label) label.textContent = 'Ver detalhes';
+      }
+    }
+
     function renderAdminProtectionZones(zones) {
       const listaEl = document.getElementById('admin-protecoes-lista');
       if (!listaEl) return;
@@ -7619,90 +7649,109 @@
         const ownerTxt = z.owner_nick ? escapeHtml(z.owner_nick) : '<span class="text-slate-500 italic">Sem dono (Servidor)</span>';
         const membersList = Array.isArray(z.allowed_players) ? z.allowed_players : [];
 
+        const isOpen = openAdminProtZones.has(z.id);
+        const hiddenClass = isOpen ? '' : 'hidden';
+        const chevronChar = isOpen ? '▲' : '▼';
+        const chevronClass = isOpen ? 'text-emerald-400' : 'text-slate-400';
+        const labelText = isOpen ? 'Ocultar detalhes' : 'Ver detalhes';
+
         return `
-          <div class="glass-card rounded-xl p-3.5 border border-white/[0.08] hover:border-emerald-500/30 transition space-y-3 bg-black/40">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div class="space-y-1 min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="text-sm font-extrabold text-white flex items-center gap-1.5 truncate">
-                    <span class="text-emerald-400">🛡️</span>
-                    <span>${escapeHtml(z.name || 'Proteção')}</span>
-                  </span>
-                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${worldColor}">
-                    ${worldLabel}
-                  </span>
-                  <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                    ${diam}×${diam} blocos
-                  </span>
-                  <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                    <span>👑 Dono:</span> <strong>${ownerTxt}</strong>
-                  </span>
-                </div>
-
-                <div class="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
-                  <span>📍 Centro: <strong class="text-white font-mono">X=${z.center_x}, Z=${z.center_z}</strong></span>
-                  <span>•</span>
-                  <span>📐 Raio: <strong class="text-emerald-300 font-mono">${r}</strong> blocos</span>
-                  <span>•</span>
-                  <span class="text-slate-400 text-[10px]">Limites: X=[${minX}..${maxX}], Z=[${minZ}..${maxZ}]</span>
-                  ${dataFormatada ? `<span>•</span><span class="text-slate-500 text-[10px]">Criado em ${dataFormatada}</span>` : ''}
-                </div>
+          <div class="glass-card rounded-xl border border-white/[0.08] hover:border-emerald-500/40 transition bg-black/40 overflow-hidden shadow-sm">
+            <!-- Cabeçalho Clicável: Apenas o Nome da Proteção -->
+            <div onclick="toggleAdminProtCard('${z.id}')" 
+              class="flex items-center justify-between p-3.5 cursor-pointer select-none hover:bg-white/[0.04] transition active:scale-[0.99]">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span class="text-base text-emerald-400 flex-shrink-0">🛡️</span>
+                <span class="text-sm font-extrabold text-white truncate tracking-wide">${escapeHtml(z.name || 'Proteção')}</span>
               </div>
-
-              <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center flex-wrap">
-                <button onclick="editarAdminProtectionZone('${z.id}')" 
-                  class="text-amber-300 hover:text-amber-100 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-sm" title="Editar nome, mundo, coordenadas ou raio">
-                  <span>✏️</span> <span>Editar</span>
-                </button>
-                <button onclick="removerAdminProtectionZone('${z.id}', '${escapeHtml(z.name || '')}')" 
-                  class="text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
-                  <span>🗑️</span> <span>Excluir</span>
-                </button>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span id="admin-prot-label-${z.id}" class="text-[10px] text-slate-400 font-medium">${labelText}</span>
+                <span id="admin-prot-chevron-${z.id}" class="text-xs ${chevronClass} transition-transform duration-200">${chevronChar}</span>
               </div>
             </div>
 
-            <!-- Seção de Jogadores / Amigos Autorizados -->
-            <div class="pt-2 border-t border-white/[0.06] space-y-2">
-              <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                <span>👥 Jogadores Autorizados a Construir/Quebrar:</span>
-                <span class="text-slate-500 font-normal">O primeiro adicionado vira dono se não houver</span>
+            <!-- Corpo Expansível com todos os detalhes (Aparece ao clicar em cima) -->
+            <div id="admin-prot-body-${z.id}" class="${hiddenClass} p-3.5 pt-2.5 space-y-3 border-t border-white/[0.06] bg-black/25">
+              <!-- Informações de Mundo, Dono, Coordenadas e Botões -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div class="space-y-1.5 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${worldColor}">
+                      ${worldLabel}
+                    </span>
+                    <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                      ${diam}×${diam} blocos
+                    </span>
+                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                      <span>👑 Dono:</span> <strong>${ownerTxt}</strong>
+                    </span>
+                  </div>
+
+                  <div class="flex items-center gap-2.5 text-[11px] text-slate-300 flex-wrap">
+                    <span>📍 Centro: <strong class="text-white font-mono">X=${z.center_x}, Z=${z.center_z}</strong></span>
+                    <span>•</span>
+                    <span>📐 Raio: <strong class="text-emerald-300 font-mono">${r}</strong> blocos</span>
+                    <span>•</span>
+                    <span class="text-slate-400 text-[10px]">Limites: X=[${minX}..${maxX}], Z=[${minZ}..${maxZ}]</span>
+                    ${dataFormatada ? `<span>•</span><span class="text-slate-500 text-[10px]">Criado em ${dataFormatada}</span>` : ''}
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-center flex-wrap pt-1 sm:pt-0">
+                  <button onclick="editarAdminProtectionZone('${z.id}')" 
+                    class="text-amber-300 hover:text-amber-100 text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer shadow-sm" title="Editar nome, mundo, coordenadas ou raio">
+                    <span>✏️</span> <span>Editar</span>
+                  </button>
+                  <button onclick="removerAdminProtectionZone('${z.id}', '${escapeHtml(z.name || '')}')" 
+                    class="text-rose-400 hover:text-rose-200 text-xs font-bold bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 px-3 py-1.5 rounded-xl transition flex items-center gap-1 cursor-pointer">
+                    <span>🗑️</span> <span>Excluir</span>
+                  </button>
+                </div>
               </div>
 
-              <div class="flex flex-wrap gap-1.5">
-                ${z.owner_nick ? `
-                  <span class="bg-amber-500/20 text-amber-200 border border-amber-500/40 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                    <span>👑 ${escapeHtml(z.owner_nick)}</span>
-                    <button onclick="removerMembroAdminProt('${z.id}', '${escapeHtml(z.owner_nick)}')" class="text-amber-400 hover:text-white font-bold ml-1" title="Remover Dono">✕</button>
-                  </span>
-                ` : ''}
+              <!-- Seção de Jogadores / Amigos Autorizados -->
+              <div class="pt-2.5 border-t border-white/[0.06] space-y-2">
+                <div class="flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <span>👥 Jogadores Autorizados a Construir/Quebrar:</span>
+                  <span class="text-slate-500 font-normal">O primeiro adicionado vira dono se não houver</span>
+                </div>
 
-                ${membersList.map(m => `
-                  <span class="bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
-                    <span>👤 ${escapeHtml(m)}</span>
-                    <button onclick="removerMembroAdminProt('${z.id}', '${escapeHtml(m)}')" class="text-emerald-400 hover:text-rose-300 font-bold ml-1" title="Remover Jogador">✕</button>
-                  </span>
-                `).join('')}
+                <div class="flex flex-wrap gap-1.5">
+                  ${z.owner_nick ? `
+                    <span class="bg-amber-500/20 text-amber-200 border border-amber-500/40 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                      <span>👑 ${escapeHtml(z.owner_nick)}</span>
+                      <button onclick="removerMembroAdminProt('${z.id}', '${escapeHtml(z.owner_nick)}')" class="text-amber-400 hover:text-white font-bold ml-1" title="Remover Dono">✕</button>
+                    </span>
+                  ` : ''}
 
-                ${(!z.owner_nick && membersList.length === 0) ? `
-                  <span class="text-[11px] text-slate-500 italic">Nenhum jogador autorizado (apenas administradores).</span>
-                ` : ''}
-              </div>
-
-              <!-- Input / Select para Adicionar Jogador -->
-              <div class="flex items-center gap-2 pt-1 flex-wrap">
-                <select id="admin-prot-select-add-${z.id}" onchange="if(this.value){ const inp = document.getElementById('admin-prot-add-nick-${z.id}'); if(inp) inp.value = this.value; }"
-                  class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-emerald-300 focus:outline-none focus:border-emerald-500 max-w-xs">
-                  <option value="">-- Selecionar Jogador da Whitelist --</option>
-                  ${(cachedAdminPlayers || []).map(p => `
-                    <option value="${escapeHtml(p.nick)}">👤 ${escapeHtml(p.nick)} [${escapeHtml(p.platform || 'Java')}]</option>
+                  ${membersList.map(m => `
+                    <span class="bg-emerald-500/15 text-emerald-200 border border-emerald-500/30 px-2 py-0.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                      <span>👤 ${escapeHtml(m)}</span>
+                      <button onclick="removerMembroAdminProt('${z.id}', '${escapeHtml(m)}')" class="text-emerald-400 hover:text-rose-300 font-bold ml-1" title="Remover Jogador">✕</button>
+                    </span>
                   `).join('')}
-                </select>
-                <input id="admin-prot-add-nick-${z.id}" type="text" maxlength="25" placeholder="Ou digite o nick..."
-                  class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-36" />
-                <button onclick="adicionarMembroAdminProt('${z.id}')"
-                  class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
-                  <span>➕</span> <span>Adicionar</span>
-                </button>
+
+                  ${(!z.owner_nick && membersList.length === 0) ? `
+                    <span class="text-[11px] text-slate-500 italic">Nenhum jogador autorizado (apenas administradores).</span>
+                  ` : ''}
+                </div>
+
+                <!-- Input / Select para Adicionar Jogador -->
+                <div class="flex items-center gap-2 pt-1 flex-wrap">
+                  <select id="admin-prot-select-add-${z.id}" onchange="if(this.value){ const inp = document.getElementById('admin-prot-add-nick-${z.id}'); if(inp) inp.value = this.value; }"
+                    class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-emerald-300 focus:outline-none focus:border-emerald-500 max-w-xs">
+                    <option value="">-- Selecionar Jogador da Whitelist --</option>
+                    ${(cachedAdminPlayers || []).map(p => `
+                      <option value="${escapeHtml(p.nick)}">👤 ${escapeHtml(p.nick)} [${escapeHtml(p.platform || 'Java')}]</option>
+                    `).join('')}
+                  </select>
+                  <input id="admin-prot-add-nick-${z.id}" type="text" maxlength="25" placeholder="Ou digite o nick..."
+                    class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-36" />
+                  <button onclick="adicionarMembroAdminProt('${z.id}')"
+                    class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                    <span>➕</span> <span>Adicionar</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
