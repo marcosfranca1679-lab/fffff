@@ -44,6 +44,15 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.Material;
+import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -172,6 +181,24 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private final Map<String, KingdomArea> adminProtections = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastProtectionNotice = new ConcurrentHashMap<>();
 
+    public static class UserSession {
+        public final String nick;
+        public final String email;
+        public final String token;
+        public final boolean isAdmin;
+        public final long loggedAt;
+
+        public UserSession(String nick, String email, String token, boolean isAdmin) {
+            this.nick = nick;
+            this.email = email;
+            this.token = token;
+            this.isAdmin = isAdmin;
+            this.loggedAt = System.currentTimeMillis();
+        }
+    }
+
+    private final Map<String, UserSession> activeSessions = new ConcurrentHashMap<>();
+
     public record BanEntry(String reason, String remaining) {}
 
     private HttpClient httpClient;
@@ -186,6 +213,11 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             .build();
 
         getServer().getPluginManager().registerEvents(this, this);
+
+        // Registro de comandos in-game (liberados para todos os jogadores)
+        if (getCommand("painel") != null) getCommand("painel").setExecutor(this);
+        if (getCommand("reino") != null) getCommand("reino").setExecutor(this);
+        if (getCommand("terreno") != null) getCommand("terreno").setExecutor(this);
 
         // 1. Carrega dados salvos do dados.yml
         loadLocalData();
@@ -313,10 +345,23 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 }
             }
 
+            activeSessions.clear();
+            ConfigurationSection sessSec = yaml.getConfigurationSection("sessions");
+            if (sessSec != null) {
+                for (String sKey : sessSec.getKeys(false)) {
+                    String sn = sessSec.getString(sKey + ".nick", sKey);
+                    String se = sessSec.getString(sKey + ".email", "");
+                    String st = sessSec.getString(sKey + ".token", "");
+                    boolean sa = sessSec.getBoolean(sKey + ".isAdmin", false);
+                    activeSessions.put(sKey.toLowerCase().trim(), new UserSession(sn, se, st, sa));
+                }
+            }
+
             log.info("[LocalData] Carregados do disco: " + localWhitelist.size() + " whitelist, " 
                 + localBans.size() + " bans, " + localIpBans.size() + " bans IP, " + localLives.size() + " vidas, "
                 + kingdomProtections.size() + " proteções de reino, "
-                + adminProtections.size() + " proteções admin.");
+                + adminProtections.size() + " proteções admin, "
+                + activeSessions.size() + " sessões ativas.");
         } catch (Exception e) {
             log.warning("[LocalData] Erro ao carregar dados.yml: " + e.getMessage());
         }
@@ -365,6 +410,15 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 yaml.set(path + ".radius", a.radius);
                 yaml.set(path + ".owner", a.ownerNick != null ? a.ownerNick : "");
                 yaml.set(path + ".members", new ArrayList<>(a.members));
+            }
+
+            for (Map.Entry<String, UserSession> entry : activeSessions.entrySet()) {
+                String k = entry.getKey();
+                UserSession s = entry.getValue();
+                yaml.set("sessions." + k + ".nick", s.nick);
+                yaml.set("sessions." + k + ".email", s.email);
+                yaml.set("sessions." + k + ".token", s.token);
+                yaml.set("sessions." + k + ".isAdmin", s.isAdmin);
             }
 
             yaml.save(file);
@@ -805,51 +859,569 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // ── Comando in-game /reino info e verificação de território/sobreposição ──
+    // ── Holder para Menus Customizados (compatível 100% com Java e Bedrock) ──
+    public static class PainelMenuHolder implements org.bukkit.inventory.InventoryHolder {
+        private final String menuTipo;
+        public PainelMenuHolder(String menuTipo) {
+            this.menuTipo = menuTipo;
+        }
+        public String getMenuTipo() {
+            return menuTipo;
+        }
+        @Override
+        public Inventory getInventory() {
+            return null;
+        }
+    }
+
+    public boolean isPlayerAdmin(Player player) {
+        if (player == null) return false;
+        String clean = cleanNick(player.getName()).toLowerCase().trim();
+        if (BYPASS.contains(clean) || player.isOp()) return true;
+        UserSession s = activeSessions.get(clean);
+        return s != null && s.isAdmin;
+    }
+
+    // ── Tratamento Oficial de Comandos Bukkit/Paper ──────────────────────────
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("§cApenas jogadores no jogo podem usar este comando.");
+            return true;
+        }
+
+        String cmd = command.getName().toLowerCase();
+        if (cmd.equals("reino")) {
+            if (args.length > 0 && (args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("checar"))) {
+                exibirInfoTerritorio(player);
+            } else {
+                abrirMenuReinos(player);
+            }
+            return true;
+        }
+
+        if (cmd.equals("terreno")) {
+            if (args.length > 0 && (args[0].equalsIgnoreCase("info") || args[0].equalsIgnoreCase("checar"))) {
+                exibirInfoTerritorio(player);
+            } else {
+                abrirMenuTerrenos(player);
+            }
+            return true;
+        }
+
+        if (cmd.equals("painel") || cmd.equals("menu") || cmd.equals("p")) {
+            if (args.length >= 3 && args[0].equalsIgnoreCase("login")) {
+                fazerLoginSite(player, args[1], args[2]);
+                return true;
+            }
+            if (args.length >= 1 && args[0].equalsIgnoreCase("logout")) {
+                activeSessions.remove(cleanNick(player.getName()).toLowerCase().trim());
+                saveLocalData();
+                player.sendMessage(Component.text("§e[5DAY MC] Você desconectou da sua conta do site."));
+                return true;
+            }
+            if (args.length >= 1 && args[0].equalsIgnoreCase("reino")) {
+                abrirMenuReinos(player);
+                return true;
+            }
+            if (args.length >= 1 && (args[0].equalsIgnoreCase("terreno") || args[0].equalsIgnoreCase("terrenos"))) {
+                abrirMenuTerrenos(player);
+                return true;
+            }
+            if (args.length >= 1 && args[0].equalsIgnoreCase("admin")) {
+                if (isPlayerAdmin(player)) {
+                    abrirMenuAdmin(player);
+                } else {
+                    player.sendMessage(Component.text("§c[5DAY MC] Acesso restrito. Faça login com a conta de Administrador usando /painel login <email> <senha>"));
+                }
+                return true;
+            }
+
+            abrirMenuPrincipal(player);
+            return true;
+        }
+
+        return false;
+    }
+
+    // ── Interceptador de Comandos para Segurança e Acesso Rápido ────────────
     @EventHandler(priority = EventPriority.LOWEST)
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
-        String msg = event.getMessage().trim().toLowerCase();
-        if (msg.equals("/reino info") || msg.equals("/reino checar") || msg.equals("/reino") || msg.equals("/terreno")) {
-            event.setCancelled(true);
-            Player player = event.getPlayer();
-            Location loc = player.getLocation();
-            KingdomArea area = getProtectedAreaAt(loc);
+        String fullMsg = event.getMessage().trim();
+        String[] parts = fullMsg.split("\\s+");
+        if (parts.length == 0) return;
+        String baseCmd = parts[0].toLowerCase();
 
-            if (area != null) {
-                if (area.isAdminZone) {
-                    player.sendMessage(Component.text("§6§l🛡️ [5DAY MC] Proteção de Terreno do Administrador:"));
-                    player.sendMessage(Component.text("§e• Nome: §fProteção de \"" + area.nome + "\""));
-                    player.sendMessage(Component.text("§e• Mundo: §f" + area.world));
-                    player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
-                    player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
-                    String pNick = cleanNick(player.getName()).toLowerCase().trim();
-                    boolean isAdmin = BYPASS.contains(pNick) || player.isOp();
-                    boolean isOwner = area.ownerNick != null && area.ownerNick.toLowerCase().trim().equals(pNick);
-                    boolean isMem = area.isMember(pNick) || isAdmin;
-
-                    String donoTxt = (area.ownerNick != null && !area.ownerNick.isBlank()) ? area.ownerNick : "Servidor / Administrador";
-                    player.sendMessage(Component.text("§e• Dono: §f" + donoTxt));
-
-                    String statusTxt;
-                    if (isOwner) statusTxt = "§a👑 Você é o Dono desta Proteção (Acesso Total)";
-                    else if (isAdmin) statusTxt = "§a👑 Administrador (Acesso Total)";
-                    else if (isMem) statusTxt = "§a✅ Amigo / Membro Autorizado";
-                    else statusTxt = "§c❌ Não é membro (Apenas visualização)";
-
-                    player.sendMessage(Component.text("§e• Seu Status: " + statusTxt));
-                } else {
-                    player.sendMessage(Component.text("§6§l🏰 [5DAY MC] Território Protegido de Reino:"));
-                    player.sendMessage(Component.text("§e• Reino: §f" + area.nome + " §7[" + area.tag + "]"));
-                    player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
-                    player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
-                    player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
-                    boolean isMem = area.isMember(cleanNick(player.getName()).toLowerCase().trim()) || BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim());
-                    player.sendMessage(Component.text("§e• Seu Status: " + (isMem ? "§a✅ Membro autorizado" : "§c❌ Não é membro (Apenas visualização)")));
-                }
-            } else {
-                player.sendMessage(Component.text("§a§l🌍 [5DAY MC] Território Livre!"));
-                player.sendMessage(Component.text("§7Nenhum reino possui proteção nesta área (Coordenadas atuais: X=" + loc.getBlockX() + ", Z=" + loc.getBlockZ() + ")."));
+        if (baseCmd.equals("/painel") || baseCmd.equals("/menu") || baseCmd.equals("/p")) {
+            if (parts.length >= 3 && parts[1].equalsIgnoreCase("login")) {
+                event.setCancelled(true);
+                fazerLoginSite(event.getPlayer(), parts[2], parts[3]);
+                return;
             }
+            if (parts.length == 1) {
+                event.setCancelled(true);
+                abrirMenuPrincipal(event.getPlayer());
+                return;
+            }
+        }
+        if (baseCmd.equals("/reino")) {
+            if (parts.length == 1) {
+                event.setCancelled(true);
+                abrirMenuReinos(event.getPlayer());
+                return;
+            }
+            if (parts.length > 1 && (parts[1].equalsIgnoreCase("info") || parts[1].equalsIgnoreCase("checar"))) {
+                event.setCancelled(true);
+                exibirInfoTerritorio(event.getPlayer());
+                return;
+            }
+        }
+        if (baseCmd.equals("/terreno")) {
+            if (parts.length == 1) {
+                event.setCancelled(true);
+                abrirMenuTerrenos(event.getPlayer());
+                return;
+            }
+            if (parts.length > 1 && (parts[1].equalsIgnoreCase("info") || parts[1].equalsIgnoreCase("checar"))) {
+                event.setCancelled(true);
+                exibirInfoTerritorio(event.getPlayer());
+                return;
+            }
+        }
+    }
+
+    // ── Login Assíncrono com o Site (Supabase / Vercel API) ─────────────────
+    private void fazerLoginSite(Player player, String loginOrEmail, String password) {
+        player.sendMessage(Component.text("§e[5DAY MC] Verificando credenciais no site..."));
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                JsonObject json = new JsonObject();
+                json.addProperty("login", loginOrEmail);
+                json.addProperty("password", password);
+
+                HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://fffff-autoforge.vercel.app/api/auth/login"))
+                    .header("Content-Type", "application/json")
+                    .header("User-Agent", "5DAY-MC-Plugin")
+                    .timeout(Duration.ofSeconds(6))
+                    .POST(HttpRequest.BodyPublishers.ofString(json.toString(), StandardCharsets.UTF_8))
+                    .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() == 200) {
+                    JsonObject resp = JsonParser.parseString(response.body()).getAsJsonObject();
+                    if (resp.has("success") && resp.get("success").getAsBoolean()) {
+                        String token = resp.has("token") ? resp.get("token").getAsString() : "";
+                        boolean isAdmin = resp.has("isAdmin") && resp.get("isAdmin").getAsBoolean();
+                        String userNick = cleanNick(player.getName());
+                        if (resp.has("user") && resp.getAsJsonObject("user").has("nick")) {
+                            userNick = resp.getAsJsonObject("user").get("nick").getAsString();
+                        }
+
+                        String key = cleanNick(player.getName()).toLowerCase().trim();
+                        activeSessions.put(key, new UserSession(userNick, loginOrEmail, token, isAdmin));
+                        saveLocalData();
+
+                        final boolean fIsAdmin = isAdmin;
+                        final String fNick = userNick;
+                        getServer().getScheduler().runTask(this, () -> {
+                            player.sendMessage(Component.text("§a✔ [5DAY MC] Login realizado com sucesso!"));
+                            player.sendMessage(Component.text("§eBem-vindo(a), §f" + fNick + (fIsAdmin ? " §c§l[ADMINISTRADOR]" : "") + "§e!"));
+                            abrirMenuPrincipal(player);
+                        });
+                        return;
+                    }
+                }
+
+                String err = "Email/Nick ou senha incorretos.";
+                try {
+                    JsonObject errObj = JsonParser.parseString(response.body()).getAsJsonObject();
+                    if (errObj.has("error")) err = errObj.get("error").getAsString();
+                } catch (Exception ignored) {}
+
+                final String finalErr = err;
+                getServer().getScheduler().runTask(this, () -> {
+                    player.sendMessage(Component.text("§c❌ [5DAY MC] " + finalErr));
+                });
+            } catch (Exception e) {
+                getServer().getScheduler().runTask(this, () -> {
+                    player.sendMessage(Component.text("§c❌ [5DAY MC] Falha ao conectar ao site: " + e.getMessage()));
+                });
+            }
+        });
+    }
+
+    // ── Helper para Criar Itens Decorados ────────────────────────────────────
+    private ItemStack criarItem(Material material, String nome, String... lore) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        if (meta != null) {
+            meta.displayName(Component.text(nome));
+            if (lore != null && lore.length > 0) {
+                List<Component> loreList = new ArrayList<>();
+                for (String l : lore) {
+                    loreList.add(Component.text(l));
+                }
+                meta.lore(loreList);
+            }
+            item.setItemMeta(meta);
+        }
+        return item;
+    }
+
+    private ItemStack criarCabecaJogador(Player player, String nome, String... lore) {
+        ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+        if (item.getItemMeta() instanceof SkullMeta skullMeta) {
+            skullMeta.setOwningPlayer(player);
+            skullMeta.displayName(Component.text(nome));
+            if (lore != null && lore.length > 0) {
+                List<Component> loreList = new ArrayList<>();
+                for (String l : lore) {
+                    loreList.add(Component.text(l));
+                }
+                skullMeta.lore(loreList);
+            }
+            item.setItemMeta(skullMeta);
+        }
+        return item;
+    }
+
+    // ── Telas GUI (Caixas de Baú) ────────────────────────────────────────────
+    public void abrirMenuPrincipal(Player player) {
+        Inventory inv = Bukkit.createInventory(new PainelMenuHolder("principal"), 27, Component.text("§0§l5DAY MC - Menu Principal"));
+        ItemStack vidro = criarItem(Material.GRAY_STAINED_GLASS_PANE, "§7");
+        for (int i = 0; i < 27; i++) {
+            inv.setItem(i, vidro);
+        }
+
+        String clean = cleanNick(player.getName()).toLowerCase().trim();
+        int vidas = localLives.getOrDefault(clean, 5);
+        int totalSeconds = player.getStatistic(Statistic.PLAY_ONE_MINUTE) / 20;
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        String tempo = (hours > 0 ? hours + "h " : "") + minutes + "m";
+        UserSession sess = activeSessions.get(clean);
+        boolean isAdmin = isPlayerAdmin(player);
+
+        ItemStack cabeca = criarCabecaJogador(player, "§6§l👤 " + player.getName(),
+            "§7Vidas: §c" + vidas + " ❤️",
+            "§7Tempo de Jogo: §e" + tempo + " ⏰",
+            "§7Conta Site: " + (sess != null ? "§a" + sess.nick : "§cNão conectado"),
+            "§7Cargo: " + (isAdmin ? "§c§lADMINISTRADOR" : "§7Jogador")
+        );
+        inv.setItem(4, cabeca);
+
+        inv.setItem(11, criarItem(Material.GOLDEN_HELMET, "§6§l👑 Reinos",
+            "§7Ver membros, status e proteção do reino.",
+            "§eClique para abrir!"
+        ));
+
+        inv.setItem(13, criarItem(Material.GRASS_BLOCK, "§a§l🗺️ Meus Terrenos",
+            "§7Ver terrenos protegidos onde você é Dono ou Amigo.",
+            "§eClique para abrir!"
+        ));
+
+        if (isAdmin) {
+            inv.setItem(15, criarItem(Material.NETHERITE_CHESTPLATE, "§c§l⚡ Painel do Administrador",
+                "§7Aprovar Whitelist, Bans, Proteções e Vidas.",
+                "§cClique para acessar!"
+            ));
+        } else {
+            inv.setItem(15, criarItem(Material.BOOK, "§b§l🔑 Conectar Conta do Site",
+                "§7Vincule sua conta digitando no chat:",
+                "§e/painel login <email> <senha>",
+                "§7Libera funções exclusivas!"
+            ));
+        }
+
+        inv.setItem(22, criarItem(Material.BARRIER, "§c§l✕ Fechar Menu"));
+
+        player.openInventory(inv);
+    }
+
+    public void abrirMenuReinos(Player player) {
+        Inventory inv = Bukkit.createInventory(new PainelMenuHolder("reinos"), 27, Component.text("§0§l5DAY MC - Reinos"));
+        ItemStack vidro = criarItem(Material.GRAY_STAINED_GLASS_PANE, "§7");
+        for (int i = 0; i < 27; i++) {
+            inv.setItem(i, vidro);
+        }
+
+        String clean = cleanNick(player.getName()).toLowerCase().trim();
+        KingdomArea meuReino = null;
+        for (KingdomArea k : kingdomProtections.values()) {
+            if (k.isMember(clean)) {
+                meuReino = k;
+                break;
+            }
+        }
+
+        if (meuReino != null) {
+            inv.setItem(11, criarItem(Material.BEACON, "§6§l🏰 " + meuReino.nome + " §7[" + meuReino.tag + "]",
+                "§e• Mundo: §f" + meuReino.world,
+                "§e• Centro: §fX=" + meuReino.centerX + ", Z=" + meuReino.centerZ,
+                "§e• Raio: §f" + meuReino.radius + " blocos"
+            ));
+
+            inv.setItem(13, criarItem(Material.PLAYER_HEAD, "§b§l👥 Membros do Reino",
+                "§7Total: §f" + meuReino.members.size() + " membros",
+                "§7Membros: §f" + String.join(", ", meuReino.members)
+            ));
+
+            inv.setItem(15, criarItem(Material.COMPASS, "§e§l🧭 Coordenadas do Território",
+                "§7Coordenadas do centro do seu reino:",
+                "§fX: " + meuReino.centerX + " | Z: " + meuReino.centerZ
+            ));
+        } else {
+            inv.setItem(13, criarItem(Material.BOOK, "§e§lℹ️ Nenhum Reino Encontrado",
+                "§7Você ainda não faz parte de nenhum reino.",
+                "§7Acesse o site oficial para criar ou ingressar em um reino!"
+            ));
+        }
+
+        inv.setItem(18, criarItem(Material.ARROW, "§7⬅ Voltar"));
+        inv.setItem(22, criarItem(Material.BARRIER, "§c§l✕ Fechar Menu"));
+
+        player.openInventory(inv);
+    }
+
+    public void abrirMenuTerrenos(Player player) {
+        Inventory inv = Bukkit.createInventory(new PainelMenuHolder("terrenos"), 27, Component.text("§0§l5DAY MC - Meus Terrenos"));
+        ItemStack vidro = criarItem(Material.GRAY_STAINED_GLASS_PANE, "§7");
+        for (int i = 0; i < 27; i++) {
+            inv.setItem(i, vidro);
+        }
+
+        String clean = cleanNick(player.getName()).toLowerCase().trim();
+        List<KingdomArea> terrenos = new ArrayList<>();
+        for (KingdomArea a : adminProtections.values()) {
+            if (a.isMember(clean) || (a.ownerNick != null && a.ownerNick.toLowerCase().trim().equals(clean))) {
+                terrenos.add(a);
+            }
+        }
+
+        if (terrenos.isEmpty()) {
+            inv.setItem(13, criarItem(Material.BARRIER, "§c§lNenhum Terreno Encontrado",
+                "§7Você ainda não possui nenhum terreno protegido.",
+                "§7Fale com um Administrador para registrar sua proteção!"
+            ));
+        } else {
+            int slot = 10;
+            for (KingdomArea t : terrenos) {
+                if (slot > 16) break;
+                boolean isOwner = t.ownerNick != null && t.ownerNick.toLowerCase().trim().equals(clean);
+                inv.setItem(slot, criarItem(Material.OAK_DOOR, "§a§l🛡️ " + t.nome,
+                    "§e• Status: " + (isOwner ? "§a👑 Dono" : "§b✅ Amigo Autorizado"),
+                    "§e• Centro: §fX=" + t.centerX + ", Z=" + t.centerZ,
+                    "§e• Raio: §f" + t.radius + " blocos",
+                    "§e• Mundo: §f" + t.world
+                ));
+                slot++;
+            }
+        }
+
+        inv.setItem(18, criarItem(Material.ARROW, "§7⬅ Voltar"));
+        inv.setItem(22, criarItem(Material.BARRIER, "§c§l✕ Fechar Menu"));
+
+        player.openInventory(inv);
+    }
+
+    public void abrirMenuAdmin(Player player) {
+        if (!isPlayerAdmin(player)) {
+            player.sendMessage(Component.text("§c❌ Apenas Administradores podem acessar este painel."));
+            return;
+        }
+
+        Inventory inv = Bukkit.createInventory(new PainelMenuHolder("admin"), 27, Component.text("§0§l5DAY MC - Painel Admin"));
+        ItemStack vidro = criarItem(Material.GRAY_STAINED_GLASS_PANE, "§7");
+        for (int i = 0; i < 27; i++) {
+            inv.setItem(i, vidro);
+        }
+
+        inv.setItem(10, criarItem(Material.WRITABLE_BOOK, "§e§l📋 Whitelist (" + localWhitelist.size() + ")",
+            "§7Total aprovados: §a" + localWhitelist.size() + " jogadores",
+            "§7Aprovação completa disponível no site."
+        ));
+
+        inv.setItem(12, criarItem(Material.IRON_DOOR, "§c§l🔨 Bans Ativos (" + localBans.size() + ")",
+            "§7Total banidos: §c" + localBans.size() + " jogadores",
+            "§7Gerencie motivos e desbans no site."
+        ));
+
+        inv.setItem(14, criarItem(Material.SHIELD, "§a§l🛡️ Criar Proteção Aqui",
+            "§7Cria uma proteção no local exato onde você está em pé!",
+            "§e• Raio: §f20 blocos",
+            "§e• Coordenadas: §fX=" + player.getLocation().getBlockX() + ", Z=" + player.getLocation().getBlockZ(),
+            "§aClique para criar agora!"
+        ));
+
+        inv.setItem(16, criarItem(Material.REDSTONE, "§c§l❤️ Resetar Vidas de Todos",
+            "§7Restaura as vidas de todos os jogadores para 5.",
+            "§cClique para executar!"
+        ));
+
+        inv.setItem(18, criarItem(Material.ARROW, "§7⬅ Voltar"));
+        inv.setItem(22, criarItem(Material.BARRIER, "§c§l✕ Fechar Menu"));
+
+        player.openInventory(inv);
+    }
+
+    // ── Ações Executadas pelo Administrador no Jogo ──────────────────────────
+    private void criarProtecaoAdminAqui(Player player) {
+        if (!isPlayerAdmin(player)) {
+            player.sendMessage(Component.text("§c❌ Apenas Administradores podem criar proteções."));
+            return;
+        }
+
+        Location loc = player.getLocation();
+        int x = loc.getBlockX();
+        int z = loc.getBlockZ();
+        String worldName = loc.getWorld().getName();
+        int radius = 20;
+        String zoneName = "Proteção " + player.getName() + " #" + (adminProtections.size() + 1);
+        String zoneId = UUID.randomUUID().toString();
+
+        KingdomArea newZone = new KingdomArea(zoneId, zoneName, "ADMIN", worldName, x, z, radius, Set.of(player.getName().toLowerCase().trim()), true, player.getName());
+        adminProtections.put(zoneId, newZone);
+        saveLocalData();
+
+        player.sendMessage(Component.text("§a🛡️ [5DAY MC] Proteção criada localmente com sucesso!"));
+        player.sendMessage(Component.text("§e• Nome: §f" + zoneName + " §e• Raio: §f" + radius + " blocos (X=" + x + ", Z=" + z + ")"));
+
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                JsonObject json = new JsonObject();
+                json.addProperty("name", zoneName);
+                json.addProperty("world", worldName);
+                json.addProperty("centerX", x);
+                json.addProperty("centerZ", z);
+                json.addProperty("radius", radius);
+                json.addProperty("enabled", true);
+                json.addProperty("ownerNick", player.getName());
+
+                HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("https://fffff-autoforge.vercel.app/api/admin/protection-zones"))
+                    .header("Content-Type", "application/json")
+                    .header("x-plugin-secret", PLUGIN_SECRET)
+                    .POST(HttpRequest.BodyPublishers.ofString(json.toString(), StandardCharsets.UTF_8))
+                    .build();
+
+                httpClient.send(req, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception ignored) {}
+        });
+    }
+
+    private void resetarVidasAdmin(Player player) {
+        if (!isPlayerAdmin(player)) {
+            player.sendMessage(Component.text("§c❌ Apenas Administradores podem resetar vidas."));
+            return;
+        }
+
+        for (String k : localLives.keySet()) {
+            localLives.put(k, 5);
+        }
+        saveLocalData();
+
+        player.sendMessage(Component.text("§a❤️ [5DAY MC] Todas as vidas foram restauradas para 5 localmente!"));
+
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create("https://fffff-autoforge.vercel.app/api/admin/lives/reset-all"))
+                    .header("x-plugin-secret", PLUGIN_SECRET)
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+
+                httpClient.send(req, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception ignored) {}
+        });
+    }
+
+    // ── Listener de Cliques no Menu (Java e Bedrock) ─────────────────────────
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (event.getInventory().getHolder() instanceof PainelMenuHolder holder) {
+            event.setCancelled(true);
+            ItemStack clicked = event.getCurrentItem();
+            if (clicked == null || clicked.getType().isAir()) return;
+
+            Material mat = clicked.getType();
+            if (mat == Material.BARRIER) {
+                player.closeInventory();
+                return;
+            }
+            if (mat == Material.ARROW) {
+                abrirMenuPrincipal(player);
+                return;
+            }
+
+            String tipo = holder.getMenuTipo();
+            if ("principal".equals(tipo)) {
+                if (mat == Material.GOLDEN_HELMET) {
+                    abrirMenuReinos(player);
+                } else if (mat == Material.GRASS_BLOCK) {
+                    abrirMenuTerrenos(player);
+                } else if (mat == Material.NETHERITE_CHESTPLATE) {
+                    abrirMenuAdmin(player);
+                } else if (mat == Material.BOOK) {
+                    player.closeInventory();
+                    player.sendMessage(Component.text("§e[5DAY MC] Para vincular sua conta do site, digite no chat:"));
+                    player.sendMessage(Component.text("§f/painel login <email_ou_nick> <senha>"));
+                }
+            } else if ("admin".equals(tipo)) {
+                if (mat == Material.SHIELD) {
+                    player.closeInventory();
+                    criarProtecaoAdminAqui(player);
+                } else if (mat == Material.REDSTONE) {
+                    player.closeInventory();
+                    resetarVidasAdmin(player);
+                } else if (mat == Material.WRITABLE_BOOK) {
+                    player.sendMessage(Component.text("§e[5DAY MC] Total de aprovados na Whitelist: §f" + localWhitelist.size()));
+                } else if (mat == Material.IRON_DOOR) {
+                    player.sendMessage(Component.text("§c[5DAY MC] Total de jogadores banidos: §f" + localBans.size()));
+                }
+            }
+        }
+    }
+
+    private void exibirInfoTerritorio(Player player) {
+        Location loc = player.getLocation();
+        KingdomArea area = getProtectedAreaAt(loc);
+
+        if (area != null) {
+            if (area.isAdminZone) {
+                player.sendMessage(Component.text("§6§l🛡️ [5DAY MC] Proteção de Terreno do Administrador:"));
+                player.sendMessage(Component.text("§e• Nome: §fProteção de \"" + area.nome + "\""));
+                player.sendMessage(Component.text("§e• Mundo: §f" + area.world));
+                player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
+                player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
+                String pNick = cleanNick(player.getName()).toLowerCase().trim();
+                boolean isAdmin = BYPASS.contains(pNick) || player.isOp();
+                boolean isOwner = area.ownerNick != null && area.ownerNick.toLowerCase().trim().equals(pNick);
+                boolean isMem = area.isMember(pNick) || isAdmin;
+
+                String donoTxt = (area.ownerNick != null && !area.ownerNick.isBlank()) ? area.ownerNick : "Servidor / Administrador";
+                player.sendMessage(Component.text("§e• Dono: §f" + donoTxt));
+
+                String statusTxt;
+                if (isOwner) statusTxt = "§a👑 Você é o Dono desta Proteção (Acesso Total)";
+                else if (isAdmin) statusTxt = "§a👑 Administrador (Acesso Total)";
+                else if (isMem) statusTxt = "§a✅ Amigo / Membro Autorizado";
+                else statusTxt = "§c❌ Não é membro (Apenas visualização)";
+
+                player.sendMessage(Component.text("§e• Seu Status: " + statusTxt));
+            } else {
+                player.sendMessage(Component.text("§6§l🏰 [5DAY MC] Território Protegido de Reino:"));
+                player.sendMessage(Component.text("§e• Reino: §f" + area.nome + " §7[" + area.tag + "]"));
+                player.sendMessage(Component.text("§e• Centro: §fX=" + area.centerX + ", Z=" + area.centerZ));
+                player.sendMessage(Component.text("§e• Raio: §f" + area.radius + " blocos para cada lado (" + (area.radius * 2) + "×" + (area.radius * 2) + ")"));
+                player.sendMessage(Component.text("§e• Limites: §fX=[" + area.getMinX() + ".." + area.getMaxX() + "], Z=[" + area.getMinZ() + ".." + area.getMaxZ() + "]"));
+                boolean isMem = area.isMember(cleanNick(player.getName()).toLowerCase().trim()) || BYPASS.contains(cleanNick(player.getName()).toLowerCase().trim());
+                player.sendMessage(Component.text("§e• Seu Status: " + (isMem ? "§a✅ Membro autorizado" : "§c❌ Não é membro (Apenas visualização)")));
+            }
+        } else {
+            player.sendMessage(Component.text("§a§l🌍 [5DAY MC] Território Livre!"));
+            player.sendMessage(Component.text("§7Nenhum reino possui proteção nesta área (Coordenadas atuais: X=" + loc.getBlockX() + ", Z=" + loc.getBlockZ() + ")."));
         }
     }
 
