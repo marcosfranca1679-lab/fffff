@@ -471,7 +471,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }, 20L);
     }
 
-    // ── Evento de Desconexão (Registra Saída no Histórico de Sessões) ──
+    // ── Evento de Desconexão (Registra Saída + Stats de Jogo) ──
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
@@ -483,11 +483,27 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         int z = player.getLocation().getBlockZ();
         log.info("[Whitelist] 🔴 Desconexão: " + cleanName);
 
+        // Coleta stats de jogo (horas, kills) para atualizar reinos
+        int playTicks = 0, mobKills = 0, pvpKills = 0;
+        try {
+            playTicks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+            mobKills  = player.getStatistic(Statistic.MOB_KILLS);
+            pvpKills  = player.getStatistic(Statistic.PLAYER_KILLS);
+        } catch (Exception ignored) {}
+        long totalSeconds = playTicks / 20L;
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        String playtimeFormatted = (hours > 0 ? hours + "h " : "") + minutes + "m";
+
         String payload = "{"
             + "\"secret\":\"" + PLUGIN_SECRET + "\","
             + "\"event\":\"logout\","
             + "\"world\":\"" + escJson(world) + "\","
-            + "\"location\":\"" + x + ", " + y + ", " + z + "\""
+            + "\"location\":\"" + x + ", " + y + ", " + z + "\","
+            + "\"playtimeSeconds\":" + totalSeconds + ","
+            + "\"playtimeFormatted\":\"" + escJson(playtimeFormatted) + "\","
+            + "\"mobKills\":" + mobKills + ","
+            + "\"pvpKills\":" + pvpKills
             + "}";
         getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
