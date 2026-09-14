@@ -4363,10 +4363,9 @@
       </div>`;
     }
 
-    let liveInspectTimer = null;
     let currentInspectingNick = null;
-    let lastInspectPayloadHash = null;
     let lastKnownGameData = null;
+
 
     async function inspecionarJogador(nick, isBackgroundUpdate = false) {
       const modal = document.getElementById('inspect-modal');
@@ -4379,13 +4378,6 @@
         document.getElementById('inspect-loading').classList.remove('hidden');
         document.getElementById('inspect-content').classList.add('hidden');
         
-        // Inicia atualização contínua AO VIVO a cada 3.5 segundos
-        if (liveInspectTimer) clearInterval(liveInspectTimer);
-        liveInspectTimer = setInterval(() => {
-          if (!document.hidden && isUserActive && currentInspectingNick) {
-            inspecionarJogador(currentInspectingNick, true);
-          }
-        }, 3500);
 
         const cleanNick = nick.startsWith('.') || nick.startsWith('*') ? nick.substring(1) : nick;
         document.getElementById('inspect-avatar').src = `https://mc-heads.net/avatar/${encodeURIComponent(cleanNick)}/64`;
@@ -4622,15 +4614,11 @@
     }
 
     function fecharInspecionar() {
-      if (liveInspectTimer) {
-        clearInterval(liveInspectTimer);
-        liveInspectTimer = null;
-      }
       currentInspectingNick = null;
       lastKnownGameData = null;
-      lastInspectPayloadHash = null;
       document.getElementById('inspect-modal').classList.add('hidden');
     }
+
 
     async function acaoAdmin(tipo, nick) {
       if (tipo === 'remove' && !confirm(`⚠️ EXCLUIR ${nick} E LIMPAR TUDO?\n\nEsta ação excluirá o jogador e TODOS os registros dele (mortes, conexões, telemetria, bans e chat) do Supabase para liberar espaço.`)) return;
