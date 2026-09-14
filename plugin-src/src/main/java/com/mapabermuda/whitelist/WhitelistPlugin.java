@@ -204,6 +204,16 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, 100L, 100L);
 
+        // ── Task: Telemetria Periódica (alimenta ranking dos reinos) ─────────────
+        // Roda a cada 60s só para jogadores online, enviando horas/kills/stats.
+        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
+            for (Player p : getServer().getOnlinePlayers()) {
+                String name = cleanNick(p.getName());
+                String json = buildTelemetryJson(p, name, "live");
+                if (json != null) postTelemetria(name, json);
+            }
+        }, 1200L, 1200L); // 60 segundos
+
         log.info("Mapa Bermuda Whitelist v3.1 (Sincronização Gson + Persistência Local) - ATIVA!");
     }
 
