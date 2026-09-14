@@ -2791,20 +2791,14 @@
         }
       }, 120000);
 
-      // 3.5. Reino Privado: entregue via Supabase Realtime WebSockets; contingência a cada 60s
-      let _inviteCheckTick = 0;
+      // 3.5. Check de convites de reino a cada 4min (chat entregue via WebSocket Realtime)
       setInterval(() => {
-        if (!document.hidden && isUserActive && currentChannel === 'reinos' && meuReinoAtual) {
-          carregarMensagensReinoSilencioso();
-        }
-        _inviteCheckTick++;
-        if (_inviteCheckTick >= 4 && !document.hidden && isUserActive && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
-          _inviteCheckTick = 0;
+        if (!document.hidden && isUserActive && currentUser && !isUserAdmin && currentChannel !== 'reinos') {
           apiFetch('/api/kingdoms/status').then(r => r.json()).then(d => {
             if (d && d.success) atualizarBadgeConvites((d.myInvites || []).length);
           }).catch(() => {});
         }
-      }, 60000);
+      }, 240000);
 
       // 4. Admin Whitelist & Vidas: apenas se admin, ativo e na aba admin (a cada 30s)
       setInterval(() => {
