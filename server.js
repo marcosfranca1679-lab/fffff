@@ -3373,8 +3373,16 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
         const totalHrs = Math.floor(aggSec / 3600);
         const totalMins = Math.floor((aggSec % 3600) / 60);
         myKingdom.playtimeFormatted = totalHrs > 0 ? `${totalHrs}h ${totalMins}m` : `${totalMins}m`;
+        // Se não for líder nem admin, oculta os dados detalhados individuais dos outros membros
+        if (!isLiderOrAdmin) {
+          members = mList.map(m => ({
+            id: m.id,
+            user_nick: m.user_nick,
+            role: m.role,
+            joined_at: m.joined_at
+          }));
+        }
       } else {
-        // Membro comum: não recebe dados de produtividade privada
         members = mList || [];
       }
 
