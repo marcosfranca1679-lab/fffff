@@ -78,7 +78,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final Set<String> BYPASS = Set.of(
         "admin",
         "marcos",
-        "marcosfranca1679"
+        "marcosfranca1679",
+        "willcraft333281"
     );
 
     // ── Proteção de Terreno (Reinos e Administrador) ─────────────────────────
