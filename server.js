@@ -3245,8 +3245,8 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
 
       const isLiderOrAdmin = (currentRole === 'lider' || req.isAdmin);
 
-      if (isLiderOrAdmin && mList && mList.length > 0) {
-        // Apenas o líder e admin recebem os dados detalhados do que cada membro fez enquanto esteve no reino
+      if (mList && mList.length > 0) {
+        // Calcula os dados detalhados do que cada membro fez enquanto esteve no reino
         const { data: baselines } = await supabase
           .from('messages')
           .select('author_nick, content')
