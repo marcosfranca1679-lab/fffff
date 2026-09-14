@@ -2285,6 +2285,325 @@ app.post('/api/plugin/console-logs', async (req, res) => {
   res.json({ success: true });
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+//  ROTAS DO PAINEL IN-GAME (Autenticadas por x-plugin-secret)
+// ════════════════════════════════════════════════════════════════════════════
+
+function requirePluginSecret(req, res, next) {
+  const secret = req.headers['x-plugin-secret'] || req.query.secret || req.body.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+
+// ── Jogador: Vidas ──
+app.get('/api/plugin/painel/player/:nick', requirePluginSecret, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { data: row } = await supabase.from('player_lives').select('lives, last_death_at').ilike('nick', nick).maybeSingle();
+    res.json({ success: true, lives: row ? (row.lives !== undefined ? row.lives : 5) : 5 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Jogador: Sessões ──
+app.get('/api/plugin/painel/sessions/:nick', requirePluginSecret, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { data } = await supabase.from('player_sessions').select('nick, event, created_at').ilike('nick', nick).order('created_at', { ascending: false }).limit(10);
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Jogador: Terrenos ──
+app.get('/api/plugin/painel/terrenos/:nick', requirePluginSecret, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { data: zones } = await supabase.from('admin_protection_zones').select('id, name, owner_nick, members');
+    const result = [];
+    for (const z of (zones || [])) {
+      const isOwner = z.owner_nick && z.owner_nick.toLowerCase() === nick.toLowerCase();
+      const isMember = Array.isArray(z.members) && z.members.some(m => m.toLowerCase() === nick.toLowerCase());
+      if (isOwner || isMember) {
+        result.push({ id: z.id, name: z.name, role: isOwner ? 'owner' : 'member' });
+      }
+    }
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Jogador: Add/Rem Membro do Terreno ──
+app.post('/api/plugin/painel/terrenos/:id/members', requirePluginSecret, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nick, targetNick, action } = req.body;
+    if (!targetNick) return res.status(400).json({ error: 'Nick alvo obrigatório.' });
+    const { data: zone } = await supabase.from('admin_protection_zones').select('*').eq('id', id).maybeSingle();
+    if (!zone) return res.status(404).json({ error: 'Terreno não encontrado.' });
+    if (!zone.owner_nick || zone.owner_nick.toLowerCase() !== (nick || '').toLowerCase()) {
+      return res.status(403).json({ error: 'Apenas o dono do terreno pode alterar membros.' });
+    }
+    let members = Array.isArray(zone.members) ? [...zone.members] : [];
+    const tLower = targetNick.toLowerCase().trim();
+    if (action === 'add') {
+      if (!members.some(m => m.toLowerCase() === tLower)) members.push(targetNick.trim());
+    } else {
+      members = members.filter(m => m.toLowerCase() !== tLower);
+    }
+    await supabase.from('admin_protection_zones').update({ members }).eq('id', id);
+    res.json({ success: true, members });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Reino: Info do Reino do Dono ──
+app.get('/api/plugin/painel/reino/:nick', requirePluginSecret, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { data: k } = await supabase.from('kingdoms').select('*').ilike('owner_nick', nick).maybeSingle();
+    if (!k) return res.json({});
+    // Calcula kills e pontos
+    res.json({
+      success: true,
+      id: k.id,
+      nome: k.nome,
+      tag: k.tag,
+      kills: k.kills || 0,
+      totalPoints: k.pontos || 0,
+      playtimeFormatted: '0m'
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Reino: Membros com Stats ──
+app.get('/api/plugin/painel/reino/membros/:nick', requirePluginSecret, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { data: k } = await supabase.from('kingdoms').select('id').ilike('owner_nick', nick).maybeSingle();
+    if (!k) return res.json([]);
+    const { data: members } = await supabase.from('kingdom_members').select('user_nick').eq('kingdom_id', k.id);
+    const result = [];
+    for (const m of (members || [])) {
+      result.push({ nick: m.user_nick, playtimeFormatted: '0m', pvpKills: 0, mobKills: 0 });
+    }
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Reino: Convidar Membro ──
+app.post('/api/plugin/painel/reino/convidar', requirePluginSecret, async (req, res) => {
+  try {
+    const { ownerNick, targetNick } = req.body;
+    const { data: k } = await supabase.from('kingdoms').select('id').ilike('owner_nick', ownerNick).maybeSingle();
+    if (!k) return res.status(404).json({ error: 'Reino não encontrado.' });
+    // Verifica se jogador existe e está na whitelist
+    const { data: p } = await supabase.from('players').select('nick').ilike('nick', targetNick).eq('status', 'approved').maybeSingle();
+    if (!p) return res.status(400).json({ error: 'Jogador não encontrado ou não aprovado na whitelist.' });
+    // Adiciona direto
+    await safeDb(supabase.from('kingdom_members').insert([{ kingdom_id: k.id, user_nick: p.nick }]));
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Reino: Expulsar Membro ──
+app.post('/api/plugin/painel/reino/expulsar', requirePluginSecret, async (req, res) => {
+  try {
+    const { ownerNick, targetNick } = req.body;
+    const { data: k } = await supabase.from('kingdoms').select('id').ilike('owner_nick', ownerNick).maybeSingle();
+    if (!k) return res.status(404).json({ error: 'Reino não encontrado.' });
+    await supabase.from('kingdom_members').delete().eq('kingdom_id', k.id).ilike('user_nick', targetNick);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Pedidos Pendentes ──
+app.get('/api/plugin/painel/admin/pendentes', requirePluginSecret, async (req, res) => {
+  try {
+    const { data } = await supabase.from('players').select('nick, platform, requested_at').eq('status', 'pending').order('requested_at', { ascending: false }).limit(20);
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Aprovar Whitelist ──
+app.post('/api/plugin/painel/admin/aprovar', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    const { error } = await supabase.from('players').update({ status: 'approved', updated_at: new Date().toISOString() }).ilike('nick', nick);
+    if (error) throw error;
+    registrarConsoleLog('info', `✅ [Painel] ${adminNick || 'Admin'} aprovou ${nick} na whitelist.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Rejeitar Whitelist ──
+app.post('/api/plugin/painel/admin/rejeitar', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    await supabase.from('players').delete().ilike('nick', nick);
+    registrarConsoleLog('warn', `❌ [Painel] ${adminNick || 'Admin'} rejeitou ${nick}.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Add Whitelist ──
+app.post('/api/plugin/painel/admin/add', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    const now = new Date().toISOString();
+    await safeDb(supabase.from('players').delete().ilike('nick', nick));
+    await supabase.from('players').insert([{ nick, status: 'approved', platform: 'Bedrock', updated_at: now, requested_at: now }]);
+    registrarConsoleLog('info', `➕ [Painel] ${adminNick || 'Admin'} adicionou ${nick} à whitelist.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Remover Whitelist ──
+app.post('/api/plugin/painel/admin/remover', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    await supabase.from('players').delete().ilike('nick', nick);
+    registrarConsoleLog('warn', `🗑 [Painel] ${adminNick || 'Admin'} removeu ${nick} da whitelist.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Banir ──
+app.post('/api/plugin/painel/admin/banir', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, reason, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    const now = new Date().toISOString();
+    await supabase.from('players').upsert({ nick, status: 'banned', ban_reason: reason || 'Banido pelo admin', updated_at: now }, { onConflict: 'nick' });
+    registrarConsoleLog('warn', `🔨 [Painel] ${adminNick || 'Admin'} baniu ${nick}: ${reason}`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Desbanir ──
+app.post('/api/plugin/painel/admin/desbanir', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    await supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', nick);
+    registrarConsoleLog('info', `🔓 [Painel] ${adminNick || 'Admin'} desbaniu ${nick}.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Ban IP ──
+app.post('/api/plugin/painel/admin/banip', requirePluginSecret, async (req, res) => {
+  try {
+    const { ip, reason, adminNick } = req.body;
+    if (!ip) return res.status(400).json({ error: 'IP obrigatório.' });
+    await supabase.from('messages').insert([{
+      author_nick: ip,
+      author_role: 'ip_ban',
+      content: JSON.stringify({ reason: reason || 'IP Bloqueado' }),
+      created_at: new Date().toISOString()
+    }]);
+    bannedIpsCache.set(ip, { reason: reason || 'IP Bloqueado' });
+    registrarConsoleLog('warn', `🌐 [Painel] ${adminNick || 'Admin'} baniu IP ${ip}.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Desban IP ──
+app.post('/api/plugin/painel/admin/desbanip', requirePluginSecret, async (req, res) => {
+  try {
+    const { ip, adminNick } = req.body;
+    if (!ip) return res.status(400).json({ error: 'IP obrigatório.' });
+    await supabase.from('messages').delete().eq('author_role', 'ip_ban').eq('author_nick', ip);
+    bannedIpsCache.delete(ip);
+    registrarConsoleLog('info', `🌐 [Painel] ${adminNick || 'Admin'} desbaniu IP ${ip}.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Vidas (Add / Remove) ──
+app.post('/api/plugin/painel/admin/vidas', requirePluginSecret, async (req, res) => {
+  try {
+    const { nick, action, amount, adminNick } = req.body;
+    if (!nick) return res.status(400).json({ error: 'Nick obrigatório.' });
+    const qtd = Math.max(1, parseInt(amount, 10) || 1);
+    const { data: cur } = await supabase.from('player_lives').select('lives').ilike('nick', nick).maybeSingle();
+    const currentLives = cur ? (cur.lives !== undefined ? cur.lives : 5) : 5;
+    const newLives = action === 'add' ? Math.min(5, currentLives + qtd) : Math.max(0, currentLives - qtd);
+    await definirVidasJogador(nick, newLives);
+    registrarConsoleLog('info', `❤ [Painel] ${adminNick || 'Admin'} alterou vidas de ${nick}: ${currentLives} -> ${newLives}`, 'Painel');
+    res.json({ success: true, lives: newLives });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Zonas de Proteção ──
+app.get('/api/plugin/painel/admin/zonas', requirePluginSecret, async (req, res) => {
+  try {
+    const { data } = await supabase.from('admin_protection_zones').select('id, name, world');
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/plugin/painel/admin/zonas/criar', requirePluginSecret, async (req, res) => {
+  try {
+    const { name, world, x1, z1, x2, z2, adminNick } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nome obrigatório.' });
+    const cx = Math.round((Number(x1) + Number(x2)) / 2);
+    const cz = Math.round((Number(z1) + Number(z2)) / 2);
+    const radius = Math.max(10, Math.round(Math.max(Math.abs(Number(x2) - Number(x1)), Math.abs(Number(z2) - Number(z1))) / 2));
+    await supabase.from('admin_protection_zones').insert([{
+      name,
+      world: world || 'world',
+      centerX: cx,
+      centerZ: cz,
+      radius,
+      created_at: new Date().toISOString()
+    }]);
+    registrarConsoleLog('info', `🏠 [Painel] ${adminNick || 'Admin'} criou zona '${name}' em (${cx}, ${cz}) raio ${radius}`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/plugin/painel/admin/zonas/remover', requirePluginSecret, async (req, res) => {
+  try {
+    const { name, adminNick } = req.body;
+    await supabase.from('admin_protection_zones').delete().ilike('name', name);
+    registrarConsoleLog('warn', `🗑 [Painel] ${adminNick || 'Admin'} removeu zona '${name}'.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Dissolver Reino ──
+app.post('/api/plugin/painel/admin/dissolverreino', requirePluginSecret, async (req, res) => {
+  try {
+    const { ownerNick, adminNick } = req.body;
+    const { data: k } = await supabase.from('kingdoms').select('id, tag').ilike('owner_nick', ownerNick).maybeSingle();
+    if (!k) return res.status(404).json({ error: 'Reino não encontrado.' });
+    await supabase.from('kingdom_members').delete().eq('kingdom_id', k.id);
+    await supabase.from('kingdoms').delete().eq('id', k.id);
+    registrarConsoleLog('warn', `🗑 [Painel] ${adminNick || 'Admin'} dissolveu o reino [${k.tag}] de ${ownerNick}.`, 'Painel');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Sessões Recentes ──
+app.get('/api/plugin/painel/admin/sessoes', requirePluginSecret, async (req, res) => {
+  try {
+    const { data } = await supabase.from('player_sessions').select('nick, event, created_at').order('created_at', { ascending: false }).limit(15);
+    res.json(data || []);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Admin: Broadcast ──
+app.post('/api/plugin/painel/admin/broadcast', requirePluginSecret, async (req, res) => {
+  try {
+    const { message, adminNick } = req.body;
+    if (!message) return res.status(400).json({ error: 'Mensagem vazia.' });
+    registrarConsoleLog('info', `📢 [Broadcast] ${adminNick || 'Admin'}: ${message}`, 'Broadcast');
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // 6. Sincronização Geral Unificada com o Plugin (Ultra-Econômico)
 app.get('/api/plugin/sync', async (req, res) => {
   const secret = req.headers['x-plugin-secret'] || req.query.secret || '';
@@ -2419,6 +2738,7 @@ app.get('/api/plugin/sync', async (req, res) => {
             centerX: parseInt(k.land_protection.centerX, 10) || 0,
             centerZ: parseInt(k.land_protection.centerZ, 10) || 0,
             radius: Math.min(200, Math.max(1, parseInt(k.land_protection.radius, 10) || 50)),
+            owner_nick: k.owner_nick || '',
             members: mList
           });
         }
