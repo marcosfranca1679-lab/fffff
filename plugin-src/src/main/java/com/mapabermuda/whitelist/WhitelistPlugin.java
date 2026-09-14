@@ -192,13 +192,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         getServer().getScheduler().runTaskAsynchronously(this, this::syncWithWeb);
 
         // ── Task: Sincronização Geral Unificada ──────────────────────────────────
-        // 20s com jogadores online (para bans, whitelist e vidas do site refletirem).
-        // 60s quando vazio (para não gastar a Vercel e ainda assim puxar mudanças).
+        // 30s com jogadores online (para bans, whitelist e vidas do site refletirem).
+        // ZERO chamadas quando o servidor estiver vazio (economia total da Vercel).
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            boolean hasPlayers = !getServer().getOnlinePlayers().isEmpty();
+            if (getServer().getOnlinePlayers().isEmpty()) return; // 0 requisições quando vazio!
             long now = System.currentTimeMillis();
-            long requiredInterval = hasPlayers ? (SYNC_ONLINE_TICKS * 50L) : (SYNC_EMPTY_TICKS * 50L);
-            if (now - lastSyncTime >= requiredInterval) {
+            if (now - lastSyncTime >= (SYNC_ONLINE_TICKS * 50L)) {
                 lastSyncTime = now;
                 syncWithWeb();
             }
@@ -477,7 +476,11 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                 + "\"world\":\"" + escJson(world) + "\","
                 + "\"location\":\"" + x + ", " + y + ", " + z + "\""
                 + "}";
-            getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
+            getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                postTelemetria(cleanName, payload);
+                // Sincroniza dados frescos na hora que o primeiro/qualquer jogador entrar
+                syncWithWeb();
+            });
         }, 20L);
     }
 
@@ -1367,3 +1370,4 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         return sb.toString().trim();
     }
 }
+
