@@ -70,10 +70,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String SYNC_URL  = "https://fffff-autoforge.vercel.app/api/plugin/sync";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // 1200 ticks = 60s (telemetria de inventário e estatísticas)
-    private static final long TELEM_INTERVAL_TICKS = 1200L;
-    // 300 ticks = 15s (sync rápido de whitelist, bans, vidas e comandos com jogadores online)
-    private static final long SYNC_ONLINE_TICKS = 300L;
+    // 600 ticks = 30s (sync otimizado de whitelist, bans, vidas e proteções com jogadores online)
+    private static final long SYNC_ONLINE_TICKS = 600L;
     // 1200 ticks = 60s (sync em repouso quando o servidor estiver sem jogadores)
     private static final long SYNC_EMPTY_TICKS = 1200L;
 
@@ -193,19 +191,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         // 2. Faz primeira sincronização com o site
         getServer().getScheduler().runTaskAsynchronously(this, this::syncWithWeb);
 
-        // ── Task: Telemetria Periódica (a cada 60s se houver jogadores online) ──
-        getServer().getScheduler().runTaskTimer(this, () -> {
-            if (getServer().getOnlinePlayers().isEmpty()) return;
-            for (Player player : getServer().getOnlinePlayers()) {
-                String cleanName = cleanNick(player.getName());
-                if (BYPASS.contains(cleanName.toLowerCase())) continue;
-                String payload = buildTelemetryJson(player, cleanName, "live");
-                getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
-            }
-        }, TELEM_INTERVAL_TICKS, TELEM_INTERVAL_TICKS);
-
         // ── Task: Sincronização Geral Unificada ──────────────────────────────────
-        // 15s com jogadores online (para bans e vidas do site refletirem rápido).
+        // 20s com jogadores online (para bans, whitelist e vidas do site refletirem).
         // 60s quando vazio (para não gastar a Vercel e ainda assim puxar mudanças).
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             boolean hasPlayers = !getServer().getOnlinePlayers().isEmpty();
@@ -468,8 +455,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         getServer().getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
             log.info("[Whitelist] 🟢 Conexão: " + cleanName + " (IP: " + getPlayerIp(player) + ")");
-            String payload = buildTelemetryJson(player, cleanName, "login");
-            getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
         }, 20L);
     }
 
@@ -481,8 +466,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         if (BYPASS.contains(cleanName.toLowerCase())) return;
 
         log.info("[Whitelist] 🔴 Desconexão: " + cleanName);
-        String payload = buildTelemetryJson(player, cleanName, "logout");
-        getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
     // ── Evento de Morte: Desconta Vidas Localmente e Sincroniza com o Site ──
