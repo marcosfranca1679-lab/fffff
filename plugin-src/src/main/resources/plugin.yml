@@ -5,3 +5,15 @@ api-version: "1.21"
 description: "Whitelist automática conectada ao site Mapa Bermuda via Vercel + Supabase"
 authors:
   - MarcosFreanca
+
+commands:
+  painel:
+    description: "Abre a caixa/menu principal de reinos, terrenos e admin"
+    aliases: [menu, p]
+    permission: ""
+  reino:
+    description: "Informacoes e menu do reino"
+    permission: ""
+  terreno:
+    description: "Informacoes do terreno protegido"
+    permission: ""
