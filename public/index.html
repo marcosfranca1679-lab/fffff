@@ -6140,7 +6140,7 @@
             const isMLider = m.role === 'lider';
             const initial = m.user_nick.substring(0, 1).toUpperCase();
             const st = m.stats;
-            const hasStats = !!st;
+            const hasStats = isLider && st;
 
             let removeBtn = '';
             if (isLider && !isMLider) {
