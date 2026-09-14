@@ -146,9 +146,13 @@ public class PainelMenu {
     //  VIDAS
     // ════════════════════════════════════════════════════════
     public void abrirVidas(Player p) {
-        hdr(p, "❤ MINHAS VIDAS");
         get("/api/plugin/painel/player/" + encUrl(p.getName())).thenAccept(body -> run(() -> {
             int v = fi(body,"lives");
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalVidas(p, this, v);
+                return;
+            }
+            hdr(p, "❤ MINHAS VIDAS");
             String h = "❤".repeat(Math.max(0,v)) + "♡".repeat(Math.max(0,5-v));
             NamedTextColor c = v>=4?NamedTextColor.GREEN:v>=2?NamedTextColor.YELLOW:NamedTextColor.RED;
             p.sendMessage(Component.text("  Vidas: ", NamedTextColor.WHITE).append(Component.text(h+" ("+v+"/5)",c)));
@@ -160,9 +164,13 @@ public class PainelMenu {
     //  HISTÓRICO
     // ════════════════════════════════════════════════════════
     public void abrirHistorico(Player p) {
-        hdr(p, "📜 MEU HISTÓRICO");
         get("/api/plugin/painel/sessions/" + encUrl(p.getName())).thenAccept(body -> run(() -> {
             List<String[]> ss = parseSessions(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalHistorico(p, this, ss);
+                return;
+            }
+            hdr(p, "📜 MEU HISTÓRICO");
             if (ss.isEmpty()) p.sendMessage(Component.text("  Nenhuma sessão registrada.", NamedTextColor.GRAY));
             else for (String[] s : ss) {
                 boolean in = "login".equals(s[1]);
@@ -176,9 +184,13 @@ public class PainelMenu {
     //  TERRENOS
     // ════════════════════════════════════════════════════════
     public void abrirMeusTerrenos(Player p) {
-        hdr(p, "🏠 MEUS TERRENOS");
         get("/api/plugin/painel/terrenos/" + encUrl(p.getName())).thenAccept(body -> run(() -> {
             List<String[]> ts = parseTerrenos(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalTerrenos(p, this, ts);
+                return;
+            }
+            hdr(p, "🏠 MEUS TERRENOS");
             if (ts.isEmpty()) p.sendMessage(Component.text("  Nenhum terreno encontrado.", NamedTextColor.GRAY));
             else for (String[] t : ts) {
                 p.sendMessage(Component.text("  🏠 "+t[1]+" ["+t[2]+"]", NamedTextColor.YELLOW));
@@ -208,15 +220,23 @@ public class PainelMenu {
     //  RANKINGS
     // ════════════════════════════════════════════════════════
     public void abrirRankings(Player p) {
+        if (FloodgateForms.isBedrock(p)) {
+            FloodgateForms.modalRankings(p, this);
+            return;
+        }
         hdr(p,"🏆 RANKINGS");
         p.sendMessage(btn("⏱","Top Horas","/mb:ranking-horas","Top 5 por horas jogadas"));
         p.sendMessage(btn("👑","Top Reinos","/mb:ranking-reinos","Ranking de reinos por pontos"));
         ftr(p);
     }
     public void rankingHoras(Player p) {
-        hdr(p,"⏱ TOP HORAS JOGADAS");
         get("/api/ranking/horas").thenAccept(body -> run(() -> {
             List<String[]> r = parseRkHoras(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalRankingHoras(p, this, r);
+                return;
+            }
+            hdr(p,"⏱ TOP HORAS JOGADAS");
             String[] m = {"🥇","🥈","🥉","4.","5."};
             if(r.isEmpty()) p.sendMessage(Component.text("  Nenhum dado.", NamedTextColor.GRAY));
             else for(int i=0;i<r.size();i++) p.sendMessage(Component.text("  "+(i<m.length?m[i]:(i+1)+".")+" "+r.get(i)[0]+" — "+r.get(i)[1], NamedTextColor.WHITE));
@@ -224,9 +244,13 @@ public class PainelMenu {
         })).exceptionally(e->{err(p,"Falha.");return null;});
     }
     public void rankingReinos(Player p) {
-        hdr(p,"👑 TOP REINOS");
         get("/api/ranking/kingdoms").thenAccept(body -> run(() -> {
             List<String[]> r = parseRkReinos(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalRankingReinos(p, this, r);
+                return;
+            }
+            hdr(p,"👑 TOP REINOS");
             String[] m = {"🥇","🥈","🥉","4.","5."};
             if(r.isEmpty()) p.sendMessage(Component.text("  Nenhum reino.", NamedTextColor.GRAY));
             else for(int i=0;i<r.size();i++) p.sendMessage(Component.text("  "+(i<m.length?m[i]:(i+1)+".")+" ["+r.get(i)[1]+"] "+r.get(i)[0]+" — "+r.get(i)[2]+" pts", NamedTextColor.GOLD));
@@ -260,9 +284,13 @@ public class PainelMenu {
         })).exceptionally(e->{err(p,"Falha ao buscar reino.");return null;});
     }
     public void reinoMembros(Player p) {
-        hdr(p,"👥 MEMBROS DO REINO");
         get("/api/plugin/painel/reino/membros/"+encUrl(p.getName())).thenAccept(body -> run(() -> {
             List<String[]> ms = parseMembros(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalReinoMembros(p, this, ms);
+                return;
+            }
+            hdr(p,"👥 MEMBROS DO REINO");
             if(ms.isEmpty()) p.sendMessage(Component.text("  Nenhum membro.",NamedTextColor.GRAY));
             else for(String[] m:ms) p.sendMessage(Component.text("  ▸ "+m[0]+"  ⏱"+m[1]+" ⚔"+m[2]+" 🐉"+m[3], NamedTextColor.WHITE));
             ftr(p);
@@ -328,9 +356,13 @@ public class PainelMenu {
     }
 
     public void adminPendentes(Player p) {
-        hdr(p,"📋 PEDIDOS PENDENTES");
         get("/api/plugin/painel/admin/pendentes").thenAccept(body -> run(() -> {
             List<String> ns = parseStrList(body,"nick");
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalAdminPendentes(p, this, ns);
+                return;
+            }
+            hdr(p,"📋 PEDIDOS PENDENTES");
             if(ns.isEmpty()) p.sendMessage(Component.text("  Nenhum pedido pendente.",NamedTextColor.GRAY));
             else for(String n:ns) p.sendMessage(Component.text("  ▸ "+n+" ",NamedTextColor.WHITE)
                 .append(btnG("✅","Aprovar","/mb:admin-aprovar "+n,"Aprovar "+n))
@@ -397,7 +429,13 @@ public class PainelMenu {
     public void adminVerVidas(Player p) {
         awaitInput(p,"Nick para ver vidas:", nick ->
             get("/api/plugin/painel/player/"+encUrl(nick)).thenAccept(body -> run(() -> {
-                int v=fi(body,"lives"); String h="❤".repeat(Math.max(0,v))+"♡".repeat(Math.max(0,5-v));
+                int v=fi(body,"lives");
+                if (FloodgateForms.isBedrock(p)) {
+                    String h="❤".repeat(Math.max(0,v))+"♡".repeat(Math.max(0,5-v));
+                    FloodgateForms.modalVidas(p, this, v);
+                    return;
+                }
+                String h="❤".repeat(Math.max(0,v))+"♡".repeat(Math.max(0,5-v));
                 p.sendMessage(Component.text("  "+nick+": "+h+" ("+v+"/5)", NamedTextColor.WHITE));
             })).exceptionally(e->{err(p,"Falha.");return null;}));
     }
@@ -414,9 +452,13 @@ public class PainelMenu {
             .exceptionally(e->{err(p,"Falha.");return null;})));
     }
     public void adminZonas(Player p) {
-        hdr(p,"🏠 ZONAS DE PROTEÇÃO ADMIN");
         get("/api/plugin/painel/admin/zonas").thenAccept(body -> run(() -> {
             List<String[]> zs=parseZonas(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalAdminZonas(p, this, zs);
+                return;
+            }
+            hdr(p,"🏠 ZONAS DE PROTEÇÃO ADMIN");
             if(zs.isEmpty()) p.sendMessage(Component.text("  Nenhuma zona.",NamedTextColor.GRAY));
             else for(String[] z:zs) p.sendMessage(Component.text("  🏠 ["+z[0]+"] "+z[1]+" — "+z[2], NamedTextColor.YELLOW));
             ftr(p);
@@ -439,9 +481,13 @@ public class PainelMenu {
             .exceptionally(e->{err(p,"Falha.");return null;}));
     }
     public void adminReinos(Player p) {
-        hdr(p,"👑 TODOS OS REINOS");
         get("/api/ranking/kingdoms").thenAccept(body -> run(() -> {
             List<String[]> rs=parseRkReinos(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalAdminReinos(p, this, rs);
+                return;
+            }
+            hdr(p,"👑 TODOS OS REINOS");
             if(rs.isEmpty()) p.sendMessage(Component.text("  Nenhum reino.",NamedTextColor.GRAY));
             else for(String[] r:rs) p.sendMessage(Component.text("  ["+r[1]+"] "+r[0]+" — Dono: "+r[3]+" — "+r[2]+" pts", NamedTextColor.GOLD));
             ftr(p);
@@ -454,9 +500,13 @@ public class PainelMenu {
             .exceptionally(e->{err(p,"Falha.");return null;}));
     }
     public void adminSessoes(Player p) {
-        hdr(p,"📜 HISTÓRICO DE SESSÕES");
         get("/api/plugin/painel/admin/sessoes").thenAccept(body -> run(() -> {
             List<String[]> ss=parseSessions(body);
+            if (FloodgateForms.isBedrock(p)) {
+                FloodgateForms.modalAdminSessoes(p, this, ss);
+                return;
+            }
+            hdr(p,"📜 HISTÓRICO DE SESSÕES");
             if(ss.isEmpty()) p.sendMessage(Component.text("  Nenhuma sessão.",NamedTextColor.GRAY));
             else for(String[] s:ss) { boolean in="login".equals(s[1]);
                 p.sendMessage(Component.text("  "+(in?"▶ ":"◀ ")+s[0]+" — "+s[1]+" — "+s[2], in?NamedTextColor.GREEN:NamedTextColor.RED)); }
