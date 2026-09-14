@@ -2672,8 +2672,10 @@
       // Mostra home imediatamente enquanto verifica sessão
       selecionarCanal('home', 'home');
       await verificarSessao();
-      carregarBans();
-      carregarRankingHorasSilencioso();
+
+
+
+
       iniciarSupabaseRealtime();
       iniciarAutoRefresh();
     });
@@ -2695,25 +2697,7 @@
           );
         }
 
-        // 1. Canal WebSocket para Chat da Comunidade (#chat-geral)
-        if (!realtimeChatSub) {
-          realtimeChatSub = realtimeSb
-            .channel('realtime-community-chat')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-              const m = payload.new;
-              if (!m) return;
-              const r = m.author_role;
-              if (r === 'console_log' || r === 'playtime_rank' || r === 'telemetry' || r === 'death_log' || r === 'session_log' || r === 'ban_log' || r === 'ip_ban' || r === 'player_lives') return;
-              const c = (m.content || '').trim();
-              if (c.startsWith('{"lives":') || c.startsWith('{"event":')) return;
 
-              // Mensagem nova chegou via WebSocket instantâneo (0ms de atraso, 0 Vercel requests)!
-              if (currentChannel === 'chat') {
-                carregarChat();
-              }
-            })
-            .subscribe();
-        }
 
         // 2. Canal WebSocket para Chat de Reinos (#reinos)
         if (!realtimeKingdomSub) {
