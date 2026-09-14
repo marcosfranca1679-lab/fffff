@@ -445,27 +445,51 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // ── Evento de Conexão ──
+    // ── Evento de Conexão (Registra Entrada no Histórico de Sessões) ──
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         String cleanName = cleanNick(player.getName());
-        if (BYPASS.contains(cleanName.toLowerCase())) return;
 
         getServer().getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
-            log.info("[Whitelist] 🟢 Conexão: " + cleanName + " (IP: " + getPlayerIp(player) + ")");
+            String ip = getPlayerIp(player);
+            String world = player.getWorld() != null ? player.getWorld().getName() : "world";
+            int x = player.getLocation().getBlockX();
+            int y = player.getLocation().getBlockY();
+            int z = player.getLocation().getBlockZ();
+            log.info("[Whitelist] 🟢 Conexão: " + cleanName + " (IP: " + ip + ")");
+
+            String payload = "{"
+                + "\"secret\":\"" + PLUGIN_SECRET + "\","
+                + "\"event\":\"login\","
+                + "\"ip\":\"" + escJson(ip) + "\","
+                + "\"world\":\"" + escJson(world) + "\","
+                + "\"location\":\"" + x + ", " + y + ", " + z + "\""
+                + "}";
+            getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
         }, 20L);
     }
 
-    // ── Evento de Desconexão ──
+    // ── Evento de Desconexão (Registra Saída no Histórico de Sessões) ──
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         String cleanName = cleanNick(player.getName());
-        if (BYPASS.contains(cleanName.toLowerCase())) return;
 
+        String world = player.getWorld() != null ? player.getWorld().getName() : "world";
+        int x = player.getLocation().getBlockX();
+        int y = player.getLocation().getBlockY();
+        int z = player.getLocation().getBlockZ();
         log.info("[Whitelist] 🔴 Desconexão: " + cleanName);
+
+        String payload = "{"
+            + "\"secret\":\"" + PLUGIN_SECRET + "\","
+            + "\"event\":\"logout\","
+            + "\"world\":\"" + escJson(world) + "\","
+            + "\"location\":\"" + x + ", " + y + ", " + z + "\""
+            + "}";
+        getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
     // ── Evento de Morte: Desconta Vidas Localmente e Sincroniza com o Site ──
