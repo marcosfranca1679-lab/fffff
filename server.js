@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
@@ -3127,7 +3127,7 @@ async function salvarBaselineMembroReino(nick, kingdomId) {
       try {
         const j = JSON.parse(telem.content);
         initSec = Math.max(initSec, Number(j.playtimeSeconds) || 0);
-        initPk = Number(j.playerKills) || 0;
+        initPk = Math.max(Number(j.playerKills) || 0, Number(j.pvpKills) || 0);
         initMk = Number(j.mobKills) || 0;
       } catch (_) {}
     }
@@ -3289,7 +3289,7 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
             const j = JSON.parse(t.content);
             const sec = Number(j.playtimeSeconds) || 0;
             if (sec > 0) playtimeMap.set(k, Math.max(playtimeMap.get(k) || 0, sec));
-            const pk = Number(j.playerKills) || 0;
+            const pk = Math.max(Number(j.playerKills) || 0, Number(j.pvpKills) || 0); // suporte logout (pvpKills) e live (playerKills)
             if (pk > 0) pvpMap.set(k, Math.max(pvpMap.get(k) || 0, pk));
             const mk = Number(j.mobKills) || 0;
             if (mk > 0) mobMap.set(k, Math.max(mobMap.get(k) || 0, mk));
@@ -3352,6 +3352,27 @@ app.get('/api/kingdoms/status', requireAuth, async (req, res) => {
             }
           };
         });
+
+        // Agrega estatísticas dinâmicas em myKingdom para refletir no painel do reino
+        let aggKills = 0;
+        let aggPvp = 0;
+        let aggPoints = 0;
+        let aggSec = 0;
+        members.forEach(mb => {
+          if (mb.stats) {
+            aggKills += (mb.stats.totalKills || 0);
+            aggPvp += (mb.stats.pvpKills || 0);
+            aggPoints += (mb.stats.pointsGenerated || 0);
+            aggSec += (mb.stats.playtimeSeconds || 0);
+          }
+        });
+        myKingdom.kills = Math.max(Number(myKingdom.kills) || 0, aggKills);
+        myKingdom.pvpKills = aggPvp;
+        myKingdom.pontos = Math.max(Number(myKingdom.pontos) || 0, aggPoints);
+        myKingdom.totalSeconds = aggSec;
+        const totalHrs = Math.floor(aggSec / 3600);
+        const totalMins = Math.floor((aggSec % 3600) / 60);
+        myKingdom.playtimeFormatted = totalHrs > 0 ? `${totalHrs}h ${totalMins}m` : `${totalMins}m`;
       } else {
         // Membro comum: não recebe dados de produtividade privada
         members = mList || [];
@@ -5212,7 +5233,7 @@ app.get('/api/ranking/kingdoms', async (req, res) => {
           const current = playtimeMap.get(nickKey) || 0;
           playtimeMap.set(nickKey, Math.max(current, sec));
         }
-        const pk = Number(json.playerKills) || 0;
+        const pk = Math.max(Number(json.playerKills) || 0, Number(json.pvpKills) || 0);
         if (pk > 0) {
           const curPk = playerKillsMap.get(nickKey) || 0;
           playerKillsMap.set(nickKey, Math.max(curPk, pk));
