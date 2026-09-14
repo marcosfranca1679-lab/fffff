@@ -70,10 +70,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final String SYNC_URL  = "https://fffff-autoforge.vercel.app/api/plugin/sync";
     private static final String PLUGIN_SECRET = "MapaBermuda2025Plugin";
 
-    // 600 ticks = 30s (sync otimizado de whitelist, bans, vidas e proteções com jogadores online)
-    private static final long SYNC_ONLINE_TICKS = 600L;
-    // 1200 ticks = 60s (sync em repouso quando o servidor estiver sem jogadores)
-    private static final long SYNC_EMPTY_TICKS = 1200L;
+    // 1200 ticks = 60s (sync unificado de whitelist, bans, vidas e proteções com jogadores online)
+    private static final long SYNC_ONLINE_TICKS = 1200L;
 
     private static final Set<String> BYPASS = Set.of(
         "admin",
@@ -192,7 +190,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         getServer().getScheduler().runTaskAsynchronously(this, this::syncWithWeb);
 
         // ── Task: Sincronização Geral Unificada ──────────────────────────────────
-        // 30s com jogadores online (para bans, whitelist e vidas do site refletirem).
+        // 60s com jogadores online (para bans, whitelist e vidas do site refletirem).
         // ZERO chamadas quando o servidor estiver vazio (economia total da Vercel).
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
             if (getServer().getOnlinePlayers().isEmpty()) return; // 0 requisições quando vazio!
