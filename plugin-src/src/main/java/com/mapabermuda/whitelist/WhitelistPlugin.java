@@ -944,7 +944,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     // ── Comando in-game /reino info e verificação de território/sobreposição ──
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
+    public void onTerritorioCheckCommand(PlayerCommandPreprocessEvent event) {
         String msg = event.getMessage().trim().toLowerCase();
         if (msg.equals("/reino info") || msg.equals("/reino checar") || msg.equals("/reino") || msg.equals("/terreno")) {
             event.setCancelled(true);
