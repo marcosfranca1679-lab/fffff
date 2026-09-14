@@ -2033,8 +2033,22 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
     const isGameIpBanned = gameIp ? !!(await checkIpBan(gameIp)) : false;
     const isWebIpBanned = webIp ? !!(await checkIpBan(webIp)) : false;
 
+    // 6. Vidas do sistema de 5 vidas
+    let lives = 5;
+    try {
+      const { data: livesRow } = await supabase
+        .from('player_lives')
+        .select('lives')
+        .ilike('nick', nick)
+        .maybeSingle();
+      if (livesRow && livesRow.lives !== undefined) {
+        lives = livesRow.lives;
+      }
+    } catch {}
+
     res.json({
       player: player || { nick, status: 'unknown' },
+      lives,
       currentBan,
       banHistory,
       sessionHistory,
@@ -2042,8 +2056,6 @@ app.get('/api/admin/player/:nick', requireAdmin, async (req, res) => {
       totalDeaths: (gameData && gameData.totalDeaths !== undefined) ? gameData.totalDeaths : deathHistory.length,
       playtimeFormatted: (gameData && gameData.playtimeFormatted) ? gameData.playtimeFormatted : '0m',
       chatMessages: (chatMsgs || []).map(m => ({ content: m.content, at: m.created_at })),
-      gameData,
-      isLive,
       webIp,
       gameIp,
       isGameIpBanned,
