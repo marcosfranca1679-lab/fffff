@@ -7737,18 +7737,18 @@
                 </div>
 
                 <!-- Input / Select para Adicionar Jogador -->
-                <div class="flex items-center gap-2 pt-1 flex-wrap">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 flex-wrap w-full">
                   <select id="admin-prot-select-add-${z.id}" onchange="if(this.value){ const inp = document.getElementById('admin-prot-add-nick-${z.id}'); if(inp) inp.value = this.value; }"
-                    class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-emerald-300 focus:outline-none focus:border-emerald-500 max-w-xs">
+                    class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-emerald-300 focus:outline-none focus:border-emerald-500 w-full sm:w-auto min-w-0">
                     <option value="">-- Selecionar Jogador da Whitelist --</option>
                     ${(cachedAdminPlayers || []).map(p => `
                       <option value="${escapeHtml(p.nick)}">👤 ${escapeHtml(p.nick)} [${escapeHtml(p.platform || 'Java')}]</option>
                     `).join('')}
                   </select>
                   <input id="admin-prot-add-nick-${z.id}" type="text" maxlength="25" placeholder="Ou digite o nick..."
-                    class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-36" />
+                    class="bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 w-full sm:w-36 min-w-0" />
                   <button onclick="adicionarMembroAdminProt('${z.id}')"
-                    class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                    class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer w-full sm:w-auto shrink-0">
                     <span>➕</span> <span>Adicionar</span>
                   </button>
                 </div>
@@ -8033,11 +8033,11 @@
                 </div>
 
                 <!-- Input para Adicionar Amigo Manualmente -->
-                <div class="flex items-center gap-2 pt-1">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1 w-full">
                   <input id="add-amigo-nick-${t.id}" type="text" maxlength="25" placeholder="Nick do jogador no Minecraft..."
-                    class="bg-black/80 border border-white/[0.12] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 flex-1 max-w-sm" />
+                    class="bg-black/80 border border-white/[0.12] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 flex-1 min-w-0 w-full" />
                   <button onclick="adicionarAmigoTerreno('${t.id}')"
-                    class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-slate-950 font-black text-xs px-4 py-2 rounded-xl transition flex items-center gap-1 shadow-md active:scale-95 cursor-pointer">
+                    class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-slate-950 font-black text-xs px-4 py-2.5 sm:py-2 rounded-xl transition flex items-center justify-center gap-1 shadow-md active:scale-95 cursor-pointer shrink-0">
                     <span>➕</span> <span>Adicionar</span>
                   </button>
                 </div>
