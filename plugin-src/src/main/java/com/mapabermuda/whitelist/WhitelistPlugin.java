@@ -1,4 +1,4 @@
-package com.mapabermuda.whitelist;
+﻿package com.mapabermuda.whitelist;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -78,8 +78,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private static final Set<String> BYPASS = Set.of(
         "admin",
         "marcos",
-        "marcosfranca1679",
-        "willcraft333281"
+        "marcosfranca1679"
     );
 
     // ── Proteção de Terreno (Reinos e Administrador) ─────────────────────────
@@ -176,10 +175,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private HttpClient httpClient;
     private Logger log;
     private volatile long lastSyncTime = 0L;
-    private PainelMenu painelMenu;
-    // Cache de reino por nick (dono) — atualizado no sync
-    private final Map<String, String> reinoOwners = new ConcurrentHashMap<>();
-
 
     @Override
     public void onEnable() {
@@ -219,38 +214,8 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }, 1200L, 1200L); // 60 segundos
 
-        // ── Painel In-Game ────────────────────────────────────────────────────────
-        String panelBase = "https://fffff-autoforge.vercel.app";
-        this.painelMenu = new PainelMenu(this, httpClient, panelBase, PLUGIN_SECRET);
-        var painelCmd = getCommand("painel");
-        if (painelCmd != null) {
-            painelCmd.setExecutor((sender, cmd, label, args) -> {
-                if (!(sender instanceof Player p)) {
-                    sender.sendMessage("Apenas jogadores podem usar este comando.");
-                    return true;
-                }
-                String lowerName = cleanNick(p.getName()).toLowerCase().trim();
-                boolean isAdmin = BYPASS.contains(lowerName);
-                boolean isReinoOwner = reinoOwners.containsKey(lowerName);
-
-                if (args.length == 0) {
-                    painelMenu.abrirMenuPrincipal(p, isAdmin, isReinoOwner);
-                    return true;
-                }
-                String sub = args[0].toLowerCase();
-                String arg2 = args.length > 1 ? args[1] : null;
-                switch (sub) {
-                    case "admin"     -> { if(isAdmin) painelMenu.abrirMenuAdmin(p); else p.sendMessage(Component.text("Sem permissão.", NamedTextColor.RED)); }
-                    case "reino"     -> { if(isReinoOwner||isAdmin) painelMenu.abrirMenuReino(p); else p.sendMessage(Component.text("Você não tem reino.", NamedTextColor.RED)); }
-                    default          -> painelMenu.abrirMenuPrincipal(p, isAdmin, isReinoOwner);
-                }
-                return true;
-            });
-        }
-
         log.info("Mapa Bermuda Whitelist v3.1 (Sincronização Gson + Persistência Local) - ATIVA!");
     }
-
 
     @Override
     public void onDisable() {
@@ -607,84 +572,14 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         getServer().getScheduler().runTaskAsynchronously(this, () -> postTelemetria(cleanName, payload));
     }
 
-    // ── Envia chat dos jogadores in-game para o console do admin + Intercepta input do Painel ──
-    @EventHandler(priority = EventPriority.LOWEST)
+    // ── Envia chat dos jogadores in-game para o console do admin ──────────────
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerChat(AsyncPlayerChatEvent event) {
-        Player player = event.getPlayer();
-        if (painelMenu != null && painelMenu.hasPendingInput(player.getUniqueId())) {
-            event.setCancelled(true);
-            String text = event.getMessage().trim();
-            getServer().getScheduler().runTask(this, () -> painelMenu.handleChatInput(player, text));
-            return;
-        }
         try {
-            String nick = cleanNick(player.getName());
+            String nick = cleanNick(event.getPlayer().getName());
             String msg = event.getMessage();
             enviarLogConsole("💬 [CHAT] " + nick + ": " + msg);
         } catch (Exception ignored) {}
-    }
-
-    // ── Intercepta cliques de botões do Painel (/mb:*) ────────────────────────
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
-        String msg = event.getMessage().trim();
-        if (!msg.startsWith("/mb:") && !msg.startsWith("/mb ")) return;
-        event.setCancelled(true);
-
-        Player p = event.getPlayer();
-        String lowerName = cleanNick(p.getName()).toLowerCase().trim();
-        boolean isAdmin = BYPASS.contains(lowerName);
-        boolean isReinoOwner = reinoOwners.containsKey(lowerName);
-
-        String full = msg.startsWith("/mb:") ? msg.substring(4) : msg.substring(4).trim();
-        String[] parts = full.split("\\s+");
-        String action = parts[0].toLowerCase();
-        String arg1 = parts.length > 1 ? parts[1] : "";
-        String arg2 = parts.length > 2 ? parts[2] : "";
-
-        if (painelMenu == null) return;
-
-        switch (action) {
-            // Jogador
-            case "vidas"            -> painelMenu.abrirVidas(p);
-            case "historico"        -> painelMenu.abrirHistorico(p);
-            case "terrenos"         -> painelMenu.abrirMeusTerrenos(p);
-            case "terreno-add"      -> painelMenu.terrenoAddMembro(p, arg1);
-            case "terreno-rem"      -> painelMenu.terrenoRemMembro(p, arg1);
-            case "rankings"         -> painelMenu.abrirRankings(p);
-            case "ranking-horas"    -> painelMenu.rankingHoras(p);
-            case "ranking-reinos"   -> painelMenu.rankingReinos(p);
-
-            // Reino
-            case "reino"            -> { if (isReinoOwner || isAdmin) painelMenu.abrirMenuReino(p); else p.sendMessage(Component.text("Sem permissão.", NamedTextColor.RED)); }
-            case "reino-membros"    -> { if (isReinoOwner || isAdmin) painelMenu.reinoMembros(p); }
-            case "reino-convidar"   -> { if (isReinoOwner || isAdmin) painelMenu.reinoConvidar(p); }
-            case "reino-expulsar"   -> { if (isReinoOwner || isAdmin) painelMenu.reinoExpulsar(p); }
-
-            // Admin
-            case "admin"            -> { if (isAdmin) painelMenu.abrirMenuAdmin(p); else p.sendMessage(Component.text("Sem permissão.", NamedTextColor.RED)); }
-            case "admin-pendentes"  -> { if (isAdmin) painelMenu.adminPendentes(p); }
-            case "admin-aprovar"    -> { if (isAdmin) painelMenu.adminAprovar(p, arg1); }
-            case "admin-rejeitar"   -> { if (isAdmin) painelMenu.adminRejeitar(p, arg1); }
-            case "admin-add"        -> { if (isAdmin) painelMenu.adminAdd(p); }
-            case "admin-remover"    -> { if (isAdmin) painelMenu.adminRemover(p); }
-            case "admin-banir"      -> { if (isAdmin) painelMenu.adminBanir(p); }
-            case "admin-desbanir"   -> { if (isAdmin) painelMenu.adminDesbanir(p); }
-            case "admin-banip"      -> { if (isAdmin) painelMenu.adminBanIp(p); }
-            case "admin-desbanip"   -> { if (isAdmin) painelMenu.adminDesbanIp(p); }
-            case "admin-vidas"      -> { if (isAdmin) painelMenu.adminVerVidas(p); }
-            case "admin-darvidas"   -> { if (isAdmin) painelMenu.adminDarVidas(p); }
-            case "admin-tirarvidas" -> { if (isAdmin) painelMenu.adminTirarVidas(p); }
-            case "admin-zonas"      -> { if (isAdmin) painelMenu.adminZonas(p); }
-            case "admin-criarzona"  -> { if (isAdmin) painelMenu.adminCriarZona(p); }
-            case "admin-remzona"    -> { if (isAdmin) painelMenu.adminRemZona(p); }
-            case "admin-reinos"     -> { if (isAdmin) painelMenu.adminReinos(p); }
-            case "admin-dissolver"  -> { if (isAdmin) painelMenu.adminDissolver(p); }
-            case "admin-sessoes"    -> { if (isAdmin) painelMenu.adminSessoes(p); }
-            case "admin-broadcast"  -> { if (isAdmin) painelMenu.adminBroadcast(p); }
-
-            default                 -> painelMenu.abrirMenuPrincipal(p, isAdmin, isReinoOwner);
-        }
     }
 
     // ── Sistema de Proteção de Terreno (Reinos e Administrador) ─────────────
@@ -945,7 +840,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
     // ── Comando in-game /reino info e verificação de território/sobreposição ──
     @EventHandler(priority = EventPriority.LOWEST)
-    public void onTerritorioCheckCommand(PlayerCommandPreprocessEvent event) {
+    public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
         String msg = event.getMessage().trim().toLowerCase();
         if (msg.equals("/reino info") || msg.equals("/reino checar") || msg.equals("/reino") || msg.equals("/terreno")) {
             event.setCancelled(true);
@@ -1088,11 +983,6 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                         int cz = o.has("centerZ") ? o.get("centerZ").getAsInt() : 0;
                         int r = o.has("radius") ? o.get("radius").getAsInt() : 50;
 
-                        String ownerNick = o.has("owner_nick") ? o.get("owner_nick").getAsString().trim() : "";
-                        if (!ownerNick.isEmpty()) {
-                            reinoOwners.put(ownerNick.toLowerCase(), kid);
-                        }
-
                         Set<String> mSet = ConcurrentHashMap.newKeySet();
                         if (o.has("members") && o.get("members").isJsonArray()) {
                             for (JsonElement mel : o.getAsJsonArray("members")) {
@@ -1100,7 +990,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                                 if (!mn.isEmpty()) mSet.add(mn);
                             }
                         }
-                        updatedAreas.put(kid, new KingdomArea(kid, nome, tag, world, cx, cz, r, mSet, false, ownerNick));
+                        updatedAreas.put(kid, new KingdomArea(kid, nome, tag, world, cx, cz, r, mSet));
                     }
                 }
                 kingdomProtections.clear();
@@ -1477,3 +1367,4 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         return sb.toString().trim();
     }
 }
+
