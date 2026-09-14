@@ -1,4 +1,4 @@
-﻿package com.mapabermuda.whitelist;
+package com.mapabermuda.whitelist;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -1367,4 +1367,3 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         return sb.toString().trim();
     }
 }
-
