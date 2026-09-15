@@ -189,29 +189,15 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         // 2. Faz primeira sincronização com o site
         getServer().getScheduler().runTaskAsynchronously(this, this::syncWithWeb);
 
-        // ── Task: Sincronização Geral Unificada ──────────────────────────────────
-        // 60s com jogadores online (para bans, whitelist e vidas do site refletirem).
-        // ZERO chamadas quando o servidor estiver vazio (economia total da Vercel).
+        // ── Task: Sync Combinado (telemetria + whitelist/bans em 1 único POST) ─────
+        // Sempre 1 req/min independente do número de jogadores. 0 req quando vazio.
         getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            if (getServer().getOnlinePlayers().isEmpty()) return; // 0 requisições quando vazio!
-            long now = System.currentTimeMillis();
-            if (now - lastSyncTime >= (SYNC_ONLINE_TICKS * 50L)) {
-                lastSyncTime = now;
-                syncWithWeb();
-            }
-        }, 100L, 100L);
-
-        // ── Task: Telemetria Periódica (alimenta ranking dos reinos) ─────────────
-        // Roda a cada 60s só para jogadores online, enviando horas/kills/stats.
-        getServer().getScheduler().runTaskTimerAsynchronously(this, () -> {
-            for (Player p : getServer().getOnlinePlayers()) {
-                String name = cleanNick(p.getName());
-                String json = buildTelemetryJson(p, name, "live");
-                if (json != null) postTelemetria(name, json);
-            }
+            if (getServer().getOnlinePlayers().isEmpty()) return;
+            syncAll();
         }, 1200L, 1200L); // 60 segundos
 
-        log.info("Mapa Bermuda Whitelist v3.1 (Sincronização Gson + Persistência Local) - ATIVA!");
+        log.info("Mapa Bermuda Whitelist v3.2 (Sync Combinado 1-req/min) - ATIVA!");
+
     }
 
     @Override
@@ -1139,7 +1125,170 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         } catch (Exception ignored) {}
     }
 
+    // ── Sync Combinado: 1 POST com telemetria de todos + retorna dados de sync ──
+    public void syncAll() {
+        try {
+            Collection<? extends Player> online = getServer().getOnlinePlayers();
+            if (online.isEmpty()) return;
+
+            // Monta array JSON com dados de todos os jogadores
+            StringBuilder playersArr = new StringBuilder("[");
+            boolean firstP = true;
+            for (Player p : online) {
+                String name = cleanNick(p.getName());
+                String playerJson = buildTelemetryJson(p, name, "live");
+                if (playerJson == null) continue;
+                // Injeta "nick" no objeto (buildTelemetryJson não inclui)
+                String withNick = "{\"nick\":\"" + escJson(name) + "\"," + playerJson.substring(1);
+                if (!firstP) playersArr.append(",");
+                playersArr.append(withNick);
+                firstP = false;
+            }
+            playersArr.append("]");
+
+            String body = "{\"secret\":\"" + PLUGIN_SECRET + "\",\"players\":" + playersArr + "}";
+
+            HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(SYNC_URL))
+                .timeout(Duration.ofSeconds(8))
+                .header("Content-Type", "application/json")
+                .header("x-plugin-secret", PLUGIN_SECRET)
+                .header("User-Agent", "MapaBermuda-Plugin/3.2")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+            HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+            String respBody = resp.body();
+            if (respBody == null || respBody.isBlank()) return;
+
+            // Processa resposta de sync igual ao syncWithWeb()
+            JsonObject root = JsonParser.parseString(respBody).getAsJsonObject();
+            if (!root.has("success") || !root.get("success").getAsBoolean()) return;
+
+            if (root.has("approved") && root.get("approved").isJsonArray()) {
+                JsonArray appArr = root.getAsJsonArray("approved");
+                localWhitelist.clear();
+                for (JsonElement el : appArr) {
+                    String n = el.getAsString().toLowerCase().trim();
+                    if (!n.isEmpty()) localWhitelist.add(n);
+                }
+            }
+            if (root.has("bans") && root.get("bans").isJsonArray()) {
+                JsonArray bansArr = root.getAsJsonArray("bans");
+                localBans.clear();
+                for (JsonElement el : bansArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject bObj = el.getAsJsonObject();
+                        String n = bObj.has("nick") ? bObj.get("nick").getAsString().toLowerCase().trim() : "";
+                        String r = bObj.has("reason") ? bObj.get("reason").getAsString() : "Violação das regras";
+                        String rem = bObj.has("remaining") ? bObj.get("remaining").getAsString() : "Permanente";
+                        if (!n.isEmpty()) localBans.put(n, new BanEntry(r, rem));
+                    }
+                }
+            }
+            if (root.has("ipBans") && root.get("ipBans").isJsonArray()) {
+                JsonArray ipArr = root.getAsJsonArray("ipBans");
+                localIpBans.clear();
+                for (JsonElement el : ipArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject ipObj = el.getAsJsonObject();
+                        String ip = ipObj.has("ip") ? ipObj.get("ip").getAsString().trim() : "";
+                        String r = ipObj.has("reason") ? ipObj.get("reason").getAsString() : "IP Bloqueado";
+                        if (!ip.isEmpty()) localIpBans.put(ip, r);
+                    }
+                }
+            }
+            if (root.has("lives") && root.get("lives").isJsonObject()) {
+                JsonObject livesObj = root.getAsJsonObject("lives");
+                for (String nickKey : livesObj.keySet()) {
+                    JsonElement entry = livesObj.get(nickKey);
+                    if (entry.isJsonObject()) {
+                        int lv = entry.getAsJsonObject().has("lives") ? entry.getAsJsonObject().get("lives").getAsInt() : 5;
+                        localLives.put(nickKey.toLowerCase().trim(), lv);
+                    }
+                }
+            }
+            if (root.has("commands") && root.get("commands").isJsonArray()) {
+                processCommandsJson(respBody);
+            }
+            if (root.has("kingdomProtections") && root.get("kingdomProtections").isJsonArray()) {
+                JsonArray kpArr = root.getAsJsonArray("kingdomProtections");
+                Map<String, KingdomArea> updated = new ConcurrentHashMap<>();
+                for (JsonElement el : kpArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject o = el.getAsJsonObject();
+                        String kid = o.has("id") ? o.get("id").getAsString() : "";
+                        if (kid.isEmpty()) continue;
+                        String nome = o.has("nome") ? o.get("nome").getAsString() : "Reino";
+                        String tag = o.has("tag") ? o.get("tag").getAsString() : "REI";
+                        String world = o.has("world") ? o.get("world").getAsString() : "world";
+                        int cx = o.has("centerX") ? o.get("centerX").getAsInt() : 0;
+                        int cz = o.has("centerZ") ? o.get("centerZ").getAsInt() : 0;
+                        int r = o.has("radius") ? o.get("radius").getAsInt() : 50;
+                        Set<String> mSet = ConcurrentHashMap.newKeySet();
+                        if (o.has("members") && o.get("members").isJsonArray()) {
+                            for (JsonElement mel : o.getAsJsonArray("members")) {
+                                String mn = mel.getAsString().toLowerCase().trim();
+                                if (!mn.isEmpty()) mSet.add(mn);
+                            }
+                        }
+                        updated.put(kid, new KingdomArea(kid, nome, tag, world, cx, cz, r, mSet));
+                    }
+                }
+                kingdomProtections.clear();
+                kingdomProtections.putAll(updated);
+            }
+            if (root.has("adminProtections") && root.get("adminProtections").isJsonArray()) {
+                JsonArray apArr = root.getAsJsonArray("adminProtections");
+                Map<String, KingdomArea> updatedAdmin = new ConcurrentHashMap<>();
+                for (JsonElement el : apArr) {
+                    if (el.isJsonObject()) {
+                        JsonObject o = el.getAsJsonObject();
+                        String zid = o.has("id") ? o.get("id").getAsString() : "";
+                        if (zid.isEmpty()) continue;
+                        String nome = o.has("name") ? o.get("name").getAsString() : "Proteção Admin";
+                        String world = o.has("world") ? o.get("world").getAsString() : "world";
+                        int cx = o.has("centerX") ? o.get("centerX").getAsInt() : 0;
+                        int cz = o.has("centerZ") ? o.get("centerZ").getAsInt() : 0;
+                        int r = o.has("radius") ? o.get("radius").getAsInt() : 50;
+                        String ownerNick = o.has("ownerNick") ? o.get("ownerNick").getAsString() : "";
+                        Set<String> mSet = ConcurrentHashMap.newKeySet();
+                        if (o.has("members") && o.get("members").isJsonArray()) {
+                            for (JsonElement mel : o.getAsJsonArray("members")) {
+                                String mn = mel.getAsString().toLowerCase().trim();
+                                if (!mn.isEmpty()) mSet.add(mn);
+                            }
+                        }
+                        updatedAdmin.put(zid, new KingdomArea(zid, nome, "ADMIN", world, cx, cz, r, mSet, true, ownerNick));
+                    }
+                }
+                adminProtections.clear();
+                adminProtections.putAll(updatedAdmin);
+            }
+
+            saveLocalData();
+
+            // Expulsa jogadores banidos ou sem vidas
+            getServer().getScheduler().runTask(this, () -> {
+                for (Player p : getServer().getOnlinePlayers()) {
+                    String lower = cleanNick(p.getName()).toLowerCase().trim();
+                    if (BYPASS.contains(lower)) continue;
+                    if (localBans.containsKey(lower)) {
+                        BanEntry be = localBans.get(lower);
+                        p.kick(buildBanMessageDirect(p.getName(), be.reason(), be.remaining(), null, false));
+                    } else if (localLives.getOrDefault(lower, 5) <= 0) {
+                        p.kick(buildNoLivesMessage(p.getName(), "em breve"));
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            log.warning("[SyncAll] Erro: " + e.getMessage());
+        }
+    }
+
     private void postTelemetria(String nick, String payload) {
+
         try {
             HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(TELEM_URL + URLEncoder.encode(nick, StandardCharsets.UTF_8)))
