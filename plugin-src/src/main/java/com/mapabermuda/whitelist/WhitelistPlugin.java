@@ -959,6 +959,7 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                     logAction(cleanNick(player.getName()), "CONTAINER_PUT", cursor.getType().name(), cursor.getAmount() + "x " + prettyName(cursor.getType().name()), loc);
                 }
             }
+        }
     }
 
     // ── SISTEMA ANTI-CHEAT (FLY, ITEM HACK, X-RAY & PROVAS) ───────────────────
