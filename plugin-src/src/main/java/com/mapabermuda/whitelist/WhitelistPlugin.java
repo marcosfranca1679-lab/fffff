@@ -42,6 +42,11 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -54,6 +59,11 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -62,6 +72,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.logging.Logger;
 
 public class WhitelistPlugin extends JavaPlugin implements Listener {
@@ -170,6 +181,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, Long> lastProtectionNotice = new ConcurrentHashMap<>();
 
     public record BanEntry(String reason, String remaining) {}
+    public record LogEntry(String nick, String action, String target, String details, String world, int x, int y, int z, long createdAt) {}
+
+    private final ConcurrentLinkedQueue<LogEntry> logQueue = new ConcurrentLinkedQueue<>();
+    private File dbFile;
 
     private HttpClient httpClient;
     private Logger log;
@@ -187,8 +202,17 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         // 1. Carrega dados salvos do dados.yml
         loadLocalData();
 
-        // 2. Faz primeira sincronização com o site
+        // 2. Inicializa SQLite local de auditoria forense e limpa logs > 7 dias
+        initDatabase();
+
+        // 3. Faz primeira sincronização com o site
         getServer().getScheduler().runTaskAsynchronously(this, this::syncWithWeb);
+
+        // ── Task: Gravação em lote de logs forenses no SQLite (a cada 5s, sem lag) ──
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::flushLogQueue, 100L, 100L);
+
+        // ── Task: Auto-limpeza de logs com mais de 7 dias (a cada 6 horas) ─────────
+        getServer().getScheduler().runTaskTimerAsynchronously(this, this::cleanOldLogs, 72000L, 432000L);
 
         // ── Task: Sync Combinado (telemetria + whitelist/bans em 1 único POST) ─────
         // Sempre 1 req/min independente do número de jogadores. 0 req quando vazio.
@@ -197,12 +221,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             syncAll();
         }, 1200L, 1200L); // 60 segundos
 
-        log.info("Mapa Bermuda Whitelist v3.2 (Sync Combinado 1-req/min) - ATIVA!");
-
+        log.info("Mapa Bermuda Whitelist v3.3 (Logs Forenses + Sync Combinado 1-req/min) - ATIVA!");
     }
 
     @Override
     public void onDisable() {
+        flushLogQueue();
         saveLocalData();
         log.info("[Whitelist] Dados salvos localmente. Plugin desativado.");
     }
@@ -614,14 +638,21 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // 1. Bloqueia quebrar blocos na área protegida (mesmo se o jogador estiver fora alcançando a borda)
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    // 1. Bloqueia quebrar blocos na área protegida e registra ação forense se permitido
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
         KingdomArea[] matched = new KingdomArea[1];
         if (!canPlayerInteractAt(player, event.getBlock().getLocation(), matched)) {
             event.setCancelled(true);
             sendProtectionNotice(player, matched[0]);
+            return;
+        }
+        // Registra log forense de quebra
+        if (!event.isCancelled()) {
+            String cleanName = cleanNick(player.getName());
+            String mat = event.getBlock().getType().name();
+            logAction(cleanName, "BREAK", mat, null, event.getBlock().getLocation());
         }
     }
 
@@ -636,14 +667,21 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // 3. Bloqueia colocar blocos na área protegida
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    // 3. Bloqueia colocar blocos na área protegida e registra ação forense se permitido
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onBlockPlace(BlockPlaceEvent event) {
         Player player = event.getPlayer();
         KingdomArea[] matched = new KingdomArea[1];
         if (!canPlayerInteractAt(player, event.getBlock().getLocation(), matched)) {
             event.setCancelled(true);
             sendProtectionNotice(player, matched[0]);
+            return;
+        }
+        // Registra log forense de colocação
+        if (!event.isCancelled()) {
+            String cleanName = cleanNick(player.getName());
+            String mat = event.getBlockPlaced().getType().name();
+            logAction(cleanName, "PLACE", mat, null, event.getBlockPlaced().getLocation());
         }
     }
 
@@ -659,6 +697,19 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (!canPlayerInteractAt(player, targetLoc, matched)) {
                 event.setCancelled(true);
                 sendProtectionNotice(player, matched[0]);
+                return;
+            }
+        }
+
+        // Registra log forense de interação com portas, botões, alavancas, baús, etc.
+        if (!event.isCancelled() && clicked != null && event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+            String mat = clicked.getType().name();
+            if (mat.contains("DOOR") || mat.contains("TRAPDOOR") || mat.contains("GATE")) {
+                logAction(cleanNick(player.getName()), "DOOR", mat, "Interagiu com porta/alçapão", clicked.getLocation());
+            } else if (mat.contains("BUTTON") || mat.contains("LEVER")) {
+                logAction(cleanNick(player.getName()), "INTERACT", mat, "Acionou botão/alavanca", clicked.getLocation());
+            } else if (mat.contains("CHEST") || mat.contains("BARREL") || mat.contains("SHULKER_BOX")) {
+                logAction(cleanNick(player.getName()), "OPEN_CONTAINER", mat, "Abriu container", clicked.getLocation());
             }
         }
     }
@@ -795,6 +846,64 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             }
         }
     }
+
+    // ── LISTENERS FORENSES (DROP DE ITENS, COLETA, BAÚS E PLACAS) ───────────
+
+    // Registra quando jogador joga itens no chão
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerDropItem(PlayerDropItemEvent event) {
+        Player player = event.getPlayer();
+        ItemStack item = event.getItemDrop().getItemStack();
+        String details = item.getAmount() + "x " + prettyName(item.getType().name());
+        logAction(cleanNick(player.getName()), "DROP_ITEM", item.getType().name(), details, event.getItemDrop().getLocation());
+    }
+
+    // Registra quando jogador pega itens do chão
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityPickupItem(EntityPickupItemEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            ItemStack item = event.getItem().getItemStack();
+            String details = item.getAmount() + "x " + prettyName(item.getType().name());
+            logAction(cleanNick(player.getName()), "PICKUP_ITEM", item.getType().name(), details, player.getLocation());
+        }
+    }
+
+    // Registra texto digitado em placas
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSignChange(SignChangeEvent event) {
+        Player player = event.getPlayer();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 4; i++) {
+            Component c = event.line(i);
+            if (c != null) {
+                String line = net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(c);
+                if (!line.isBlank()) {
+                    if (sb.length() > 0) sb.append(" | ");
+                    sb.append(line.trim());
+                }
+            }
+        }
+        String txt = sb.length() > 0 ? sb.toString() : "[Vazia]";
+        logAction(cleanNick(player.getName()), "SIGN", event.getBlock().getType().name(), "Texto: " + txt, event.getBlock().getLocation());
+    }
+
+    // Registra pegar ou colocar itens dentro de containers (baús, barris, fornalhas)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (event.getWhoClicked() instanceof Player player) {
+            if (event.getClickedInventory() != null && event.getClickedInventory().getLocation() != null) {
+                Location loc = event.getClickedInventory().getLocation();
+                ItemStack curr = event.getCurrentItem();
+                ItemStack cursor = event.getCursor();
+                if (curr != null && !curr.getType().isAir()) {
+                    logAction(cleanNick(player.getName()), "CONTAINER_TAKE", curr.getType().name(), curr.getAmount() + "x " + prettyName(curr.getType().name()), loc);
+                } else if (cursor != null && !cursor.getType().isAir()) {
+                    logAction(cleanNick(player.getName()), "CONTAINER_PUT", cursor.getType().name(), cursor.getAmount() + "x " + prettyName(cursor.getType().name()), loc);
+                }
+            }
+        }
+    }
+
 
     // 16. Bloqueia interagir com entidades (molduras, suportes de armaduras, barcos com baú)
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -954,6 +1063,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (root.has("commands") && root.get("commands").isJsonArray()) {
                 processCommandsJson(body);
             }
+
+            // 5.5. Processa Consultas de Logs Forenses solicitadas pelo Admin no Site
+            if (root.has("logQueries") && root.get("logQueries").isJsonArray()) {
+                processLogQueries(root.getAsJsonArray("logQueries"));
+            }
+
 
             // 6. Sincroniza Proteções de Terreno dos Reinos
             if (root.has("kingdomProtections") && root.get("kingdomProtections").isJsonArray()) {
@@ -1212,6 +1327,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (root.has("commands") && root.get("commands").isJsonArray()) {
                 processCommandsJson(respBody);
             }
+            if (root.has("logQueries") && root.get("logQueries").isJsonArray()) {
+                processLogQueries(root.getAsJsonArray("logQueries"));
+            }
+
             if (root.has("kingdomProtections") && root.get("kingdomProtections").isJsonArray()) {
                 JsonArray kpArr = root.getAsJsonArray("kingdomProtections");
                 Map<String, KingdomArea> updated = new ConcurrentHashMap<>();
@@ -1517,5 +1636,205 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
         return sb.toString().trim();
     }
+
+    // ── SISTEMA FORENSE LOCAL (SQLITE + FILA ASSÍNCRONA) ────────────────────
+
+    private void initDatabase() {
+        try {
+            if (!getDataFolder().exists()) getDataFolder().mkdirs();
+            dbFile = new File(getDataFolder(), "logs.db");
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
+                 Statement st = conn.createStatement()) {
+                st.execute("CREATE TABLE IF NOT EXISTS action_logs (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "nick TEXT NOT NULL," +
+                        "action TEXT NOT NULL," +
+                        "target TEXT," +
+                        "details TEXT," +
+                        "world TEXT NOT NULL," +
+                        "x INTEGER NOT NULL," +
+                        "y INTEGER NOT NULL," +
+                        "z INTEGER NOT NULL," +
+                        "created_at INTEGER NOT NULL" +
+                        ");");
+                st.execute("CREATE INDEX IF NOT EXISTS idx_coords ON action_logs(world, x, z);");
+                st.execute("CREATE INDEX IF NOT EXISTS idx_time ON action_logs(created_at);");
+            }
+            log.info("[Forensic] Banco de dados SQLite de auditoria pronto!");
+            cleanOldLogs();
+        } catch (Exception e) {
+            log.severe("[Forensic] Erro ao inicializar SQLite: " + e.getMessage());
+        }
+    }
+
+    public void logAction(String nick, String action, String target, String details, Location loc) {
+        if (loc == null || loc.getWorld() == null || nick == null) return;
+        logQueue.add(new LogEntry(
+                nick,
+                action,
+                target != null ? target : "",
+                details != null ? details : "",
+                loc.getWorld().getName(),
+                loc.getBlockX(),
+                loc.getBlockY(),
+                loc.getBlockZ(),
+                System.currentTimeMillis()
+        ));
+    }
+
+    private void flushLogQueue() {
+        if (logQueue.isEmpty() || dbFile == null) return;
+        List<LogEntry> batch = new ArrayList<>();
+        LogEntry entry;
+        while ((entry = logQueue.poll()) != null && batch.size() < 500) {
+            batch.add(entry);
+        }
+        if (batch.isEmpty()) return;
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
+             PreparedStatement ps = conn.prepareStatement(
+                     "INSERT INTO action_logs (nick, action, target, details, world, x, y, z, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+            conn.setAutoCommit(false);
+            for (LogEntry e : batch) {
+                ps.setString(1, e.nick());
+                ps.setString(2, e.action());
+                ps.setString(3, e.target());
+                ps.setString(4, e.details());
+                ps.setString(5, e.world());
+                ps.setInt(6, e.x());
+                ps.setInt(7, e.y());
+                ps.setInt(8, e.z());
+                ps.setLong(9, e.createdAt());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+            conn.commit();
+        } catch (Exception e) {
+            log.warning("[Forensic] Erro ao gravar lote no SQLite: " + e.getMessage());
+        }
+    }
+
+    private void cleanOldLogs() {
+        if (dbFile == null || !dbFile.exists()) return;
+        try {
+            long cutoff = System.currentTimeMillis() - (7L * 24 * 3600 * 1000); // 7 dias
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
+                 PreparedStatement ps = conn.prepareStatement("DELETE FROM action_logs WHERE created_at < ?")) {
+                ps.setLong(1, cutoff);
+                int deleted = ps.executeUpdate();
+                if (deleted > 0) {
+                    log.info("[Forensic] Limpeza de 7 dias: " + deleted + " logs antigos foram excluídos.");
+                }
+            }
+        } catch (Exception e) {
+            log.warning("[Forensic] Erro na limpeza de logs: " + e.getMessage());
+        }
+    }
+
+    // ── PROCESSAMENTO DE CONSULTAS DE LOGS VINDAS DO SITE ───────────────────
+
+    private void processLogQueries(JsonArray queries) {
+        if (queries == null || queries.isEmpty()) return;
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            for (JsonElement el : queries) {
+                if (el.isJsonObject()) {
+                    executeLogQuery(el.getAsJsonObject());
+                }
+            }
+        });
+    }
+
+    private void executeLogQuery(JsonObject q) {
+        if (dbFile == null || !dbFile.exists()) return;
+        String queryId = q.has("queryId") ? q.get("queryId").getAsString() : "";
+        if (queryId.isEmpty()) return;
+
+        String world = q.has("world") ? q.get("world").getAsString() : "world";
+        int cx = q.has("x") ? q.get("x").getAsInt() : 0;
+        Integer cy = q.has("y") && !q.get("y").isJsonNull() ? q.get("y").getAsInt() : null;
+        int cz = q.has("z") ? q.get("z").getAsInt() : 0;
+        int radius = q.has("radius") ? q.get("radius").getAsInt() : 10;
+        String filterNick = q.has("filterNick") && !q.get("filterNick").isJsonNull() ? q.get("filterNick").getAsString().toLowerCase().trim() : null;
+        String filterAction = q.has("filterAction") && !q.get("filterAction").isJsonNull() ? q.get("filterAction").getAsString().toUpperCase().trim() : null;
+
+        int minX = cx - radius;
+        int maxX = cx + radius;
+        int minZ = cz - radius;
+        int maxZ = cz + radius;
+        long rSq = (long) radius * radius;
+
+        JsonArray results = new JsonArray();
+
+        // Antes de consultar, grava o que estiver pendente na fila
+        flushLogQueue();
+
+        String sql = "SELECT nick, action, target, details, world, x, y, z, created_at FROM action_logs " +
+                "WHERE world = ? AND x BETWEEN ? AND ? AND z BETWEEN ? AND ? " +
+                "ORDER BY created_at DESC LIMIT 400";
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, world);
+            ps.setInt(2, minX);
+            ps.setInt(3, maxX);
+            ps.setInt(4, minZ);
+            ps.setInt(5, maxZ);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int x = rs.getInt("x");
+                    int y = rs.getInt("y");
+                    int z = rs.getInt("z");
+
+                    // Verificação do raio euclidiano
+                    long dx = x - cx;
+                    long dz = z - cz;
+                    if ((dx * dx + dz * dz) > rSq) continue;
+                    if (cy != null && Math.abs(y - cy) > radius) continue;
+
+                    String nick = rs.getString("nick");
+                    String action = rs.getString("action");
+
+                    if (filterNick != null && !filterNick.isEmpty() && !nick.toLowerCase().contains(filterNick)) continue;
+                    if (filterAction != null && !filterAction.isEmpty() && !action.equalsIgnoreCase(filterAction)) continue;
+
+                    JsonObject item = new JsonObject();
+                    item.addProperty("nick", nick);
+                    item.addProperty("action", action);
+                    item.addProperty("target", rs.getString("target"));
+                    item.addProperty("details", rs.getString("details"));
+                    item.addProperty("world", rs.getString("world"));
+                    item.addProperty("x", x);
+                    item.addProperty("y", y);
+                    item.addProperty("z", z);
+                    item.addProperty("created_at", rs.getLong("created_at"));
+                    results.add(item);
+                }
+            }
+
+            // Envia resposta para a Vercel
+            JsonObject respObj = new JsonObject();
+            respObj.addProperty("queryId", queryId);
+            respObj.addProperty("secret", PLUGIN_SECRET);
+            respObj.add("results", results);
+
+            String url = "https://fffff-autoforge.vercel.app/api/plugin/logs-response";
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("Content-Type", "application/json")
+                    .header("x-plugin-secret", PLUGIN_SECRET)
+                    .header("User-Agent", "MapaBermuda-Plugin/3.3")
+                    .POST(HttpRequest.BodyPublishers.ofString(respObj.toString()))
+                    .build();
+
+            httpClient.send(req, HttpResponse.BodyHandlers.discarding());
+            log.info("[Forensic] Consulta " + queryId + " respondida com " + results.size() + " registros.");
+
+        } catch (Exception e) {
+            log.warning("[Forensic] Erro ao executar consulta de logs: " + e.getMessage());
+        }
+    }
 }
+
 
