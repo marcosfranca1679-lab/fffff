@@ -2477,7 +2477,8 @@ app.get('/api/plugin/sync', async (req, res) => {
       commands: commandsToRun,
       kingdomProtections,
       adminProtections,
-      logQueries: logQueriesToRun
+      logQueries: logQueriesToRun,
+      anticheatEnabled: isAnticheatActive
     });
   } catch (err) {
 
@@ -2645,12 +2646,152 @@ app.post('/api/plugin/sync', async (req, res) => {
       commands: commandsToRun,
       kingdomProtections,
       adminProtections,
-      logQueries: logQueriesToRun
+      logQueries: logQueriesToRun,
+      anticheatEnabled: isAnticheatActive
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── SISTEMA ANTI-CHEAT & PROVAS FORENSES ─────────────────────────────────────
+let isAnticheatActive = true; // Por padrão ativo
+
+// Inicializa estado do anti-cheat salvo no banco se houver
+(async () => {
+  try {
+    const { data } = await supabase
+      .from('messages')
+      .select('content')
+      .eq('author_role', 'anticheat_config')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (data && data.length > 0) {
+      const cfg = JSON.parse(data[0].content);
+      if (typeof cfg.enabled === 'boolean') isAnticheatActive = cfg.enabled;
+    }
+  } catch (_) {}
+})();
+
+// 1. Status do Anti-Cheat para o painel admin
+app.get('/api/admin/anticheat/status', requireAdmin, (req, res) => {
+  res.json({ success: true, enabled: isAnticheatActive });
+});
+
+// 2. Toggle Liga/Desliga do Anti-Cheat pelo Admin
+app.post('/api/admin/anticheat/toggle', requireAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body || {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'Parâmetro enabled deve ser booleano.' });
+    }
+    isAnticheatActive = enabled;
+
+    // Salva configuração no banco de forma assíncrona
+    safeDb(supabase.from('messages').insert([{
+      author_nick: req.session?.userNick || 'admin',
+      author_role: 'anticheat_config',
+      author_platform: 'web',
+      content: JSON.stringify({ enabled: isAnticheatActive, updated_at: new Date().toISOString() })
+    }]));
+
+    registrarConsoleLog(
+      isAnticheatActive ? 'info' : 'warn',
+      `🛡️ Anti-Cheat foi ${isAnticheatActive ? 'ATIVADO' : 'DESATIVADO'} pelo Administrador via painel web.`,
+      'AntiCheat'
+    );
+
+    res.json({
+      success: true,
+      enabled: isAnticheatActive,
+      message: `Anti-Cheat ${isAnticheatActive ? 'ativado' : 'desativado'} com sucesso!`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Plugin envia banimento do Anti-Cheat com provas técnicas (chamada única!)
+app.post('/api/plugin/anticheat-ban', async (req, res) => {
+  const secret = req.headers['x-plugin-secret'] || req.query.secret || req.body?.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    const { nick, reason, evidence } = req.body || {};
+    if (!nick) return res.status(400).json({ error: 'Nick é obrigatório.' });
+
+    const cleanNick = String(nick).trim();
+    const banReason = `🛡️ [Anti-Cheat] ${reason || 'Violação de segurança'}`;
+    const now = new Date().toISOString();
+
+    // 1. Atualiza status para banned na tabela players
+    await safeDb(
+      supabase.from('players')
+        .update({
+          status: 'banned',
+          ban_reason: banReason,
+          updated_at: now
+        })
+        .ilike('nick', cleanNick)
+    );
+
+    // 2. Salva prova técnica estruturada para consulta do Admin
+    const evidencePayload = {
+      nick: cleanNick,
+      reason: reason || 'Detecção de Trapaça',
+      evidence: evidence || {},
+      timestamp: Date.now(),
+      created_at: now
+    };
+
+    await safeDb(
+      supabase.from('messages').insert([{
+        author_nick: cleanNick,
+        author_role: 'anticheat_evidence',
+        author_platform: 'plugin',
+        content: JSON.stringify(evidencePayload),
+        created_at: now
+      }])
+    );
+
+    // 3. Registra no console administrativo
+    registrarConsoleLog('error', `🚨 [Anti-Cheat BAN] ${cleanNick} foi banido permanentemente! Motivo: ${reason}`, 'Segurança');
+
+    res.json({ success: true, message: 'Banimento e provas registradas com sucesso.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Admin consulta as provas de banimento de um jogador
+app.get('/api/admin/anticheat/evidence/:nick', requireAdmin, async (req, res) => {
+  try {
+    const nick = req.params.nick.trim();
+    const { data, error } = await supabase
+      .from('messages')
+      .select('content, created_at')
+      .ilike('author_nick', nick)
+      .eq('author_role', 'anticheat_evidence')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+
+    const evidences = (data || []).map(row => {
+      try {
+        return JSON.parse(row.content);
+      } catch (_) {
+        return { reason: row.content, created_at: row.created_at };
+      }
+    });
+
+    res.json({ success: true, nick, count: evidences.length, evidences });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ─── SISTEMA FORENSE / AUDITORIA DE COORDENADAS (COREPROTECT LOCAL) ───────────
 const pendingLogQueries = [];
