@@ -932,6 +932,10 @@
             class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
             <span>🔍 Auditoria de Coordenadas</span>
           </button>
+          <button onclick="mudarModuloAdmin('anticheat')" id="admin-mod-anticheat"
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>🛡️ Central Anti-Cheat</span>
+          </button>
         </div>
 
 
@@ -1577,6 +1581,73 @@
             </div>
           </div>
         </div>
+
+        <!-- ── MÓDULO CENTRAL ANTI-CHEAT ──────────────────────────── -->
+        <div id="admin-mod-content-anticheat" class="hidden p-3 md:p-4 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08] flex-wrap gap-2">
+            <div>
+              <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>🛡️ Central do Sistema Anti-Cheat</span>
+                <span id="anticheat-tab-badge" class="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">ATIVO</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Detecção ativa de Fly, X-Ray, Item Hack (Creative sem OP) e Hack Clients</div>
+            </div>
+            <button onclick="carregarStatusAnticheat()" class="bg-white/[0.06] hover:bg-white/[0.12] text-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1">
+              🔄 Atualizar Status
+            </button>
+          </div>
+
+          <!-- Card de Controle Principal Liga/Desliga -->
+          <div class="glass-card p-4 rounded-2xl border border-rose-500/30 bg-black/50 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="space-y-1">
+                <div class="text-xs font-extrabold text-white flex items-center gap-2">
+                  <span>Status da Proteção em Tempo Real:</span>
+                  <span id="anticheat-main-status-text" class="text-emerald-400 font-mono font-bold">LIGADO & OPERANTE</span>
+                </div>
+                <p class="text-[11px] text-slate-400 leading-relaxed max-w-xl">
+                  Quando ativo, o servidor pune automaticamente jogadores que voam sem permissão OP (mesmo que estejam no Criativo), que usam pacotes Creative para puxar itens, ou que mineram com X-Ray.
+                </p>
+              </div>
+              <button id="btn-toggle-anticheat-main" onclick="toggleAnticheat()"
+                class="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg bg-rose-600 hover:bg-rose-500 text-white cursor-pointer active:scale-95 flex-shrink-0">
+                <span id="anticheat-btn-icon-main">🛑</span>
+                <span id="anticheat-btn-text-main">Desligar Anti-Cheat</span>
+              </button>
+            </div>
+
+            <!-- Informações das Regras Ativas -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-white/[0.06]">
+              <div class="bg-black/40 rounded-xl p-2.5 border border-white/[0.04]">
+                <div class="text-[11px] font-bold text-amber-300 flex items-center gap-1">🦅 Anti-Fly Rígido</div>
+                <div class="text-[10px] text-slate-400 mt-1">Apenas OPs podem voar. Não-OPs no Criativo são barrados e punidos.</div>
+              </div>
+              <div class="bg-black/40 rounded-xl p-2.5 border border-white/[0.04]">
+                <div class="text-[11px] font-bold text-cyan-300 flex items-center gap-1">💎 Anti-X-Ray Ores</div>
+                <div class="text-[10px] text-slate-400 mt-1">Monitora taxa de minérios raros (>14 diamantes/debris em 3 min).</div>
+              </div>
+              <div class="bg-black/40 rounded-xl p-2.5 border border-white/[0.04]">
+                <div class="text-[11px] font-bold text-rose-300 flex items-center gap-1">📦 Anti-Item Hack</div>
+                <div class="text-[10px] text-slate-400 mt-1">Bloqueia spawn não autorizado de itens via pacotes do cliente.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Histórico / Provas Recentes -->
+          <div class="glass-card p-3 md:p-4 rounded-2xl border border-white/[0.08] bg-black/40 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span>📋 Como Acessar as Provas de Cada Jogador Banido:</span>
+              </div>
+            </div>
+            <div class="text-xs text-slate-300 leading-relaxed space-y-1">
+              <p>1. Vá até a aba <b class="text-rose-400">🔨 Bans</b> no painel de administração.</p>
+              <p>2. Ao lado de cada jogador banido pelo Anti-Cheat, clique no botão <b class="text-rose-300 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/40">🔍 Provas</b>.</p>
+              <p>3. Uma janela pop-up exibirá a hora exata, coordenadas X, Y, Z, mundo e descrição técnica da violação capturada pelo servidor!</p>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Modal de Provas do Anti-Cheat -->
@@ -3616,7 +3687,7 @@
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip', 'protecoes', 'auditoria'];
+      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip', 'protecoes', 'auditoria', 'anticheat'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
@@ -3637,6 +3708,7 @@
       if (modulo === 'reinos') carregarAdminPermissoesReino();
       if (modulo === 'vip') carregarAdminVipProfiles();
       if (modulo === 'protecoes') carregarAdminProtectionZones();
+      if (modulo === 'anticheat') carregarStatusAnticheat();
     }
 
     // ── Sistema de Vidas (Admin) ──────────────────────────────────────────────
@@ -8081,6 +8153,7 @@
     }
 
     function atualizarUIAnticheat(ativo) {
+      // 1. Elementos na aba Manutenção
       const badge = document.getElementById('anticheat-badge-status');
       const btn = document.getElementById('btn-toggle-anticheat');
       const icon = document.getElementById('anticheat-btn-icon');
@@ -8099,6 +8172,31 @@
       }
       if (icon) icon.textContent = ativo ? '🛑' : '▶️';
       if (txt) txt.textContent = ativo ? 'Desligar Anti-Cheat' : 'Ligar Anti-Cheat';
+
+      // 2. Elementos na aba dedicada Central Anti-Cheat
+      const tabBadge = document.getElementById('anticheat-tab-badge');
+      const mainText = document.getElementById('anticheat-main-status-text');
+      const btnMain = document.getElementById('btn-toggle-anticheat-main');
+      const iconMain = document.getElementById('anticheat-btn-icon-main');
+      const txtMain = document.getElementById('anticheat-btn-text-main');
+
+      if (tabBadge) {
+        tabBadge.textContent = ativo ? 'ATIVO' : 'DESLIGADO';
+        tabBadge.className = ativo
+          ? 'text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+          : 'text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40';
+      }
+      if (mainText) {
+        mainText.textContent = ativo ? 'LIGADO & OPERANTE' : 'DESLIGADO PELO ADMINISTRADOR';
+        mainText.className = ativo ? 'text-emerald-400 font-mono font-bold' : 'text-rose-400 font-mono font-bold';
+      }
+      if (btnMain) {
+        btnMain.className = ativo
+          ? 'px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg bg-rose-600 hover:bg-rose-500 text-white cursor-pointer active:scale-95 flex-shrink-0'
+          : 'px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95 flex-shrink-0';
+      }
+      if (iconMain) iconMain.textContent = ativo ? '🛑' : '▶️';
+      if (txtMain) txtMain.textContent = ativo ? 'Desligar Anti-Cheat' : 'Ligar Anti-Cheat';
     }
 
     async function toggleAnticheat() {
