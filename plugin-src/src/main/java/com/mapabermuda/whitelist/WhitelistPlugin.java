@@ -30,6 +30,7 @@ import org.bukkit.event.block.BlockPistonRetractEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
@@ -47,6 +48,11 @@ import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.GameMode;
+import org.bukkit.Material;
+import org.bukkit.event.inventory.InventoryCreativeEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.potion.PotionEffectType;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -189,6 +195,16 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
     private HttpClient httpClient;
     private Logger log;
     private volatile long lastSyncTime = 0L;
+
+    // ── Anti-Cheat Integrado (Fly, X-Ray, Item Hack) ─────────────────────────
+    private volatile boolean anticheatEnabled = true;
+    private final Map<UUID, Integer> flyAirTicks = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> flyViolations = new ConcurrentHashMap<>();
+    private final Map<UUID, Location> lastSafeGround = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastDamageTime = new ConcurrentHashMap<>();
+    private final Map<UUID, List<Long>> rareOreMinedTimes = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> totalMinedCounter = new ConcurrentHashMap<>();
+
 
     @Override
     public void onEnable() {
@@ -471,6 +487,26 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
 
         getServer().getScheduler().runTaskLater(this, () -> {
             if (!player.isOnline()) return;
+
+            // Anti-Cheat: Detecção de Client Modificado / Cheat Brand
+            if (anticheatEnabled && !player.isOp()) {
+                String brand = null;
+                try {
+                    brand = player.getClientBrandName();
+                } catch (Throwable ignored) {}
+
+                if (brand != null) {
+                    String bLower = brand.toLowerCase();
+                    if (bLower.contains("wurst") || bLower.contains("meteor") || bLower.contains("aristois")
+                            || bLower.contains("liquidbounce") || bLower.contains("xray") || bLower.contains("cheat")
+                            || bLower.contains("hack") || bLower.contains("sigma") || bLower.contains("ares")
+                            || bLower.contains("inertia") || bLower.contains("impact")) {
+                        punirAntiCheat(player, "CLIENT_MOD_HACK", "Cliente/Mod hacker detectado via handshake de marca: " + brand, player.getLocation());
+                        return;
+                    }
+                }
+            }
+
             String ip = getPlayerIp(player);
             String world = player.getWorld() != null ? player.getWorld().getName() : "world";
             int x = player.getLocation().getBlockX();
@@ -652,7 +688,29 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         if (!event.isCancelled()) {
             String cleanName = cleanNick(player.getName());
             String mat = event.getBlock().getType().name();
-            logAction(cleanName, "BREAK", mat, null, event.getBlock().getLocation());
+            Location bLoc = event.getBlock().getLocation();
+            logAction(cleanName, "BREAK", mat, null, bLoc);
+
+            // ── Anti-Cheat: Detecção de X-Ray Heurístico ────────────────────────
+            if (anticheatEnabled && !player.isOp() && !BYPASS.contains(cleanName.toLowerCase())) {
+                UUID pUuid = player.getUniqueId();
+                totalMinedCounter.merge(pUuid, 1, Integer::sum);
+
+                if (mat.contains("DIAMOND_ORE") || mat.contains("ANCIENT_DEBRIS") || mat.contains("EMERALD_ORE")) {
+                    long now = System.currentTimeMillis();
+                    List<Long> times = rareOreMinedTimes.computeIfAbsent(pUuid, k -> new ArrayList<>());
+                    times.add(now);
+                    // Mantém apenas minérios minerados nos últimos 3 minutos (180.000 ms)
+                    times.removeIf(t -> (now - t) > 180000L);
+
+                    if (times.size() >= 14) {
+                        int count = times.size();
+                        times.clear();
+                        String details = "Minerou " + count + " minérios de " + prettyName(mat) + " em menos de 3 minutos (Y=" + bLoc.getBlockY() + ")";
+                        punirAntiCheat(player, "XRAY_MINING", details, bLoc);
+                    }
+                }
+            }
         }
     }
 
@@ -901,8 +959,174 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
                     logAction(cleanNick(player.getName()), "CONTAINER_PUT", cursor.getType().name(), cursor.getAmount() + "x " + prettyName(cursor.getType().name()), loc);
                 }
             }
+    }
+
+    // ── SISTEMA ANTI-CHEAT (FLY, ITEM HACK, X-RAY & PROVAS) ───────────────────
+
+    // Registra dano para tolerância de recuo/knockback no Anti-Fly
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDamage(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            lastDamageTime.put(player.getUniqueId(), System.currentTimeMillis());
         }
     }
+
+    // Bloqueia e pune jogadores que tentam usar pacote Creative para puxar itens do nada
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryCreative(InventoryCreativeEvent event) {
+        if (!anticheatEnabled) return;
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        String clean = cleanNick(player.getName()).toLowerCase();
+        if (player.isOp() || BYPASS.contains(clean) || player.getGameMode() == GameMode.CREATIVE) {
+            return;
+        }
+
+        event.setCancelled(true);
+        ItemStack item = event.getCursor();
+        String itemDesc = (item != null && !item.getType().isAir()) ? item.getAmount() + "x " + item.getType().name() : "Item desconhecido";
+        punirAntiCheat(player, "ITEM_HACK", "Tentou puxar item via pacote Creative sem permissão: " + itemDesc, player.getLocation());
+    }
+
+    // Monitora e bloqueia Fly Hack (apenas OPs, Criativo, Elytra ou poções podem voar)
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerMove(PlayerMoveEvent event) {
+        if (!anticheatEnabled) return;
+        Player player = event.getPlayer();
+        String clean = cleanNick(player.getName()).toLowerCase();
+
+        // Isenções oficiais: OPs, Criativo, Espectador, Bypass
+        if (player.isOp() || BYPASS.contains(clean)) return;
+        if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) return;
+
+        // Isenção legítima de voo planado com Elytra
+        if (player.isGliding()) {
+            flyAirTicks.remove(player.getUniqueId());
+            return;
+        }
+
+        // Isenção de veículos (barcos, cavalos, etc.) e líquidos
+        if (player.isInsideVehicle() || player.isInWater() || player.isInLava()) {
+            flyAirTicks.remove(player.getUniqueId());
+            return;
+        }
+
+        // Isenção de efeitos de poção de Levitação ou Queda Lenta
+        if (player.hasPotionEffect(PotionEffectType.LEVITATION) || player.hasPotionEffect(PotionEffectType.SLOW_FALLING)) {
+            flyAirTicks.remove(player.getUniqueId());
+            return;
+        }
+
+        Location from = event.getFrom();
+        Location to = event.getTo();
+        if (to == null) return;
+
+        // Tolerância de knockback por explosão/dano recente (1.5 segundos)
+        long now = System.currentTimeMillis();
+        Long lastDmg = lastDamageTime.get(player.getUniqueId());
+        if (lastDmg != null && (now - lastDmg) < 1500L) {
+            return;
+        }
+
+        // Verifica se há bloco de apoio ou se o jogador está no chão
+        boolean onGround = player.isOnGround();
+        if (!onGround) {
+            // Checa bloco imediatamente abaixo e ao redor (raio de 1 bloco)
+            Block bBelow = to.getBlock().getRelative(0, -1, 0);
+            if (bBelow.getType().isSolid() || bBelow.getType() == Material.COBWEB || bBelow.getType() == Material.LADDER || bBelow.getType() == Material.VINE || bBelow.getType() == Material.SCAFFOLDING) {
+                onGround = true;
+            }
+        }
+
+        UUID uuid = player.getUniqueId();
+        if (onGround) {
+            flyAirTicks.remove(uuid);
+            lastSafeGround.put(uuid, to.clone());
+            return;
+        }
+
+        // Jogador está no ar sem blocos por perto:
+        double deltaY = to.getY() - from.getY();
+        double distHoriz = Math.hypot(to.getX() - from.getX(), to.getZ() - from.getZ());
+
+        // Se deltaY >= -0.05, significa que ele NÃO está caindo normalmente (está flutuando, subindo ou pairando no ar)
+        if (deltaY >= -0.05 && distHoriz > 0.1) {
+            int ticks = flyAirTicks.merge(uuid, 1, Integer::sum);
+
+            // Após ~1.5 segundos no ar sem cair
+            if (ticks > 30) {
+                // Puxa o jogador de volta para o último chão seguro
+                Location ground = lastSafeGround.getOrDefault(uuid, from);
+                event.setTo(ground);
+
+                int viols = flyViolations.merge(uuid, 1, Integer::sum);
+                if (viols < 3) {
+                    player.sendMessage(Component.text("§c[Anti-Cheat] Voo não permitido detectado! Retornando ao chão..."));
+                } else {
+                    // 3ª violação confirmada -> Aplica banimento com provas
+                    flyViolations.remove(uuid);
+                    flyAirTicks.remove(uuid);
+                    String details = "Flutuou no ar por " + ticks + " ticks com deltaY=" + String.format("%.2f", deltaY) + " em Y=" + Math.round(to.getY()) + " sem Elytra.";
+                    punirAntiCheat(player, "FLY_HACK", details, to);
+                }
+            }
+        } else {
+            // Em queda livre normal
+            if (deltaY < -0.2) {
+                flyAirTicks.remove(uuid);
+            }
+        }
+    }
+
+    // Executa a punição e envia as provas técnicas para a Vercel (1 chamada única!)
+    public void punirAntiCheat(Player player, String cheatType, String details, Location loc) {
+        String name = cleanNick(player.getName());
+        log.warning("[AntiCheat] 🚨 INFRATOR DETECTADO: " + name + " (" + cheatType + ") - " + details);
+
+        // 1. Grava no SQLite local como registro forense
+        logAction(name, "ANTICHEAT_BAN", cheatType, details, loc);
+
+        // 2. Envia POST com provas técnicas para a Vercel de forma assíncrona (chamada única)
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                JsonObject ev = new JsonObject();
+                ev.addProperty("type", cheatType);
+                ev.addProperty("world", loc != null && loc.getWorld() != null ? loc.getWorld().getName() : "world");
+                ev.addProperty("x", loc != null ? loc.getBlockX() : 0);
+                ev.addProperty("y", loc != null ? loc.getBlockY() : 0);
+                ev.addProperty("z", loc != null ? loc.getBlockZ() : 0);
+                ev.addProperty("details", details);
+                ev.addProperty("timestamp", System.currentTimeMillis());
+
+                JsonObject body = new JsonObject();
+                body.addProperty("secret", PLUGIN_SECRET);
+                body.addProperty("nick", name);
+                body.addProperty("reason", cheatType + ": " + details);
+                body.add("evidence", ev);
+
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://fffff-autoforge.vercel.app/api/plugin/anticheat-ban"))
+                        .timeout(Duration.ofSeconds(6))
+                        .header("Content-Type", "application/json")
+                        .header("x-plugin-secret", PLUGIN_SECRET)
+                        .header("User-Agent", "MapaBermuda-AntiCheat/1.0")
+                        .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+                        .build();
+
+                httpClient.send(req, HttpResponse.BodyHandlers.discarding());
+            } catch (Exception e) {
+                log.warning("[AntiCheat] Erro ao enviar provas de ban para a web: " + e.getMessage());
+            }
+        });
+
+        // 3. Aplica o kick in-game na thread principal do Minecraft
+        getServer().getScheduler().runTask(this, () -> {
+            if (player.isOnline()) {
+                player.kick(Component.text("§c🛡️ [Anti-Cheat Mapa Bermuda]\n\n§fVocê foi banido permanentemente por uso de trapaça:\n§e" + cheatType + "\n§7Telemetria e provas foram registradas no sistema."));
+            }
+        });
+    }
+
 
 
     // 16. Bloqueia interagir com entidades (molduras, suportes de armaduras, barcos com baú)
@@ -1068,6 +1292,12 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (root.has("logQueries") && root.get("logQueries").isJsonArray()) {
                 processLogQueries(root.getAsJsonArray("logQueries"));
             }
+
+            // 5.6. Sincroniza estado do Anti-Cheat (Ativado/Desativado no Painel Admin)
+            if (root.has("anticheatEnabled")) {
+                this.anticheatEnabled = root.get("anticheatEnabled").getAsBoolean();
+            }
+
 
 
             // 6. Sincroniza Proteções de Terreno dos Reinos
@@ -1330,6 +1560,10 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
             if (root.has("logQueries") && root.get("logQueries").isJsonArray()) {
                 processLogQueries(root.getAsJsonArray("logQueries"));
             }
+            if (root.has("anticheatEnabled")) {
+                this.anticheatEnabled = root.get("anticheatEnabled").getAsBoolean();
+            }
+
 
             if (root.has("kingdomProtections") && root.get("kingdomProtections").isJsonArray()) {
                 JsonArray kpArr = root.getAsJsonArray("kingdomProtections");
