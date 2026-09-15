@@ -2482,6 +2482,161 @@ app.get('/api/plugin/sync', async (req, res) => {
   }
 });
 
+// ─── SYNC COMBINADO: Plugin envia telemetria de TODOS os jogadores + recebe dados de sync ─
+// Substitui GET /api/plugin/sync + N×POST /api/telemetry por 1 único POST por minuto.
+app.post('/api/plugin/sync', async (req, res) => {
+  const secret = req.headers['x-plugin-secret'] || req.query.secret || req.body?.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    const players = Array.isArray(req.body?.players) ? req.body.players : [];
+
+    // ── Processa telemetria de cada jogador em paralelo (fire-and-forget) ──────
+    const now = Date.now();
+    for (const p of players) {
+      if (!p.nick) continue;
+      const nick = String(p.nick).trim();
+      const payload = { ...p, reported_at: new Date(now).toISOString() };
+
+      // Atualiza cache em memória (instantâneo, sem DB)
+      liveTelemetryCache.set(nick.toLowerCase(), payload);
+
+      // Persiste no Supabase de forma assíncrona (não bloqueia a resposta)
+      const lastSync = lastDbSyncMap.get(nick.toLowerCase()) || 0;
+      if (now - lastSync > 3000) {
+        lastDbSyncMap.set(nick.toLowerCase(), now);
+        // Upsert telemetria na tabela messages
+        safeDb(
+          supabase.from('messages')
+            .select('id')
+            .ilike('author_nick', nick)
+            .eq('author_role', 'telemetry')
+            .limit(1)
+            .maybeSingle()
+        ).then(r => {
+          const existing = r && r.data ? r.data : null;
+          if (existing && existing.id) {
+            safeDb(supabase.from('messages').update({
+              content: JSON.stringify(payload),
+              author_platform: payload.ip || 'plugin',
+              created_at: payload.reported_at
+            }).eq('id', existing.id));
+          } else {
+            safeDb(supabase.from('messages').insert([{
+              author_nick: nick,
+              author_role: 'telemetry',
+              author_platform: payload.ip || 'plugin',
+              content: JSON.stringify(payload),
+              created_at: payload.reported_at
+            }]));
+          }
+        });
+
+        // Upsert ranking
+        if (payload.playtimeSeconds !== undefined || payload.playtimeFormatted) {
+          let sec = Number(payload.playtimeSeconds) || 0;
+          if (!sec && payload.playtimeFormatted) sec = parseFormattedPlaytimeToSeconds(payload.playtimeFormatted);
+          safeDb(supabase.from('player_rankings').upsert({
+            nick,
+            playtime_seconds: sec,
+            playtime_formatted: payload.playtimeFormatted || formatPlaytimeFromSeconds(sec),
+            total_deaths: Number(payload.totalDeaths) || 0,
+            level: Number(payload.level) || 0,
+            last_seen_at: payload.reported_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'nick' }));
+        }
+      }
+    }
+
+    // ── Retorna dados de sync (whitelist, bans, vidas, proteções) ──────────────
+    const { data: dbPlayers } = await supabase.from('players').select('nick, status, ban_reason');
+    const approved = [];
+    const bans = [];
+    for (const p of (dbPlayers || [])) {
+      if (p.status === 'approved') {
+        approved.push(p.nick.toLowerCase());
+      } else if (p.status === 'banned') {
+        const banInfo = parseBanInfo(p.ban_reason);
+        if (banInfo.expired) {
+          approved.push(p.nick.toLowerCase());
+          safeDb(supabase.from('players').update({ status: 'approved', ban_reason: null, updated_at: new Date().toISOString() }).ilike('nick', p.nick));
+        } else {
+          bans.push({ nick: p.nick.toLowerCase(), reason: banInfo.reason, remaining: banInfo.remaining, isPermanent: banInfo.isPermanent });
+        }
+      }
+    }
+    await syncVipProfilesCache();
+    for (const [vNick, vData] of vipProfilesCache.entries()) {
+      if (vData && vData.status === 'active') {
+        const lower = vNick.toLowerCase().trim();
+        if (!approved.includes(lower) && !bans.some(b => b.nick === lower)) approved.push(lower);
+      }
+    }
+
+    const { data: dbIpBans } = await supabase.from('messages').select('author_nick, author_platform, content, created_at').eq('author_role', 'ip_ban');
+    const ipBans = [];
+    const seenIps = new Set();
+    for (const row of (dbIpBans || [])) {
+      let parsed = {};
+      try { parsed = JSON.parse(row.content); } catch { parsed = { reason: row.content }; }
+      if (!parsed.expiresAt || Date.now() < new Date(parsed.expiresAt).getTime()) {
+        seenIps.add(row.author_nick);
+        ipBans.push({ ip: row.author_nick, reason: parsed.reason || 'IP Bloqueado', associatedNick: row.author_platform || '' });
+      }
+    }
+    for (const [ip, item] of bannedIpsCache.entries()) {
+      if (!seenIps.has(ip) && (!item.expiresAt || Date.now() < new Date(item.expiresAt).getTime())) {
+        ipBans.push({ ip, reason: item.reason, associatedNick: item.associatedNick || '' });
+      }
+    }
+
+    const { data: livesData } = await supabase.from('player_lives').select('nick, lives, last_death_at');
+    const livesMap = {};
+    for (const row of (livesData || [])) {
+      if (row.nick) livesMap[row.nick.toLowerCase()] = { lives: row.lives !== undefined ? row.lives : 5, lastDeathAt: row.last_death_at || null };
+    }
+    for (const appNick of approved) {
+      if (!livesMap[appNick]) livesMap[appNick] = { lives: 5, lastDeathAt: null };
+    }
+
+    const commandsToRun = pendingConsoleCommands.splice(0);
+
+    const kingdomProtections = [];
+    try {
+      const { data: kRows } = await supabase.from('kingdoms').select('id, nome, tag, owner_nick, land_protection');
+      const { data: kMembers } = await supabase.from('kingdom_members').select('kingdom_id, user_nick');
+      for (const k of (kRows || [])) {
+        if (k.land_protection && k.land_protection.enabled !== false && typeof k.land_protection.centerX === 'number') {
+          const mList = (kMembers || []).filter(m => m.kingdom_id === k.id).map(m => (m.user_nick || '').toLowerCase().trim()).filter(Boolean);
+          if (k.owner_nick) { const ol = k.owner_nick.toLowerCase().trim(); if (!mList.includes(ol)) mList.push(ol); }
+          kingdomProtections.push({ id: k.id, nome: k.nome, tag: k.tag, world: k.land_protection.world || 'world', centerX: parseInt(k.land_protection.centerX, 10) || 0, centerZ: parseInt(k.land_protection.centerZ, 10) || 0, radius: Math.min(200, Math.max(1, parseInt(k.land_protection.radius, 10) || 50)), members: mList });
+        }
+      }
+    } catch (kErr) { console.error('[SyncPost] Erro proteções reinos:', kErr.message); }
+
+    const adminProtections = [];
+    try {
+      const { data: aRows, error: aErr } = await supabase.from('admin_protection_zones').select('*').eq('enabled', true);
+      if (!aErr && aRows) {
+        for (const a of aRows) {
+          const membersList = [];
+          if (a.owner_nick) membersList.push(a.owner_nick.toLowerCase().trim());
+          if (Array.isArray(a.allowed_players)) { for (const ap of a.allowed_players) { if (ap && !membersList.includes(ap.toLowerCase().trim())) membersList.push(ap.toLowerCase().trim()); } }
+          adminProtections.push({ id: a.id, name: a.name || 'Proteção Admin', world: a.world || 'world', centerX: parseInt(a.center_x, 10) || 0, centerZ: parseInt(a.center_z, 10) || 0, radius: Math.max(1, parseInt(a.radius, 10) || 50), ownerNick: a.owner_nick || '', allowedPlayers: Array.isArray(a.allowed_players) ? a.allowed_players : [], members: membersList, isAdmin: true });
+        }
+      }
+    } catch (aErr) { console.error('[SyncPost] Tabela admin_protection_zones erro:', aErr.message); }
+
+    res.json({ success: true, timestamp: Date.now(), approved, bans, ipBans, lives: livesMap, commands: commandsToRun, kingdomProtections, adminProtections });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // ─── ROTA PÚBLICA DE RANKING (TOP 5 HORAS JOGADAS) ───────────────────────────
 function formatPlaytimeFromSeconds(totalSec) {
   if (!totalSec || totalSec <= 0) return '0m';
