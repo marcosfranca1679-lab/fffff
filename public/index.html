@@ -928,7 +928,12 @@
             class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
             <span>🛡️ Proteção de Terreno Admin</span>
           </button>
+          <button onclick="mudarModuloAdmin('auditoria')" id="admin-mod-auditoria"
+            class="flex-shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-white/[0.05] border border-transparent whitespace-nowrap">
+            <span>🔍 Auditoria de Coordenadas</span>
+          </button>
         </div>
+
 
         <!-- ── MÓDULO JOGANDO AGORA (AO VIVO) ─────────────────────── -->
         <div id="admin-mod-content-online" class="p-3 md:p-4 space-y-2.5">
@@ -1415,6 +1420,139 @@
             </div>
             <div id="admin-protecoes-lista" class="space-y-2 max-h-[460px] overflow-y-auto pr-1">
               <div class="text-center py-6 text-slate-400 text-xs italic">Carregando proteções admin...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── MÓDULO AUDITORIA FORENSE DE COORDENADAS (COREPROTECT) ─────── -->
+        <div id="admin-mod-content-auditoria" class="hidden p-3 md:p-4 space-y-4">
+          <div class="flex items-center justify-between pb-2 border-b border-white/[0.08] gap-2 flex-wrap">
+            <div>
+              <div class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                <span>🔍 Investigação & Auditoria Forense por Coordenadas</span>
+                <span class="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono font-bold">Local 7 Dias</span>
+              </div>
+              <div class="text-[10px] text-slate-400">Investigue blocos quebrados, colocados, baús abertos, itens retirados/colocados, placas e portas pelo raio de coordenadas. Consulta sob demanda sem gastar Vercel.</div>
+            </div>
+          </div>
+
+          <!-- Formulário de Investigação -->
+          <div class="glass-card p-3.5 rounded-xl border border-white/[0.08] bg-black/40 space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+              <!-- Mundo -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Mundo</label>
+                <select id="audit-world" class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
+                  <option value="world">Overworld (world)</option>
+                  <option value="world_nether">Nether (world_nether)</option>
+                  <option value="world_the_end">The End (world_the_end)</option>
+                </select>
+              </div>
+              <!-- Coord X -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Coordenada X</label>
+                <input id="audit-x" type="number" step="1" placeholder="Ex: 150"
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono text-center" />
+              </div>
+              <!-- Coord Y (Opcional) -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Coordenada Y (Opcional)</label>
+                <input id="audit-y" type="number" step="1" placeholder="Qualquer Y"
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono text-center" />
+              </div>
+              <!-- Coord Z -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Coordenada Z</label>
+                <input id="audit-z" type="number" step="1" placeholder="Ex: -300"
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono text-center" />
+              </div>
+            </div>
+
+            <!-- Segunda linha de filtros: Raio, Jogador, Tipo de Ação -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 border-t border-white/[0.06]">
+              <!-- Raio -->
+              <div class="space-y-1">
+                <div class="flex justify-between items-center text-[10px] font-bold text-slate-400">
+                  <span>Raio de Busca</span>
+                  <span id="audit-raio-val" class="text-indigo-400 font-mono">10 blocos</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input id="audit-raio-slider" type="range" min="1" max="100" value="10"
+                    oninput="document.getElementById('audit-raio-val').textContent = this.value + ' blocos'; document.getElementById('audit-raio-num').value = this.value;"
+                    class="flex-1 accent-indigo-500 cursor-pointer" />
+                  <input id="audit-raio-num" type="number" min="1" max="100" value="10"
+                    oninput="document.getElementById('audit-raio-val').textContent = this.value + ' blocos'; document.getElementById('audit-raio-slider').value = this.value;"
+                    class="w-16 bg-black/70 border border-white/[0.1] rounded-xl px-2 py-1 text-xs text-center text-indigo-300 font-mono font-bold focus:outline-none" />
+                </div>
+              </div>
+              <!-- Filtrar Nick -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Filtrar por Jogador (Opcional)</label>
+                <input id="audit-filter-nick" type="text" placeholder="Qualquer jogador..."
+                  class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <!-- Filtrar Tipo de Ação -->
+              <div class="space-y-1">
+                <label class="text-[10px] font-bold text-slate-400">Filtrar Tipo de Ação</label>
+                <select id="audit-filter-action" class="w-full bg-black/60 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
+                  <option value="">Todas as ações</option>
+                  <option value="BREAK">🔴 Quebrar bloco</option>
+                  <option value="PLACE">🟢 Colocou bloco</option>
+                  <option value="OPEN_CONTAINER">📦 Abrir baú/container</option>
+                  <option value="CONTAINER_TAKE">📤 Retirar item de baú</option>
+                  <option value="CONTAINER_PUT">📥 Colocar item em baú</option>
+                  <option value="DOOR">🚪 Portas & Alçapões</option>
+                  <option value="INTERACT">🔘 Botões & Alavancas</option>
+                  <option value="DROP_ITEM">⬇️ Dropar item no chão</option>
+                  <option value="PICKUP_ITEM">⬆️ Coletar item do chão</option>
+                  <option value="SIGN">📝 Escrever em Placa</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="flex items-center justify-between gap-2 pt-2 flex-wrap">
+              <div class="text-[10px] text-slate-400 flex items-center gap-1">
+                <span>💡</span> <span>Dica: Registros são mantidos no servidor pelos últimos 7 dias.</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="preencherCoordsAdminAuditoria()"
+                  class="bg-white/[0.08] hover:bg-white/[0.15] text-slate-200 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1">
+                  📍 <span>Minha Posição</span>
+                </button>
+                <button type="button" id="btn-executar-auditoria" onclick="executarAuditoriaCoordenadas()"
+                  class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs px-5 py-2 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition-all duration-200 active:scale-95 flex items-center gap-1.5 cursor-pointer">
+                  <span id="audit-btn-icon">🔍</span> <span id="audit-btn-text">Investigar Coordenadas</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Status / Indicador de Carregamento -->
+          <div id="audit-status-bar" class="hidden p-3 rounded-xl border border-indigo-500/30 bg-indigo-950/30 text-indigo-200 text-xs flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping"></span>
+              <span id="audit-status-msg">Enviando consulta ao servidor de Minecraft...</span>
+            </div>
+            <span id="audit-status-timer" class="font-mono text-[10px] text-slate-400"></span>
+          </div>
+
+          <!-- Resultados da Auditoria -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <div class="font-bold text-slate-300 flex items-center gap-1.5">
+                <span>Histórico de Atividades Registradas</span>
+                <span id="audit-results-count" class="text-[10px] bg-white/[0.08] text-slate-300 px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+              </div>
+              <button onclick="limparResultadosAuditoria()" class="text-slate-400 hover:text-white text-[10px] underline cursor-pointer">Limpar tela</button>
+            </div>
+
+            <div id="audit-results-container" class="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+              <div class="glass-card p-8 rounded-2xl text-center border border-white/[0.06] text-slate-400 space-y-2">
+                <div class="text-3xl">🧭</div>
+                <div class="text-xs font-bold text-slate-300">Nenhuma investigação realizada ainda.</div>
+                <div class="text-[10px] text-slate-500">Informe as coordenadas X e Z e clique em "Investigar Coordenadas" para obter o histórico completo de ações locais.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -3427,7 +3565,7 @@
 
     function mudarModuloAdmin(modulo) {
       adminModulo = modulo;
-      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip', 'protecoes'];
+      const mods = ['online', 'whitelist', 'banimentos', 'vidas', 'manutencao', 'reinos', 'vip', 'protecoes', 'auditoria'];
       mods.forEach(m => {
         const btn = document.getElementById(`admin-mod-${m}`);
         const content = document.getElementById(`admin-mod-content-${m}`);
@@ -7623,6 +7761,257 @@
         mostrarFeedback('Erro de conexão.', 'red');
       }
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // AUDITORIA FORENSE DE COORDENADAS (COREPROTECT LOCAL)
+    // ══════════════════════════════════════════════════════════════════════════
+    let auditPollTimer = null;
+
+    function preencherCoordsAdminAuditoria() {
+      // Tenta pegar a coordenada do jogador logado se ele estiver online
+      const nick = currentUser?.nick || '';
+      if (!nick) {
+        mostrarFeedback('Você precisa estar logado no site.', 'yellow');
+        return;
+      }
+      
+      const clean = nick.startsWith('.') || nick.startsWith('*') ? nick.substring(1) : nick;
+      apiFetch(`/api/admin/player/${encodeURIComponent(clean)}`).then(r => r.json()).then(d => {
+        if (d && d.gameData) {
+          const gd = d.gameData;
+          if (gd.world) document.getElementById('audit-world').value = gd.world;
+          if (gd.x !== undefined) document.getElementById('audit-x').value = Math.round(gd.x);
+          if (gd.y !== undefined) document.getElementById('audit-y').value = Math.round(gd.y);
+          if (gd.z !== undefined) document.getElementById('audit-z').value = Math.round(gd.z);
+          mostrarFeedback(`Coordenadas de ${clean} preenchidas!`, 'green');
+        } else {
+          mostrarFeedback('Você não parece estar online no jogo agora para pegar a localização.', 'yellow');
+        }
+      }).catch(() => {
+        mostrarFeedback('Não foi possível obter suas coordenadas ao vivo.', 'yellow');
+      });
+    }
+
+    function limparResultadosAuditoria() {
+      if (auditPollTimer) {
+        clearInterval(auditPollTimer);
+        auditPollTimer = null;
+      }
+      document.getElementById('audit-status-bar').classList.add('hidden');
+      document.getElementById('audit-results-count').textContent = '0';
+      document.getElementById('audit-results-container').innerHTML = `
+        <div class="glass-card p-8 rounded-2xl text-center border border-white/[0.06] text-slate-400 space-y-2">
+          <div class="text-3xl">🧭</div>
+          <div class="text-xs font-bold text-slate-300">Nenhuma investigação realizada ainda.</div>
+          <div class="text-[10px] text-slate-500">Informe as coordenadas X e Z e clique em "Investigar Coordenadas" para obter o histórico completo de ações locais.</div>
+        </div>
+      `;
+    }
+
+    async function executarAuditoriaCoordenadas() {
+      const world = document.getElementById('audit-world').value || 'world';
+      const xVal = document.getElementById('audit-x').value;
+      const yVal = document.getElementById('audit-y').value;
+      const zVal = document.getElementById('audit-z').value;
+      const radius = parseInt(document.getElementById('audit-raio-num').value, 10) || 10;
+      const filterNick = document.getElementById('audit-filter-nick').value.trim();
+      const filterAction = document.getElementById('audit-filter-action').value.trim();
+
+      if (xVal === '' || zVal === '') {
+        mostrarFeedback('Por favor, informe pelo menos as coordenadas X e Z.', 'red');
+        return;
+      }
+
+      const btn = document.getElementById('btn-executar-auditoria');
+      const btnIcon = document.getElementById('audit-btn-icon');
+      const btnText = document.getElementById('audit-btn-text');
+      const statusBar = document.getElementById('audit-status-bar');
+      const statusMsg = document.getElementById('audit-status-msg');
+      const statusTimer = document.getElementById('audit-status-timer');
+      const container = document.getElementById('audit-results-container');
+
+      btn.disabled = true;
+      btn.classList.add('opacity-50');
+      btnIcon.textContent = '⏳';
+      btnText.textContent = 'Consultando...';
+
+      statusBar.classList.remove('hidden');
+      statusMsg.textContent = 'Enviando pedido de auditoria ao servidor de Minecraft...';
+      statusTimer.textContent = 'Aguardando próximo ciclo do plugin (até 60s)...';
+
+      container.innerHTML = `
+        <div class="glass-card p-8 rounded-2xl text-center border border-indigo-500/20 text-slate-400 space-y-3">
+          <div class="w-8 h-8 mx-auto border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          <div class="text-xs font-bold text-slate-200">Consultando banco de dados local no servidor de jogos...</div>
+          <div class="text-[10px] text-slate-400 max-w-sm mx-auto">
+            O plugin no servidor está processando o histórico de raio de ${radius} blocos em (${xVal}, ${zVal}) nos últimos 7 dias.
+          </div>
+        </div>
+      `;
+
+      try {
+        const payload = {
+          world,
+          x: parseInt(xVal, 10),
+          y: yVal !== '' ? parseInt(yVal, 10) : null,
+          z: parseInt(zVal, 10),
+          radius,
+          filterNick: filterNick || null,
+          filterAction: filterAction || null
+        };
+
+        const res = await apiFetch('/api/admin/logs/query', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Erro ao agendar consulta.');
+        }
+
+        const queryId = data.queryId;
+        let attempts = 0;
+        const maxAttempts = 30; // 30 x 2s = 60s
+
+        if (auditPollTimer) clearInterval(auditPollTimer);
+
+        auditPollTimer = setInterval(async () => {
+          attempts++;
+          statusTimer.textContent = `Aguardando plugin... (${attempts * 2}s)`;
+
+          try {
+            const pollRes = await apiFetch(`/api/admin/logs/results/${encodeURIComponent(queryId)}`);
+            const pollData = await pollRes.json();
+
+            if (pollData.ready) {
+              clearInterval(auditPollTimer);
+              auditPollTimer = null;
+              statusBar.classList.add('hidden');
+              btn.disabled = false;
+              btn.classList.remove('opacity-50');
+              btnIcon.textContent = '🔍';
+              btnText.textContent = 'Investigar Coordenadas';
+
+              renderResultadosAuditoria(pollData.results || []);
+              mostrarFeedback(`Auditoria concluída! ${pollData.count || 0} ações encontradas.`, 'green');
+            } else if (attempts >= maxAttempts) {
+              clearInterval(auditPollTimer);
+              auditPollTimer = null;
+              statusBar.classList.add('hidden');
+              btn.disabled = false;
+              btn.classList.remove('opacity-50');
+              btnIcon.textContent = '🔍';
+              btnText.textContent = 'Investigar Coordenadas';
+
+              container.innerHTML = `
+                <div class="glass-card p-6 rounded-2xl text-center border border-amber-500/30 text-amber-300 space-y-2">
+                  <div class="text-2xl">⏳</div>
+                  <div class="text-xs font-bold">O servidor de Minecraft demorou para responder.</div>
+                  <div class="text-[10px] text-slate-400">Certifique-se de que o servidor está online com o plugin atualizado e tente novamente em alguns instantes.</div>
+                </div>
+              `;
+            }
+          } catch (e) {
+            // Segue tentando até o timeout
+          }
+        }, 2000);
+
+      } catch (err) {
+        statusBar.classList.add('hidden');
+        btn.disabled = false;
+        btn.classList.remove('opacity-50');
+        btnIcon.textContent = '🔍';
+        btnText.textContent = 'Investigar Coordenadas';
+        mostrarFeedback(err.message || 'Erro ao executar auditoria.', 'red');
+      }
+    }
+
+    function renderResultadosAuditoria(results) {
+      const container = document.getElementById('audit-results-container');
+      const countBadge = document.getElementById('audit-results-count');
+      if (!container) return;
+
+      countBadge.textContent = results.length;
+
+      if (!results || results.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card p-8 rounded-2xl text-center border border-white/[0.06] text-slate-400 space-y-2">
+            <div class="text-3xl">🌿</div>
+            <div class="text-xs font-bold text-slate-200">Nenhum evento registrado nesta área nos últimos 7 dias.</div>
+            <div class="text-[10px] text-slate-500">Nenhum jogador quebrou, colocou ou interagiu com blocos ou containers no raio pesquisado.</div>
+          </div>
+        `;
+        return;
+      }
+
+      const actionBadges = {
+        'BREAK': { label: 'Quebrou Bloco', class: 'bg-rose-500/20 text-rose-300 border-rose-500/40', icon: '🔴' },
+        'PLACE': { label: 'Colocou Bloco', class: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40', icon: '🟢' },
+        'OPEN_CONTAINER': { label: 'Abriu Baú/Container', class: 'bg-amber-500/20 text-amber-300 border-amber-500/40', icon: '📦' },
+        'CONTAINER_TAKE': { label: 'Tirou do Baú', class: 'bg-orange-500/20 text-orange-300 border-orange-500/40', icon: '📤' },
+        'CONTAINER_PUT': { label: 'Guardou no Baú', class: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40', icon: '📥' },
+        'DOOR': { label: 'Porta/Alçapão', class: 'bg-blue-500/20 text-blue-300 border-blue-500/40', icon: '🚪' },
+        'INTERACT': { label: 'Botão/Alavanca', class: 'bg-slate-500/20 text-slate-300 border-slate-500/40', icon: '🔘' },
+        'DROP_ITEM': { label: 'Dropou no Chão', class: 'bg-purple-500/20 text-purple-300 border-purple-500/40', icon: '⬇️' },
+        'PICKUP_ITEM': { label: 'Coletou do Chão', class: 'bg-teal-500/20 text-teal-300 border-teal-500/40', icon: '⬆️' },
+        'SIGN': { label: 'Escreveu em Placa', class: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40', icon: '📝' }
+      };
+
+      container.innerHTML = results.map((r, idx) => {
+        const badge = actionBadges[r.action] || { label: r.action, class: 'bg-white/10 text-slate-300 border-white/20', icon: '🔹' };
+        const cleanNick = r.nick.replace(/^[._*]/, '');
+        const dateStr = r.created_at ? new Date(r.created_at).toLocaleString('pt-BR') : '–';
+        const coordsStr = `X: ${r.x}, Y: ${r.y}, Z: ${r.z}`;
+        const tpCmd = `/tp ${r.x} ${r.y} ${r.z}`;
+
+        return `
+          <div class="glass-card p-2.5 sm:p-3 rounded-xl border border-white/[0.08] hover:border-indigo-500/30 transition bg-black/40 flex items-start justify-between gap-3">
+            <div class="flex items-start gap-2.5 min-w-0">
+              <!-- Avatar Head -->
+              <img src="https://mc-heads.net/avatar/${encodeURIComponent(cleanNick)}/36"
+                   alt="${escapeHtml(r.nick)}"
+                   class="w-8 h-8 rounded-lg bg-black/50 border border-white/10 flex-shrink-0 mt-0.5"
+                   onerror="this.src='https://mc-heads.net/avatar/steve/36'" />
+              
+              <div class="min-w-0 space-y-0.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-extrabold text-xs text-white">${escapeHtml(r.nick)}</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded border ${badge.class} flex items-center gap-1">
+                    <span>${badge.icon}</span> <span>${badge.label}</span>
+                  </span>
+                  <span class="font-mono text-[10px] text-slate-300 font-semibold bg-white/[0.06] px-1.5 py-0.5 rounded">
+                    ${escapeHtml(r.target || '')}
+                  </span>
+                </div>
+
+                ${r.details ? `
+                  <div class="text-[11px] text-slate-300 italic font-mono bg-black/30 px-2 py-0.5 rounded border border-white/[0.04]">
+                    ${escapeHtml(r.details)}
+                  </div>
+                ` : ''}
+
+                <div class="flex items-center gap-2 text-[10px] text-slate-400 flex-wrap pt-0.5">
+                  <span class="font-mono text-indigo-300">📍 ${coordsStr}</span>
+                  <span>•</span>
+                  <span>Mundo: <b class="text-slate-300">${escapeHtml(r.world)}</b></span>
+                  <span>•</span>
+                  <span class="text-slate-400 font-mono">🕒 ${dateStr}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botão de Copiar TP -->
+            <button type="button" onclick="navigator.clipboard.writeText('${tpCmd}'); mostrarFeedback('Comando copiado: ${tpCmd}', 'green')"
+              title="Copiar comando de teleporte"
+              class="flex-shrink-0 bg-white/[0.06] hover:bg-white/[0.15] text-slate-300 hover:text-white px-2 py-1 rounded-lg text-[10px] font-mono transition flex items-center gap-1 cursor-pointer">
+              <span>📋</span> <span class="hidden sm:inline">Copiar /tp</span>
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
 
     // ══════════════════════════════════════════════════════════════════════════
     // SUBDIVISÃO: MEUS TERRENOS (ÁREA DO JOGADOR / DONO)
