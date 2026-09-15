@@ -2465,6 +2465,8 @@ app.get('/api/plugin/sync', async (req, res) => {
       console.error('[Sync] Tabela admin_protection_zones ainda não criada ou erro:', aErr.message);
     }
 
+    const logQueriesToRun = pendingLogQueries.splice(0);
+
     res.json({
       success: true,
       timestamp: Date.now(),
@@ -2474,7 +2476,8 @@ app.get('/api/plugin/sync', async (req, res) => {
       lives: livesMap,
       commands: commandsToRun,
       kingdomProtections,
-      adminProtections
+      adminProtections,
+      logQueries: logQueriesToRun
     });
   } catch (err) {
 
@@ -2629,11 +2632,99 @@ app.post('/api/plugin/sync', async (req, res) => {
       }
     } catch (aErr) { console.error('[SyncPost] Tabela admin_protection_zones erro:', aErr.message); }
 
-    res.json({ success: true, timestamp: Date.now(), approved, bans, ipBans, lives: livesMap, commands: commandsToRun, kingdomProtections, adminProtections });
+    // Anexa consultas de logs forenses pendentes para o plugin processar no SQLite local
+    const logQueriesToRun = pendingLogQueries.splice(0);
+
+    res.json({
+      success: true,
+      timestamp: Date.now(),
+      approved,
+      bans,
+      ipBans,
+      lives: livesMap,
+      commands: commandsToRun,
+      kingdomProtections,
+      adminProtections,
+      logQueries: logQueriesToRun
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─── SISTEMA FORENSE / AUDITORIA DE COORDENADAS (COREPROTECT LOCAL) ───────────
+const pendingLogQueries = [];
+const logQueryResultsCache = new Map(); // queryId -> { timestamp, results }
+
+// Limpa resultados de consultas antigas a cada 10 minutos
+setInterval(() => {
+  const cutoff = Date.now() - (10 * 60 * 1000);
+  for (const [id, item] of logQueryResultsCache.entries()) {
+    if (item.timestamp < cutoff) logQueryResultsCache.delete(id);
+  }
+}, 600000);
+
+// 1. Admin solicita investigação em um raio de coordenadas
+app.post('/api/admin/logs/query', requireAdmin, (req, res) => {
+  try {
+    const { world, x, y, z, radius, filterNick, filterAction } = req.body || {};
+    if (x === undefined || z === undefined) {
+      return res.status(400).json({ error: 'Coordenadas X e Z são obrigatórias.' });
+    }
+
+    const queryId = 'qry_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    const queryPayload = {
+      queryId,
+      world: world || 'world',
+      x: parseInt(x, 10),
+      y: y !== undefined && y !== '' ? parseInt(y, 10) : null,
+      z: parseInt(z, 10),
+      radius: Math.min(100, Math.max(1, parseInt(radius, 10) || 10)),
+      filterNick: filterNick ? String(filterNick).trim() : null,
+      filterAction: filterAction ? String(filterAction).trim() : null,
+      requestedAt: Date.now()
+    };
+
+    pendingLogQueries.push(queryPayload);
+    // Limita fila pendente para no máximo 10 pedidos
+    if (pendingLogQueries.length > 10) pendingLogQueries.shift();
+
+    res.json({ success: true, queryId, message: 'Consulta enviada ao servidor de Minecraft. Aguardando processamento do plugin local...' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Admin verifica se os resultados já foram devolvidos pelo plugin
+app.get('/api/admin/logs/results/:queryId', requireAdmin, (req, res) => {
+  const qId = req.params.queryId;
+  const cached = logQueryResultsCache.get(qId);
+  if (cached) {
+    return res.json({ success: true, ready: true, results: cached.results, count: cached.results.length });
+  }
+  res.json({ success: true, ready: false, message: 'Processando no servidor de jogos...' });
+});
+
+// 3. Plugin devolve os resultados da consulta local
+app.post('/api/plugin/logs-response', (req, res) => {
+  const secret = req.headers['x-plugin-secret'] || req.query.secret || req.body?.secret || '';
+  const PLUGIN_SECRET = process.env.PLUGIN_SECRET || 'MapaBermuda2025Plugin';
+  if (secret !== PLUGIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  try {
+    const { queryId, results } = req.body || {};
+    if (queryId && Array.isArray(results)) {
+      logQueryResultsCache.set(queryId, {
+        timestamp: Date.now(),
+        results: results
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 
