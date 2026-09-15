@@ -972,33 +972,34 @@ public class WhitelistPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    // Bloqueia e pune jogadores que tentam usar pacote Creative para puxar itens do nada
+    // Bloqueia e pune jogadores que tentam usar pacote Creative para puxar itens do nada (Apenas OPs podem)
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryCreative(InventoryCreativeEvent event) {
         if (!anticheatEnabled) return;
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
         String clean = cleanNick(player.getName()).toLowerCase();
-        if (player.isOp() || BYPASS.contains(clean) || player.getGameMode() == GameMode.CREATIVE) {
+        // Apenas OP ou quem estiver na lista de bypass pode usar modo criativo/puxar itens
+        if (player.isOp() || BYPASS.contains(clean)) {
             return;
         }
 
         event.setCancelled(true);
         ItemStack item = event.getCursor();
         String itemDesc = (item != null && !item.getType().isAir()) ? item.getAmount() + "x " + item.getType().name() : "Item desconhecido";
-        punirAntiCheat(player, "ITEM_HACK", "Tentou puxar item via pacote Creative sem permissão: " + itemDesc, player.getLocation());
+        punirAntiCheat(player, "ITEM_HACK", "Tentou puxar item via pacote Creative sem ser OP: " + itemDesc, player.getLocation());
     }
 
-    // Monitora e bloqueia Fly Hack (apenas OPs, Criativo, Elytra ou poções podem voar)
+    // Monitora e bloqueia Fly Hack (apenas OPs, Elytra ou poções podem voar - criativo sem OP não voa)
     @EventHandler(priority = EventPriority.HIGHEST)
     public void onPlayerMove(PlayerMoveEvent event) {
         if (!anticheatEnabled) return;
         Player player = event.getPlayer();
         String clean = cleanNick(player.getName()).toLowerCase();
 
-        // Isenções oficiais: OPs, Criativo, Espectador, Bypass
+        // Isenções oficiais de permissão de voo: EXCLUSIVAMENTE OPs e Bypass
         if (player.isOp() || BYPASS.contains(clean)) return;
-        if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) return;
+        if (player.getGameMode() == GameMode.SPECTATOR) return;
 
         // Isenção legítima de voo planado com Elytra
         if (player.isGliding()) {
