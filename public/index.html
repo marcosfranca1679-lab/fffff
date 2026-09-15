@@ -1141,6 +1141,27 @@
         <div id="admin-mod-content-manutencao" class="hidden p-3 md:p-4 space-y-3">
           <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Ações do Servidor</div>
 
+          <!-- Controle do Anti-Cheat -->
+          <div class="glass-card p-3 rounded-xl border border-emerald-500/30 bg-black/40 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-lg flex-shrink-0">🛡️</div>
+              <div>
+                <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>Anti-Cheat do Servidor</span>
+                  <span id="anticheat-badge-status" class="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">ATIVO</span>
+                </div>
+                <div class="text-[10px] text-slate-400">Proteção contra Fly/Voo não autorizado, X-Ray de minérios e Item Hack</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btn-toggle-anticheat" onclick="toggleAnticheat()"
+                class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm bg-rose-600 hover:bg-rose-500 text-white cursor-pointer active:scale-95">
+                <span id="anticheat-btn-icon">🛑</span>
+                <span id="anticheat-btn-text">Desligar Anti-Cheat</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Limpar Chat -->
           <div class="bg-black/40 rounded-xl p-3 border border-white/[0.06] flex items-start gap-3">
             <div class="w-9 h-9 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-lg flex-shrink-0">🧹</div>
@@ -1554,6 +1575,36 @@
                 <div class="text-[10px] text-slate-500">Informe as coordenadas X e Z e clique em "Investigar Coordenadas" para obter o histórico completo de ações locais.</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal de Provas do Anti-Cheat -->
+      <div id="modal-anticheat-provas" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+        <div class="glass-card max-w-lg w-full rounded-2xl border border-rose-500/30 bg-slate-950 p-4 sm:p-6 space-y-4 shadow-2xl animate-fade-in max-h-[85vh] flex flex-col">
+          <div class="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">🔍</span>
+              <div>
+                <div class="text-sm font-extrabold text-white flex items-center gap-2">
+                  <span>Provas Anti-Cheat:</span>
+                  <span id="modal-provas-nick" class="text-rose-400 font-mono">--</span>
+                </div>
+                <div class="text-[10px] text-slate-400">Registros forenses capturados automaticamente no servidor</div>
+              </div>
+            </div>
+            <button onclick="fecharModalProvas()" class="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-xs transition cursor-pointer">✕</button>
+          </div>
+
+          <!-- Conteúdo da prova com scroll -->
+          <div id="modal-provas-conteudo" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-xs">
+            <div class="text-center py-6 text-slate-400 text-xs italic">Carregando provas...</div>
+          </div>
+
+          <div class="pt-2 border-t border-white/[0.08] flex justify-end">
+            <button onclick="fecharModalProvas()" class="px-4 py-2 rounded-xl text-xs font-bold bg-white/[0.1] hover:bg-white/[0.2] text-white transition cursor-pointer">
+              Fechar
+            </button>
           </div>
         </div>
       </div>
@@ -3581,7 +3632,7 @@
 
       if (modulo === 'online') renderAdminOnlinePlayers();
       if (modulo === 'banimentos') { carregarAdminBans(); carregarAdminIpBans(); }
-      if (modulo === 'manutencao') atualizarStatsManu();
+      if (modulo === 'manutencao') { atualizarStatsManu(); carregarStatusAnticheat(); }
       if (modulo === 'vidas') carregarAdminVidas();
       if (modulo === 'reinos') carregarAdminPermissoesReino();
       if (modulo === 'vip') carregarAdminVipProfiles();
@@ -3744,6 +3795,7 @@
               </div>
             </div>
             <div class="flex gap-1.5 flex-shrink-0">
+              <button onclick="verProvasAntiCheat('${escapeHtml(b.nick)}')" class="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1" title="Ver provas capturadas pelo Anti-Cheat">🔍 Provas</button>
               <button onclick="acaoAdmin('unban','${escapeHtml(b.nick)}')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">🔓 Desbanir</button>
               <button onclick="acaoAdmin('remove','${escapeHtml(b.nick)}')" class="bg-white/[0.08] hover:bg-white/[0.16] text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-bold transition">🗑️</button>
             </div>
@@ -8012,6 +8064,132 @@
       }).join('');
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // SISTEMA ANTI-CHEAT (TOGGLE + PROVAS)
+    // ══════════════════════════════════════════════════════════════════════════
+    let anticheatAtivoState = true;
+
+    async function carregarStatusAnticheat() {
+      try {
+        const res = await apiFetch('/api/admin/anticheat/status');
+        const data = await res.json();
+        if (data && typeof data.enabled === 'boolean') {
+          anticheatAtivoState = data.enabled;
+          atualizarUIAnticheat(anticheatAtivoState);
+        }
+      } catch (_) {}
+    }
+
+    function atualizarUIAnticheat(ativo) {
+      const badge = document.getElementById('anticheat-badge-status');
+      const btn = document.getElementById('btn-toggle-anticheat');
+      const icon = document.getElementById('anticheat-btn-icon');
+      const txt = document.getElementById('anticheat-btn-text');
+
+      if (badge) {
+        badge.textContent = ativo ? 'ATIVO' : 'DESLIGADO';
+        badge.className = ativo
+          ? 'text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+          : 'text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40';
+      }
+      if (btn) {
+        btn.className = ativo
+          ? 'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm bg-rose-600 hover:bg-rose-500 text-white cursor-pointer active:scale-95'
+          : 'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95';
+      }
+      if (icon) icon.textContent = ativo ? '🛑' : '▶️';
+      if (txt) txt.textContent = ativo ? 'Desligar Anti-Cheat' : 'Ligar Anti-Cheat';
+    }
+
+    async function toggleAnticheat() {
+      const novoEstado = !anticheatAtivoState;
+      const acao = novoEstado ? 'LIGAR' : 'DESLIGAR';
+      if (!confirm(`Tem certeza que deseja ${acao} o sistema Anti-Cheat do servidor?`)) return;
+
+      try {
+        const res = await apiFetch('/api/admin/anticheat/toggle', {
+          method: 'POST',
+          body: JSON.stringify({ enabled: novoEstado })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+          anticheatAtivoState = data.enabled;
+          atualizarUIAnticheat(anticheatAtivoState);
+          mostrarFeedback(`Anti-Cheat ${data.enabled ? 'ativado' : 'desativado'} com sucesso!`, data.enabled ? 'green' : 'yellow');
+        } else {
+          mostrarFeedback(data?.error || 'Erro ao alterar estado do Anti-Cheat.', 'red');
+        }
+      } catch (err) {
+        mostrarFeedback('Erro ao conectar com a API de Anti-Cheat.', 'red');
+      }
+    }
+
+    async function verProvasAntiCheat(nick) {
+      const modal = document.getElementById('modal-anticheat-provas');
+      const nickEl = document.getElementById('modal-provas-nick');
+      const contentEl = document.getElementById('modal-provas-conteudo');
+      if (!modal || !contentEl) return;
+
+      nickEl.textContent = nick;
+      contentEl.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs italic">Consultando provas forenses do Anti-Cheat...</div>';
+      modal.classList.remove('hidden');
+
+      try {
+        const res = await apiFetch(`/api/admin/anticheat/evidence/${encodeURIComponent(nick)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          contentEl.innerHTML = `<div class="text-xs text-rose-400 p-4">${escapeHtml(data.error || 'Erro ao buscar provas.')}</div>`;
+          return;
+        }
+
+        const evidences = data.evidences || [];
+        if (evidences.length === 0) {
+          contentEl.innerHTML = `
+            <div class="glass-card p-6 rounded-xl border border-white/[0.08] text-center space-y-2 bg-black/40">
+              <div class="text-2xl">📋</div>
+              <div class="text-xs font-bold text-slate-300">Nenhum flag automático registrado para ${escapeHtml(nick)}.</div>
+              <div class="text-[10px] text-slate-500">Este banimento pode ter sido aplicado manualmente por um administrador.</div>
+            </div>
+          `;
+          return;
+        }
+
+        contentEl.innerHTML = evidences.map((ev, i) => {
+          const dateStr = ev.created_at ? new Date(ev.created_at).toLocaleString('pt-BR') : 'Data não informada';
+          const p = ev.evidence || {};
+          const tipoCheat = p.cheatType || 'SUSPEITA';
+          const detalhes = p.details || 'Sem detalhes';
+          const loc = p.location || {};
+          const locStr = loc.x !== undefined ? `X: ${loc.x}, Y: ${loc.y}, Z: ${loc.z} (${loc.world || 'world'})` : 'Localização não informada';
+
+          return `
+            <div class="glass-card p-3 rounded-xl border border-rose-500/30 bg-rose-950/20 space-y-1.5">
+              <div class="flex items-center justify-between flex-wrap gap-1">
+                <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-rose-500/30 text-rose-300 border border-rose-500/50">
+                  FLAG #${i + 1}: ${escapeHtml(tipoCheat)}
+                </span>
+                <span class="text-[10px] text-slate-400 font-sans">🕒 ${dateStr}</span>
+              </div>
+              <div class="text-xs text-slate-200 font-sans leading-relaxed bg-black/40 p-2 rounded border border-white/[0.04]">
+                <b>Motivo:</b> ${escapeHtml(detalhes)}
+              </div>
+              <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
+                <span>📍</span> <span>${escapeHtml(locStr)}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        contentEl.innerHTML = '<div class="text-xs text-rose-400 p-4">Erro ao carregar dados de prova do servidor.</div>';
+      }
+    }
+
+    function fecharModalProvas() {
+      const modal = document.getElementById('modal-anticheat-provas');
+      if (modal) modal.classList.add('hidden');
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // SUBDIVISÃO: MEUS TERRENOS (ÁREA DO JOGADOR / DONO)
